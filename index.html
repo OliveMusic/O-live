@@ -128,6 +128,12 @@
 
   /* ---------- Buttons ---------- */
   button{font-family:inherit;}
+  /* iOS는 user-scalable=no를 무시한다. TAP처럼 연달아 누르는 버튼에서
+     더블탭 확대가 걸리는 걸 막으려면 touch-action으로 꺼야 한다. */
+  button, .pill, .btn, .gcell, .chord-cell, .choice-row, .prog-bar,
+  .fret-cell, .note-chip, select, input[type=range]{
+    touch-action:manipulation;
+  }
   .btn{
     background:var(--key);
     color:var(--ink);
@@ -1175,14 +1181,20 @@ function setAudioSession(mode){
   try{ if(navigator.audioSession) navigator.audioSession.type = mode; }catch(e){}
 }
 
+/* 컨텍스트를 통째로 버린다. 여기에 매달려 있던 것들도 같이 놓아야
+   다음에 만들 때 새 컨텍스트의 노드로 다시 세워진다. */
+function releaseCtx(){
+  if(!audioCtx) return;
+  const old = audioCtx;
+  audioCtx = null; __master = null; __send = null; __gtrCache.clear();
+  try{ old.close(); }catch(e){}
+}
+
 function getCtx(){
   if(!audioCtx || audioCtx.state === 'closed'){
-    // 잠자기 등으로 컨텍스트가 죽으면 딸려 있던 마스터 버스도 같이 버린다
     if(audioCtx){ __master = null; __send = null; __gtrCache.clear(); }
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
   }
-  // iOS는 화면 잠금·전화 같은 방해를 받으면 'suspended'가 아니라
-  // 'interrupted'로 떨어진다. suspended만 보면 이 상태를 놓쳐 소리가 영영 안 난다.
   if(audioCtx.state !== 'running') audioCtx.resume().catch(()=>{});
   return audioCtx;
 }
@@ -1576,9 +1588,12 @@ document.addEventListener('visibilitychange', ()=>{
     keepAwake(false);
     return;
   }
-  if(audioCtx && audioCtx.state !== 'running' && audioCtx.state !== 'closed'){
-    audioCtx.resume().catch(()=>{});
-  }
+  /* iOS는 화면이 꺼지는 동안 컨텍스트를 'interrupted'로 떨어뜨리는데,
+     이 상태는 resume()으로 되살아나지 않는 경우가 있다. 그러면 소리를 넣어도
+     아무 데도 나가지 않는다 — 껐다 자고 깨운 뒤 안 들리던 게 이것이다.
+     어차피 숨을 때 전부 멈췄으니 미련 없이 버리고,
+     다음에 버튼을 누를 때 그 손짓 안에서 새로 만든다. iOS가 가장 확실하게 받아주는 길이다. */
+  if(audioCtx && audioCtx.state !== 'running') releaseCtx();
   if(anySounding()) keepAwake(true);
 });
 
@@ -1658,7 +1673,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   renderDots();
 
   function updateBpmUI(){ bpmNum.textContent = bpm; }
-  function setBpm(v){ bpm = Math.max(30, Math.min(260, v)); updateBpmUI(); }
+  function setBpm(v){ bpm = Math.max(30, Math.min(260, Math.round(v))); updateBpmUI(); }
 
   bindTempoKeys(document.getElementById('bpmMinus'),
                 document.getElementById('bpmPlus'),
@@ -1910,6 +1925,25 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       if(tauEst===-1 || best>0.55) return null;   // 신뢰도 부족
     }
 
+    // --- 배수 되짚기 ---
+    // 차분함수는 참주기뿐 아니라 그 배수마다 골이 생기고, 그 깊이가 서로 비슷하다.
+    // (실측: E4에서 134·267·401·535·669 모두 0.13~0.20) 임계값을 어느 골이 먼저
+    // 넘느냐는 운에 가까워서, 배수 쪽이 걸리면 몇 옥타브씩 낮게 잡힌다.
+    // 골이 비슷하게 깊다면 가장 짧은 주기가 진짜다.
+    {
+      let sel = tauEst;
+      for(let k=2; k<=8; k++){
+        const t2 = Math.round(tauEst/k);
+        if(t2 < minTau) break;
+        let cand = t2;
+        for(let j=Math.max(minTau,t2-2); j<=Math.min(maxTau,t2+2); j++)
+          if(cmnd[j] < cmnd[cand]) cand = j;
+        // 절대 상한을 같이 둬야, 진짜 저음일 때 엉뚱하게 접히지 않는다
+        if(cmnd[cand] < Math.min(0.40, cmnd[tauEst] + 0.16)) sel = cand;
+      }
+      tauEst = sel;
+    }
+
     // --- 포물선 보간: 샘플 사이 정밀도를 얻어 센트 단위 해상도를 확보 ---
     let better=tauEst;
     if(tauEst>0 && tauEst<W-1){
@@ -2013,7 +2047,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       const r=yin(buf, audioCtx.sampleRate);
       // 선풍기·에어컨은 '음정이 있는' 소음이라 게이트로는 못 거른다.
       // 주기성(clarity)과 악기의 실제 음역으로 판별한다. (실측: 소음 오검출 0/40)
-      if(r && r.clarity>0.85 && r.freq>freqLo && r.freq<freqHi){
+      // 배수 되짚기로 값이 안정돼서 게이트를 조금 올릴 여유가 생겼다.
+      // 실측(신호 480 · 소음 200): 0.72는 검출 66%/틀린음 18, 0.78은 53%/7.
+      // 분석이 초당 45번 도니 53%면 초당 24번 갱신 — 눈에는 끊김 없이 이어진다.
+      // 검출률보다 틀린 값이 덜 뜨는 쪽이 튜닝에는 낫다.
+      if(r && r.clarity>0.78 && r.freq>freqLo && r.freq<freqHi){
         const nRaw=Math.round(69+12*Math.log2(r.freq/440));
         if(nRaw!==lastNote) hist.length=0;   // 다른 음이면 이력을 비워 즉시 반응
         update(stabilize(r.freq));
