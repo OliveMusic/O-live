@@ -280,14 +280,15 @@
   }
 
   /* 묶음별로 끊어 줄바꿈한다. 12/8도 오브 폭 안에 들어간다. */
-  /* 110px에서 줄이 가장 고르게 나뉜다.
-     7/8은 2+2+3 한 줄, 9/8은 3+3 / 3, 12/8은 3+3 / 3+3. */
+  /* 점을 13px로 키운 만큼 폭도 140px로. 줄 나뉨은 그대로다 —
+     7/8은 2+2+3 한 줄, 9/8은 3+3 / 3, 12/8은 3+3 / 3+3.
+     15px까지 키우면 강세로 1.35배 커질 때 옆 점과 겹친다. */
   .beat-dots{display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
-    gap:6px 9px; margin:20px auto 2px; max-width:110px;}
+    gap:7px 9px; margin:20px auto 2px; max-width:140px;}
   .dot-group{display:flex; gap:5px;}
   .beat-dot{
     position:relative;
-    width:10px; height:10px; border-radius:50%;
+    width:13px; height:13px; border-radius:50%;
     background:transparent; border:1px solid rgba(232,230,218,.32);
     transition:border-color .05s linear, transform .05s linear;
   }
