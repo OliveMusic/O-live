@@ -1517,8 +1517,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
      진자와 같은 사인 감속을 써서 양끝에서 느려진다 — 실제 메트로놈도 끝점에서 소리가 난다.
      위치를 프레임 수가 아니라 오디오 시계에서 뽑으므로 프레임이 밀려도 어긋나지 않는다. */
   const mdOlive = document.getElementById('mdOlive');
-  // 오브에는 30도마다 눈금이 있다. 올리브가 그 위를 타넘으며 살짝씩 걸린다.
-  const OLIVE = { rx:9.6, ry:7.9, track:45.4, a0:148, a1:32, tick:30 };
+  const OLIVE = { rx:9.6, ry:7.9, track:45.4, a0:148, a1:32 };
   let rollRight = false;
   let beatAt = 0, beatSpan = 0.6;
 
@@ -1536,17 +1535,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const th  = spin*Math.PI/180;
     const wob = Math.hypot(OLIVE.rx*Math.sin(th), OLIVE.ry*Math.cos(th));
 
-    // 눈금을 타넘는 통통거림. 양끝에서는 거의 멈추므로 속도를 곱해 자연히 잦아든다.
-    // 눈금마다 세기를 달리해 기계적으로 반복되지 않게 한다.
-    const ph   = (((phi % OLIVE.tick) + OLIVE.tick) % OLIVE.tick) / OLIVE.tick;
-    const ti   = Math.floor((((phi % 360)+360)%360) / OLIVE.tick);
-    const seg  = Math.abs(OLIVE.a1-OLIVE.a0);
-    const dphi = Math.abs(Math.sin(Math.PI*p)) * Math.PI/2 * seg;  // 지금 얼마나 빠른가
-    const bump = Math.pow(Math.cos(Math.PI*ph), 2)
-               * (1 + 0.7*((ti % 3 === 0) ? 1 : 0))
-               * Math.min(1, dphi/60) * 1.6;
-
-    const rad = OLIVE.track - wob - bump;
+    // 여기는 박자를 보는 곳이라 튀는 움직임이 오히려 방해가 된다.
+    // 통통거림은 튜너에만 두고, 메트로놈에서는 매끄럽게 굴린다.
+    const rad = OLIVE.track - wob;
     const f   = phi*Math.PI/180;
     const x   = 50 + rad*Math.cos(f);
     const y   = 50 + rad*Math.sin(f);
