@@ -100,7 +100,7 @@
   }
   header.topbar .logo{
     width:19px; height:19px; flex-shrink:0;
-    color:var(--ink-2);
+    color:var(--signal);
     transform:rotate(-22deg);          /* 살짝 기울여야 씨가 도드라진다 */
   }
   header.topbar h1{
@@ -108,7 +108,9 @@
     text-transform:uppercase; letter-spacing:0.1909em; color:var(--ink-2);
   }
 
+  /* 손에 쥐는 앱이다. 모니터에서 화면 폭만큼 늘어나면 버튼이 우스꽝스럽게 길어진다. */
   main{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:4px 14px 106px;}
+  main > *, header.topbar{ max-width:520px; margin-inline:auto; }
 
   .tabpanel{display:none;}
   .tabpanel.active{display:block;}
@@ -225,6 +227,7 @@
   nav.tabbar{
     position:fixed; z-index:30;
     left:0; right:0; bottom:0;
+    max-width:520px; margin-inline:auto;   /* 본문과 같은 폭으로 */
     display:flex;
     background:var(--body-hi);
     border-top:1px solid var(--line-soft);
@@ -276,14 +279,34 @@
     font-weight:500; text-transform:uppercase;
   }
 
-  .beat-dots{display:flex; justify-content:center; gap:11px; margin:20px 0 2px;}
+  /* 묶음별로 끊어 줄바꿈한다. 12/8도 오브 폭 안에 들어간다. */
+  /* 110px에서 줄이 가장 고르게 나뉜다.
+     7/8은 2+2+3 한 줄, 9/8은 3+3 / 3, 12/8은 3+3 / 3+3. */
+  .beat-dots{display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
+    gap:6px 9px; margin:20px auto 2px; max-width:110px;}
+  .dot-group{display:flex; gap:5px;}
   .beat-dot{
-    width:9px; height:9px; border-radius:50%;
+    position:relative;
+    width:10px; height:10px; border-radius:50%;
     background:transparent; border:1px solid rgba(232,230,218,.32);
-    transition:background .05s linear, border-color .05s linear, transform .05s linear;
+    transition:border-color .05s linear, transform .05s linear;
   }
-  .beat-dot.on{ background:var(--display-ink); border-color:var(--display-ink); }
-  .beat-dot.accent-on{ background:var(--signal-display); border-color:var(--signal-display); transform:scale(1.35); }
+  /* 울린 박은 올리브로 채운다. 아직 안 울린 박은 동그라미 그대로. */
+  .beat-dot::before{
+    content:''; position:absolute; inset:-1px;
+    -webkit-mask:var(--olive-tilt) center/100% auto no-repeat;
+            mask:var(--olive-tilt) center/100% auto no-repeat;
+    background:transparent;
+    transition:background .05s linear;
+  }
+  .beat-dot.on, .beat-dot.mid-on, .beat-dot.accent-on{ border-color:transparent; }
+  .beat-dot.on::before{ background:var(--display-ink); }
+  .beat-dot.mid-on::before{ background:var(--display-dim); }
+  .beat-dot.mid-on{ transform:scale(1.18); }
+  .beat-dot.accent-on::before{ background:var(--signal-display); }
+  .beat-dot.accent-on{ transform:scale(1.35); }
+  /* 묶음이 시작되는 박은 살짝 띄워 마디 구조가 눈에 보이게 */
+
 
   /* Circular dial */
   .pulse-ring{
@@ -756,7 +779,9 @@
   .note-chip.root .dg{ color:var(--on-signal); opacity:.72; }
 
   /* ---------- 메트로놈: 좌 숫자·키 / 우 발광 오브 ---------- */
-  .metro-main{ display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:center; }
+  /* 반반으로 나눈다. 그냥 1fr은 내용이 크면 밀려나므로 minmax(0,·)로 못박는다.
+     점은 max-width로 묶여 있어 더 이상 왼쪽을 밀어내지 않는다. */
+  .metro-main{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:center; }
   .metro-left{ --key-h:40px; min-width:0; display:flex; flex-direction:column; align-items:stretch; gap:10px; }
   .metro-left .bpm-display{ text-align:center; }
   .metro-left .bpm-display .num{ font-size:3.5rem; }
@@ -823,11 +848,30 @@
   }
 
   /* 메트로놈 우측: 오브 + 박자 점 */
-  .metro-right{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .metro-right{ display:flex; flex-direction:column; align-items:center; gap:14px; min-width:0; }
   .metro-right .beat-dots{ margin:0; }
   .metro-card .beat-dot{ border-color:var(--ink-3); }
-  .metro-card .beat-dot.on{ background:var(--ink); border-color:var(--ink); }
-  .metro-card .beat-dot.accent-on{ background:var(--signal); border-color:var(--signal); }
+  /* 이 규칙이 앞의 transparent보다 뒤에 있어 테두리를 되살리고 있었다.
+     올리브가 켜진 자리에서는 동그라미가 비치면 안 된다. */
+  .metro-card .beat-dot.on,
+  .metro-card .beat-dot.mid-on,
+  .metro-card .beat-dot.accent-on{ border-color:transparent; }
+  .metro-card .beat-dot.on::before{ background:var(--ink); }
+  .metro-card .beat-dot.mid-on::before{ background:var(--ink-3); }
+  .metro-card .beat-dot.accent-on::before{ background:var(--signal); }
+
+  /* 세분화: 글자 대신 악보 기호 */
+  .note-group{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .note-btn{
+    background:var(--key); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:var(--r); padding:7px 2px 5px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink-2); min-height:44px;
+    transition:background .1s var(--ease-out), border-color .1s var(--ease-out), color .1s var(--ease-out), transform .1s var(--ease-out);
+  }
+  .note-btn svg{ width:100%; height:26px; display:block; }
+  .note-btn:active{ transform:scale(.96); border-bottom-width:1px; }
+  .note-btn.active{ background:var(--signal); border-color:var(--signal); color:var(--on-signal); }
   .tempo-keys .key{ touch-action:none; }      /* 길게 누르기 중 스크롤 방지 */
   .metro-left .tap{ width:100%; }
 
@@ -967,20 +1011,13 @@
       </div>
 
       <div class="card">
-        <h2>박자</h2>
-        <div class="pill-group" id="beatsGroup">
-          <button class="pill" data-beats="2">2/4</button>
-          <button class="pill active" data-beats="4">4/4</button>
-          <button class="pill" data-beats="3">3/4</button>
-          <button class="pill" data-beats="6">6/8</button>
+        <div class="row" style="margin-bottom:0;">
+          <h2 style="margin:0;">박자</h2>
+          <select id="beatsSelect" aria-label="박자" style="width:auto;"></select>
         </div>
+        <p class="hint" style="margin:9px 0 0;">겹박자는 묶음 첫 박에 중간 강세가 붙습니다</p>
         <h2 style="margin-top:18px;">세분화</h2>
-        <div class="pill-group" id="subdivGroup">
-          <button class="pill active" data-sub="1">4분음표</button>
-          <button class="pill" data-sub="2">8분음표</button>
-          <button class="pill" data-sub="3">3연음</button>
-          <button class="pill" data-sub="4">16분음표</button>
-        </div>
+        <div class="note-group" id="subdivGroup"></div>
         <div class="row" style="margin-top:14px;">
           <span style="font-size:12px;">첫박 강세</span>
           <button class="pill active" id="accentToggle">ON</button>
@@ -1295,14 +1332,16 @@ function playTone(freq, duration=0.6, when=0, type='sine', gainVal=0.43){
   osc.stop(t0+duration+0.05);
   return {osc, gain};
 }
+// level: 0 약 · 1 중(묶음 첫 박) · 2 강(마디 첫 박). true/false도 받는다.
 function playClick(when, accent){
+  const lv = accent === true ? 2 : accent === false ? 0 : (accent|0);
   const ctx = getCtx();
   const t0 = ctx.currentTime + Math.max(when,0);
   const osc = ctx.createOscillator();
   osc.type = 'square';
-  osc.frequency.value = accent ? 1500 : 900;
+  osc.frequency.value = lv===2 ? 1500 : lv===1 ? 1180 : 900;
   const gain = ctx.createGain();
-  gain.gain.setValueAtTime(accent?0.62:0.40, t0);
+  gain.gain.setValueAtTime(lv===2 ? 0.62 : lv===1 ? 0.50 : 0.40, t0);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0+0.045);
   osc.connect(gain).connect(getMaster());
   osc.start(t0);
@@ -1635,7 +1674,42 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 메트로놈 ===================== */
 (function(){
   const BPM_DEFAULT = 100;
-  let bpm = BPM_DEFAULT, beatsPerMeasure = 4, subdivision = 1, accentOn = true;
+  let bpm = BPM_DEFAULT, accentOn = true;
+
+  /* ---------- 박자 ----------
+     겹박자는 묶음 첫 박에 중간 세기를 준다. 그래야 6/8이 3/4와 다르게 들린다.
+     groups의 합이 한 마디의 박 수다. */
+  const METERS = [
+    {label:'2/4',  beats:2,  groups:[2]},
+    {label:'3/4',  beats:3,  groups:[3]},
+    {label:'4/4',  beats:4,  groups:[4]},
+    {label:'5/4',  beats:5,  groups:[3,2]},
+    {label:'6/8',  beats:6,  groups:[3,3]},
+    {label:'7/8',  beats:7,  groups:[2,2,3]},
+    {label:'9/8',  beats:9,  groups:[3,3,3]},
+    {label:'12/8', beats:12, groups:[3,3,3,3]},
+  ];
+  let meter = METERS[2];                     // 4/4
+  let midBeats = new Set();                  // 중간 강세가 붙는 박
+  function computeGroups(){
+    midBeats = new Set(); let at = 0;
+    meter.groups.forEach((g,i)=>{ if(i>0) midBeats.add(at); at += g; });
+  }
+
+  /* ---------- 세분화 ----------
+     한 박을 div로 쪼개고 hits 자리에서만 소리를 낸다.
+     균등 분할(8분·3연음·16분)과 불균등(셔플·점8분+16분)을 같은 틀로 다룬다. */
+  const SUBS = [
+    {key:'q',   div:1, hits:[0],       name:'4분음표'},
+    {key:'e',   div:2, hits:[0,1],     name:'8분음표'},
+    {key:'t',   div:3, hits:[0,1,2],   name:'3연음'},
+    {key:'sh',  div:3, hits:[0,2],     name:'셔플'},
+    {key:'s',   div:4, hits:[0,1,2,3], name:'16분음표'},
+    {key:'ds',  div:4, hits:[0,3],     name:'점8분+16분'},
+    {key:'es',  div:4, hits:[0,2,3],   name:'8분+16분2'},
+    {key:'se',  div:4, hits:[0,1,2],   name:'16분2+8분'},
+  ];
+  let sub = SUBS[0];
   let isPlaying = false;
   let currentStep = 0, nextNoteTime = 0.0, timerID = null;
   let rollBeat = 0;
@@ -1685,12 +1759,18 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
   function renderDots(){
     beatDotsEl.innerHTML = '';
-    for(let i=0;i<beatsPerMeasure;i++){
-      const d = document.createElement('div');
-      d.className = 'beat-dot';
-      d.dataset.idx = i;
-      beatDotsEl.appendChild(d);
-    }
+    let i = 0;
+    meter.groups.forEach(g=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'dot-group';
+      for(let k=0; k<g; k++, i++){
+        const d = document.createElement('div');
+        d.className = 'beat-dot';
+        d.dataset.idx = i;
+        wrap.appendChild(d);
+      }
+      beatDotsEl.appendChild(wrap);
+    });
   }
   renderDots();
 
@@ -1704,21 +1784,100 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
   bindTapTempo(document.getElementById('tapTempoBtn'), setBpm);
 
-  document.querySelectorAll('#beatsGroup .pill').forEach(p=>{
-    p.addEventListener('click', ()=>{
-      document.querySelectorAll('#beatsGroup .pill').forEach(x=>x.classList.remove('active'));
-      p.classList.add('active');
-      beatsPerMeasure = parseInt(p.dataset.beats);
-      renderDots();
+  /* ---------- 음표 그림 ----------
+     글자 대신 실제 악보 기호를 그린다. {div, hits}만 주면
+     음표 길이·빔·점·잇단음표 괄호가 따라 나오므로 패턴을 늘려도 그림이 저절로 맞는다. */
+  function noteGlyph(div, hits){
+    const W=46, H=28, LEFT=6, SPAN=32;
+    const yHead=20, yStemTop=6.5, yBeam=5.6, yBeam2=9.2;
+    const x = slot => LEFT + (slot/div)*SPAN;
+    // 각 음표의 길이(칸 수)로 빔 개수와 점을 정한다
+    const notes = hits.map((h,i)=>{
+      const dur = (i+1<hits.length ? hits[i+1] : div) - h;
+      let beams = 0, dot = false;
+      if(div===2 && dur===1) beams=1;
+      else if(div===3){ beams = dur===1 ? 1 : 0; }
+      else if(div===4){ beams = dur===1 ? 2 : 1; dot = dur===3; }
+      return {slot:h, dur, beams, dot, cx:x(h), sx:x(h)+3.2};
     });
-  });
-  document.querySelectorAll('#subdivGroup .pill').forEach(p=>{
-    p.addEventListener('click', ()=>{
-      document.querySelectorAll('#subdivGroup .pill').forEach(x=>x.classList.remove('active'));
-      p.classList.add('active');
-      subdivision = parseInt(p.dataset.sub);
+    const beamed = notes.filter(n=>n.beams>0);
+    const g=[];
+    // 잇단음표 괄호
+    if(div===3){
+      const a=notes[0].sx, b=notes[notes.length-1].sx;
+      const mid=(a+b)/2;
+      g.push(`<path d="M${a} 4.2 V1.8 H${mid-3.4} M${mid+3.4} 1.8 H${b} V4.2" `+
+             `fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>`);
+      g.push(`<text x="${mid}" y="4.1" font-size="7.4" font-style="italic" text-anchor="middle" `+
+             `fill="currentColor" font-family="Georgia,serif">3</text>`);
+    }
+    notes.forEach((n,i)=>{
+      g.push(`<ellipse cx="${n.cx}" cy="${yHead}" rx="3.6" ry="2.7" `+
+             `transform="rotate(-20 ${n.cx} ${yHead})" fill="currentColor"/>`);
+      g.push(`<rect x="${n.sx-0.55}" y="${yStemTop}" width="1.1" height="${yHead-1.2-yStemTop}" fill="currentColor"/>`);
+      if(n.dot) g.push(`<circle cx="${n.cx+6.6}" cy="${yHead}" r="1" fill="currentColor"/>`);
     });
+    // 빔: 이어진 음표끼리 묶고, 혼자면 깃발을 단다
+    if(beamed.length>=2){
+      const a=beamed[0].sx-0.55, b=beamed[beamed.length-1].sx+0.55;
+      g.push(`<rect x="${a}" y="${yBeam}" width="${b-a}" height="2.5" fill="currentColor"/>`);
+      // 두 번째 빔은 16분음표가 이어진 구간에만
+      let run=[];
+      const flush=()=>{
+        if(run.length>=2){
+          const p=run[0].sx-0.55, q=run[run.length-1].sx+0.55;
+          g.push(`<rect x="${p}" y="${yBeam2}" width="${q-p}" height="2.2" fill="currentColor"/>`);
+        } else if(run.length===1){                      // 외톨이 16분음표는 반쪽 빔
+          const n=run[0], idx=beamed.indexOf(n);
+          const back = idx>0;
+          const p = back ? n.sx-4.6 : n.sx-0.55;
+          g.push(`<rect x="${p}" y="${yBeam2}" width="5.2" height="2.2" fill="currentColor"/>`);
+        }
+        run=[];
+      };
+      beamed.forEach(n=>{ if(n.beams>=2) run.push(n); else flush(); });
+      flush();
+    } else if(beamed.length===1){
+      const n=beamed[0];
+      g.push(`<path d="M${n.sx+0.55} ${yStemTop} c 3.6 1.6 4.2 4 2.4 6.6 c 1-3-0.4-4.2-2.4-5.2 Z" fill="currentColor"/>`);
+    }
+    // 그린 것의 실제 좌우 끝을 재서 가운데로 옮긴다.
+    // 4분음표처럼 음표가 하나뿐일 때 왼쪽으로 치우치던 것을 막는다.
+    let minX = notes[0].cx - 3.6;
+    let maxX = notes[notes.length-1].sx + 0.55;
+    const last = notes[notes.length-1];
+    if(last.dot) maxX = Math.max(maxX, last.cx + 7.6);
+    if(beamed.length===1) maxX = Math.max(maxX, beamed[0].sx + 3.6);   // 깃발
+    const dx = (W - (minX + maxX)) / 2;
+    return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">`+
+           `<g transform="translate(${dx.toFixed(2)} 0)">${g.join('')}</g></svg>`;
+  }
+
+  /* ---------- 박자 · 세분화 버튼 ---------- */
+  const beatsSelect = document.getElementById('beatsSelect');
+  const subdivGroup = document.getElementById('subdivGroup');
+  METERS.forEach((m,i)=>{
+    const o=document.createElement('option');
+    o.value=i; o.textContent = m.label + (m.groups.length>1 ? '  (' + m.groups.join('+') + ')' : '');
+    beatsSelect.appendChild(o);
   });
+  beatsSelect.value = METERS.indexOf(meter);
+  beatsSelect.addEventListener('change', ()=>{
+    meter = METERS[+beatsSelect.value]; computeGroups(); renderDots();
+  });
+  SUBS.forEach(v=>{
+    const b=document.createElement('button');
+    b.className='note-btn'+(v===sub?' active':'');
+    b.innerHTML=noteGlyph(v.div, v.hits);
+    b.setAttribute('aria-label', v.name);
+    b.title=v.name;
+    b.addEventListener('click', ()=>{
+      sub=v;
+      subdivGroup.querySelectorAll('.note-btn').forEach(x=>x.classList.toggle('active', x===b));
+    });
+    subdivGroup.appendChild(b);
+  });
+  computeGroups();
   document.getElementById('accentToggle').addEventListener('click', (e)=>{
     accentOn = !accentOn;
     e.target.textContent = accentOn?'ON':'OFF';
@@ -1726,16 +1885,20 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
 
   function scheduleNote(step, time){
-    const isBeatStart = (step % subdivision) === 0;
-    const beatIndex = Math.floor(step/subdivision) % beatsPerMeasure;
-    const isAccent = accentOn && isBeatStart && beatIndex===0;
-    playClick(time - getCtx().currentTime, isAccent);
-    scheduledBeats.push({step, time, isBeatStart, beatIndex, isAccent});
+    const pos = step % sub.div;
+    const isBeatStart = pos === 0;
+    const beatIndex = Math.floor(step/sub.div) % meter.beats;
+    // 0 약 · 1 중(묶음 첫 박) · 2 강(마디 첫 박)
+    const level = !isBeatStart || !accentOn ? 0
+                : beatIndex === 0 ? 2
+                : midBeats.has(beatIndex) ? 1 : 0;
+    if(sub.hits.indexOf(pos) >= 0) playClick(time - getCtx().currentTime, level);
+    scheduledBeats.push({step, time, isBeatStart, beatIndex, level});
   }
   function advanceNote(){
     const secondsPerBeat = 60.0/bpm;
-    nextNoteTime += secondsPerBeat/subdivision;
-    currentStep = (currentStep+1) % (beatsPerMeasure*subdivision);
+    nextNoteTime += secondsPerBeat/sub.div;
+    currentStep = (currentStep+1) % (meter.beats*sub.div);
   }
   function scheduler(){
     const ctx = getCtx();
@@ -1772,9 +1935,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
         void metroStart.offsetWidth;      // 애니메이션 재시작
         metroStart.classList.add('flash');
         pulseTab('metronome');
-        const dots = beatDotsEl.children;
-        Array.from(dots).forEach(d=>d.classList.remove('on','accent-on'));
-        if(dots[b.beatIndex]) dots[b.beatIndex].classList.add(b.isAccent?'accent-on':'on');
+        const dots = beatDotsEl.querySelectorAll('.beat-dot');
+        dots.forEach(d=>d.classList.remove('on','mid-on','accent-on'));
+        if(dots[b.beatIndex])
+          dots[b.beatIndex].classList.add(b.level===2?'accent-on':b.level===1?'mid-on':'on');
       }
     }
     if(beatSpan>0) drawRoll((now-beatAt)/beatSpan);
@@ -1803,7 +1967,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     metroStart.classList.remove('running','flash');
     rollRight = false; parkOlive();    // 왼쪽 끝에 멈춰 쉰다
     setTabSounding('metronome', false);
-    Array.from(beatDotsEl.children).forEach(d=>d.classList.remove('on','accent-on'));
+    beatDotsEl.querySelectorAll('.beat-dot').forEach(d=>d.classList.remove('on','mid-on','accent-on'));
   }
   metroStart.addEventListener('click', ()=> isPlaying ? stopMetro() : startMetro());
   registerTransport({ isPlaying:()=>isPlaying, stop:stopMetro });
