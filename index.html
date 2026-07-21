@@ -1612,7 +1612,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       scheduleNote(currentStep, nextNoteTime);
       advanceNote();
     }
-    timerID = setTimeout(scheduler, lookahead);
+    if(isPlaying) timerID = setTimeout(scheduler, lookahead);
   }
   let visualGen = 0;
   function visualLoop(gen){
@@ -2610,7 +2610,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       nextTime += stepDur();
       cursor++;
     }
-    timerID=setTimeout(schedule, TICK);
+    if(playing) timerID=setTimeout(schedule, TICK);
   }
 
   let visualGen=0, lastCursorEl=null;
@@ -3178,14 +3178,15 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       nextStepTime = ctx.currentTime + 0.05;
       stepCursor = 0; scheduledMarks.length = 0;
     }
-    while(nextStepTime < ctx.currentTime + AHEAD){
+    // scheduleStep 안에서 stop()이 불릴 수 있으므로 매 바퀴 playing을 다시 본다
+    while(playing && nextStepTime < ctx.currentTime + AHEAD){
       // 셔플 필: 홀수 16분을 뒤로 민다
       const swingOff = (st.swing && stepCursor%2===1) ? secPerStep*st.swing : 0;
       scheduleStep(stepCursor, nextStepTime + swingOff);
       nextStepTime += secPerStep;
       stepCursor++;
     }
-    timerID=setTimeout(scheduler, LOOKAHEAD);
+    if(playing) timerID=setTimeout(scheduler, LOOKAHEAD);
   }
 
   let visualGen=0;
