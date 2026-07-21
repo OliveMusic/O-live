@@ -1168,14 +1168,24 @@
 /* ===================== 공통 유틸 ===================== */
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 let audioCtx = null;
+/* iOS는 오디오 세션에 '용도'를 붙인다.
+   playback  : 소리를 내보내기만 한다. 무음 스위치를 무시한다.
+   play-and-record : 마이크도 같이 쓴다. 튜너를 켤 때만 이쪽으로 바꾼다.
+   playback으로 못박아 두면 마이크 요청이 물어보지도 않고 거부된다. */
+function setAudioSession(mode){
+  try{ if(navigator.audioSession) navigator.audioSession.type = mode; }catch(e){}
+}
+
 function getCtx(){
-  if(!audioCtx){
+  if(!audioCtx || audioCtx.state === 'closed'){
+    // 잠자기 등으로 컨텍스트가 죽으면 딸려 있던 마스터 버스도 같이 버린다
+    if(audioCtx){ __master = null; __send = null; __gtrCache.clear(); }
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    // iOS는 기본적으로 웹오디오를 '무음 스위치를 따르는 소리'로 본다.
-    // playback으로 선언하면 벨소리를 꺼둬도 들리고, 앱을 잠깐 벗어나도 덜 끊긴다.
-    try{ if(navigator.audioSession) navigator.audioSession.type = 'playback'; }catch(e){}
+    setAudioSession('playback');
   }
-  if(audioCtx.state === 'suspended') audioCtx.resume();
+  // iOS는 화면 잠금·전화 같은 방해를 받으면 'suspended'가 아니라
+  // 'interrupted'로 떨어진다. suspended만 보면 이 상태를 놓쳐 소리가 영영 안 난다.
+  if(audioCtx.state !== 'running') audioCtx.resume().catch(()=>{});
   return audioCtx;
 }
 
@@ -1515,7 +1525,9 @@ function setTabSounding(tab, on, source){
    돌아왔을 때 둘 다 되살린다. */
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState !== 'visible') return;
-  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+  if(audioCtx && audioCtx.state !== 'running' && audioCtx.state !== 'closed'){
+    audioCtx.resume().catch(()=>{});
+  }
   if(anySounding()) keepAwake(true);
 });
 
@@ -2049,6 +2061,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       // 트랙만 멈추면 노드는 그래프에 남는다. 켤 때마다 한 벌씩 쌓였다.
       micChain.forEach(n=>{ try{ n.disconnect(); }catch(e){} });
       micChain=[]; srcNode=null; analyser=null;
+      setAudioSession('playback');   // 다시 재생 전용으로
       startStrobe();                 // 곧바로 끊지 않고 잦아들게 둔다
       setTabSounding('tuner', false, 'mic');
       tunerStart.textContent='마이크 켜기';
@@ -2060,6 +2073,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     }
     try{
       getCtx();
+      setAudioSession('play-and-record');   // 마이크를 쓰려면 용도를 바꿔야 한다
       stream=await navigator.mediaDevices.getUserMedia({audio:{
         echoCancellation:false, noiseSuppression:false, autoGainControl:false
       }});
@@ -2091,7 +2105,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       requestAnimationFrame(analyse);
       startStrobe();
     }catch(err){
-      tunerFreq.textContent='마이크 권한 거부됨';
+      setAudioSession('playback');
+      tunerFreq.textContent = (err && err.name==='NotAllowedError')
+        ? '마이크 권한 거부됨' : '마이크를 열 수 없음';
     }
   });
 })();
