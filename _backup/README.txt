@@ -11,3 +11,7 @@ index-v29-strobe-rings.html
 
 되돌리려면 해당 파일을 index.html 자리에 덮어쓰고
 service-worker.js의 VERSION을 지금보다 큰 값으로 올리면 된다.
+
+index-v48-mediasession.html
+  잠금화면 위젯(Media Session)을 쓰고 오디오 세션이 'playback'이던 버전.
+  다른 앱 음악을 끊는 대신 무음 스위치를 무시했다. v49에서 'ambient'로 바꿈.

@@ -1233,9 +1233,9 @@
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 let audioCtx = null;
 /* iOS는 오디오 세션에 '용도'를 붙인다.
-   ambient : 다른 앱 소리와 섞인다. 음악을 틀어 놓고 메트로놈을 쓸 수 있다.
-             잠금화면 위젯도 뜨지 않는다. 대신 무음 스위치를 따른다.
-   play-and-record : 마이크도 같이 쓴다. 튜너를 켤 때만 이쪽으로 바꾼다. */
+   playback  : 소리를 내보내기만 한다. 무음 스위치를 무시한다.
+   play-and-record : 마이크도 같이 쓴다. 튜너를 켤 때만 이쪽으로 바꾼다.
+   playback으로 못박아 두면 마이크 요청이 물어보지도 않고 거부된다. */
 function setAudioSession(mode){
   try{ if(navigator.audioSession) navigator.audioSession.type = mode; }catch(e){}
 }
@@ -1253,7 +1253,7 @@ function getCtx(){
   if(!audioCtx || audioCtx.state === 'closed'){
     if(audioCtx){ __master = null; __send = null; __gtrCache.clear(); }
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    setAudioSession('ambient');    // 다른 앱 음악 위에 얹힌다 (위젯도 뜨지 않는다)
+    setAudioSession('playback');   // 만드는 순간부터 계속 재생용으로 둔다
   }
   if(audioCtx.state !== 'running') audioCtx.resume().catch(()=>{});
   return audioCtx;
@@ -1591,6 +1591,45 @@ function stopAllTransports(){
   __transports.forEach(t=>{ try{ if(t.isPlaying()) t.stop(); }catch(e){} });
 }
 
+/* iOS는 audioSession을 playback으로 선언하는 순간 이 페이지를 '미디어 재생기'로 본다.
+   잠금화면에 재생 위젯이 뜨고, 우리가 상태를 갱신해 주지 않으면 소리가 멎은 뒤에도
+   '재생 중'인 채로 남는다. 그 유령 세션이 살아 있는 동안에는 새로 소리를 내려 해도
+   나지 않는다. 그래서 실제로 울릴 때만 미디어 재생기 행세를 하고, 멈추면 즉시 내려놓는다. */
+// 잠금화면 위젯에 뭐가 울리고 있는지 적어 준다
+const __srcLabel = {metronome:'메트로놈', tuner:'튜너', trainer:'리듬', jam:'잼 세션'};
+let __mediaLabel = '';
+function syncMediaState(){
+  const active = Object.keys(__sounding).filter(k => __sounding[k].size > 0);
+  const on = active.length > 0;
+  // 세션 종류는 여기서 건드리지 않는다. 껐다 켜면 기준음·구성음·청음처럼
+  // 한 번 울리고 마는 소리가 세션 밖에서 울려 아무 데도 나가지 못한다.
+  // 잠금화면 위젯은 아래 playbackState가 맡는다.
+  try{
+    if(!navigator.mediaSession) return;
+    navigator.mediaSession.playbackState = on ? 'playing' : 'none';
+    if(!on){ __mediaLabel = ''; return; }
+    const label = active.map(k => __srcLabel[k] || k).join(' · ');
+    if(label === __mediaLabel) return;          // 바뀔 때만 갈아끼운다
+    __mediaLabel = label;
+    if(typeof MediaMetadata === 'undefined') return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'O’live',
+      artist: label,
+      // 모서리가 투명한 아이콘을 쓰면 위젯에서 검게 합성된다. 꽉 찬 쪽을 쓴다.
+      artwork: [
+        {src:'icons/apple-touch-icon.png', sizes:'180x180', type:'image/png'},
+        {src:'icons/maskable-512.png',     sizes:'512x512', type:'image/png'},
+      ],
+    });
+  }catch(e){}
+}
+try{
+  if(navigator.mediaSession && navigator.mediaSession.setActionHandler){
+    // 잠금화면의 정지 버튼이 실제로 앱을 멈추게 한다
+    navigator.mediaSession.setActionHandler('pause', ()=>{ stopAllTransports(); });
+    navigator.mediaSession.setActionHandler('stop',  ()=>{ stopAllTransports(); });
+  }
+}catch(e){}
 function setTabSounding(tab, on, source){
   const key = source || tab;
   if(!__sounding[tab]) __sounding[tab] = new Set();
@@ -1598,6 +1637,7 @@ function setTabSounding(tab, on, source){
   const btn = document.querySelector('.tab-btn[data-tab="'+tab+'"]');
   if(btn) btn.classList.toggle('sounding', __sounding[tab].size > 0);
   keepAwake(anySounding());
+  syncMediaState();
 }
 
 /* 화면을 껐다 켜면 잠금은 자동으로 풀리고, 오디오도 멈춘 채로 남는다.
@@ -2183,7 +2223,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       // 트랙만 멈추면 노드는 그래프에 남는다. 켤 때마다 한 벌씩 쌓였다.
       micChain.forEach(n=>{ try{ n.disconnect(); }catch(e){} });
       micChain=[]; srcNode=null; analyser=null;
-      setAudioSession('ambient');    // 녹음용에서 되돌린다
+      setAudioSession('playback');   // 녹음용에서 재생용으로 되돌린다
       startStrobe();                 // 곧바로 끊지 않고 잦아들게 둔다
       setTabSounding('tuner', false, 'mic');
       tunerStart.textContent='마이크 켜기';
@@ -2227,7 +2267,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       requestAnimationFrame(analyse);
       startStrobe();
     }catch(err){
-      setAudioSession('ambient');    // 녹음용으로 남지 않게 되돌린다
+      setAudioSession('playback');   // 녹음용으로 남지 않게 되돌린다
       tunerFreq.textContent = (err && err.name==='NotAllowedError')
         ? '마이크 권한 거부됨' : '마이크를 열 수 없음';
     }
