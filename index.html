@@ -54,7 +54,6 @@
     /* §4 임계감쇠(오버슈트 없음) — 대부분의 UI 기본값 */
     --ease-out:cubic-bezier(.2,0,0,1);
     /* 제스처가 운동량을 실어준 경우에만 쓰는 약한 바운스 */
-    --ease-spring:cubic-bezier(.34,1.3,.64,1);
   }
 
   @media (prefers-color-scheme: dark){
@@ -930,7 +929,7 @@
       <div class="card" style="text-align:center;">
         <div class="display">
           <div class="strobe" id="strobe">
-            <svg class="strobe-svg" viewBox="0 0 172 172" xmlns="http://www.w3.org/2000/svg">
+            <svg class="strobe-svg" viewBox="0 0 172 172" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
               <!-- 파선 링. 도는 속도가 곧 음정이 얼마나 어긋났는지다. -->
               <circle class="ring" id="strobeWheel" cx="86" cy="86" r="70"/>
               <!-- 파선 안쪽 가장자리를 구르는 올리브 -->
@@ -954,7 +953,7 @@
       </div>
       <div class="card">
         <h2>기준 튜닝</h2>
-        <select id="tuningSelect" style="width:100%;">
+        <select id="tuningSelect" aria-label="튜닝" style="width:100%;">
           <option value="guitar">기타 표준  E A D G B E</option>
           <option value="dropd">기타 드롭 D  D A D G B E</option>
           <option value="bass">베이스 4현  E A D G</option>
@@ -970,10 +969,10 @@
     <section class="tabpanel" id="tab-scales">
       <div class="card">
         <div class="row">
-          <select id="scaleKey"></select>
-          <select id="scaleType"></select>
+          <select id="scaleKey" aria-label="조"></select>
+          <select id="scaleType" aria-label="스케일 종류"></select>
         </div>
-        <select id="scaleTuning" style="width:100%; margin-top:8px;">
+        <select id="scaleTuning" aria-label="튜닝" style="width:100%; margin-top:8px;">
           <option value="guitar">기타 표준  E A D G B E</option>
           <option value="dropd">기타 드롭 D  D A D G B E</option>
           <option value="bass">베이스 4현  E A D G</option>
@@ -1044,7 +1043,7 @@
       <div class="card">
         <div class="row" style="margin-bottom:14px;">
           <h2 style="margin:0;">패턴</h2>
-          <select id="rhySig" style="width:auto;">
+          <select id="rhySig" aria-label="박자" style="width:auto;">
             <option value="4">4/4</option>
             <option value="3">3/4</option>
             <option value="2">2/4</option>
@@ -1101,8 +1100,8 @@
       <div class="card">
         <div class="jam-head">
           <div class="jam-sel">
-            <select id="jamKey"></select>
-            <select id="jamMode">
+            <select id="jamKey" aria-label="조"></select>
+            <select id="jamMode" aria-label="메이저 / 마이너">
               <option value="major">Major</option>
               <option value="minor">Minor</option>
             </select>
@@ -1119,7 +1118,7 @@
           <button class="btn key tap" id="jamTap">TAP</button>
           <button class="btn key" id="jamPlus" aria-label="빠르게">+</button>
         </div>
-        <select id="jamPreset" style="width:100%; margin-top:12px;"></select>
+        <select id="jamPreset" aria-label="코드 진행" style="width:100%; margin-top:12px;"></select>
       </div>
 
       <div class="card">
@@ -1156,11 +1155,11 @@
   </main>
 
   <nav class="tabbar">
-    <button class="tab-btn active" data-tab="metronome"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M7.2 2.5h5.6l2.7 15H4.5z"/><path d="M13.8 6.2 6.2 13.4"/></svg></span>메트로놈</button>
-    <button class="tab-btn" data-tab="tuner"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M10 3v9"/><circle cx="10" cy="15" r="2.2"/><path d="M3.5 7h3M13.5 7h3"/></svg></span>튜너</button>
-    <button class="tab-btn" data-tab="scales"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 5h15M2.5 10h15M2.5 15h15"/><circle cx="6.5" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="15" r="1.5" fill="currentColor" stroke="none"/></svg></span>스케일</button>
-    <button class="tab-btn" data-tab="trainer"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 12V8.5a7 7 0 0 1 14 0V12"/><path d="M3 12a2 2 0 0 0 2 2h1v-4H5a2 2 0 0 0-2 2Z"/><path d="M17 12a2 2 0 0 1-2 2h-1v-4h1a2 2 0 0 1 2 2Z"/></svg></span>트레이너</button>
-    <button class="tab-btn" data-tab="jam"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6" cy="14.5" r="2.4"/><circle cx="15" cy="12.5" r="2.4"/><path d="M8.4 14.5v-10l9 -2v10"/></svg></span>잼</button>
+    <button class="tab-btn active" data-tab="metronome"><span class="ic"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M7.2 2.5h5.6l2.7 15H4.5z"/><path d="M13.8 6.2 6.2 13.4"/></svg></span>메트로놈</button>
+    <button class="tab-btn" data-tab="tuner"><span class="ic"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M10 3v9"/><circle cx="10" cy="15" r="2.2"/><path d="M3.5 7h3M13.5 7h3"/></svg></span>튜너</button>
+    <button class="tab-btn" data-tab="scales"><span class="ic"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 5h15M2.5 10h15M2.5 15h15"/><circle cx="6.5" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="15" r="1.5" fill="currentColor" stroke="none"/></svg></span>스케일</button>
+    <button class="tab-btn" data-tab="trainer"><span class="ic"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 12V8.5a7 7 0 0 1 14 0V12"/><path d="M3 12a2 2 0 0 0 2 2h1v-4H5a2 2 0 0 0-2 2Z"/><path d="M17 12a2 2 0 0 1-2 2h-1v-4h1a2 2 0 0 1 2 2Z"/></svg></span>트레이너</button>
+    <button class="tab-btn" data-tab="jam"><span class="ic"><svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6" cy="14.5" r="2.4"/><circle cx="15" cy="12.5" r="2.4"/><path d="M8.4 14.5v-10l9 -2v10"/></svg></span>잼</button>
   </nav>
 </div>
 
@@ -1181,7 +1180,6 @@ function getCtx(){
     // 잠자기 등으로 컨텍스트가 죽으면 딸려 있던 마스터 버스도 같이 버린다
     if(audioCtx){ __master = null; __send = null; __gtrCache.clear(); }
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    setAudioSession('playback');
   }
   // iOS는 화면 잠금·전화 같은 방해를 받으면 'suspended'가 아니라
   // 'interrupted'로 떨어진다. suspended만 보면 이 상태를 놓쳐 소리가 영영 안 난다.
@@ -1512,6 +1510,52 @@ function pulseTab(tab){
 function anySounding(){
   return Object.keys(__sounding).some(k => __sounding[k].size > 0);
 }
+
+/* 소리를 내는 것들(메트로놈·리듬·잼·마이크)을 한 곳에 모아 둔다.
+   화면이 꺼질 때 한꺼번에 세우기 위해서다. */
+const __transports = [];
+function registerTransport(t){ __transports.push(t); }
+function stopAllTransports(){
+  __transports.forEach(t=>{ try{ if(t.isPlaying()) t.stop(); }catch(e){} });
+}
+
+/* iOS는 audioSession을 playback으로 선언하는 순간 이 페이지를 '미디어 재생기'로 본다.
+   잠금화면에 재생 위젯이 뜨고, 우리가 상태를 갱신해 주지 않으면 소리가 멎은 뒤에도
+   '재생 중'인 채로 남는다. 그 유령 세션이 살아 있는 동안에는 새로 소리를 내려 해도
+   나지 않는다. 그래서 실제로 울릴 때만 미디어 재생기 행세를 하고, 멈추면 즉시 내려놓는다. */
+// 잠금화면 위젯에 뭐가 울리고 있는지 적어 준다
+const __srcLabel = {metronome:'메트로놈', tuner:'튜너', trainer:'리듬', jam:'잼 세션'};
+let __mediaLabel = '';
+function syncMediaState(){
+  const active = Object.keys(__sounding).filter(k => __sounding[k].size > 0);
+  const on = active.length > 0;
+  setAudioSession(on ? 'playback' : 'auto');
+  try{
+    if(!navigator.mediaSession) return;
+    navigator.mediaSession.playbackState = on ? 'playing' : 'none';
+    if(!on){ __mediaLabel = ''; return; }
+    const label = active.map(k => __srcLabel[k] || k).join(' · ');
+    if(label === __mediaLabel) return;          // 바뀔 때만 갈아끼운다
+    __mediaLabel = label;
+    if(typeof MediaMetadata === 'undefined') return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'O’live',
+      artist: label,
+      // 모서리가 투명한 아이콘을 쓰면 위젯에서 검게 합성된다. 꽉 찬 쪽을 쓴다.
+      artwork: [
+        {src:'icons/apple-touch-icon.png', sizes:'180x180', type:'image/png'},
+        {src:'icons/maskable-512.png',     sizes:'512x512', type:'image/png'},
+      ],
+    });
+  }catch(e){}
+}
+try{
+  if(navigator.mediaSession && navigator.mediaSession.setActionHandler){
+    // 잠금화면의 정지 버튼이 실제로 앱을 멈추게 한다
+    navigator.mediaSession.setActionHandler('pause', ()=>{ stopAllTransports(); });
+    navigator.mediaSession.setActionHandler('stop',  ()=>{ stopAllTransports(); });
+  }
+}catch(e){}
 function setTabSounding(tab, on, source){
   const key = source || tab;
   if(!__sounding[tab]) __sounding[tab] = new Set();
@@ -1519,12 +1563,19 @@ function setTabSounding(tab, on, source){
   const btn = document.querySelector('.tab-btn[data-tab="'+tab+'"]');
   if(btn) btn.classList.toggle('sounding', __sounding[tab].size > 0);
   keepAwake(anySounding());
+  syncMediaState();
 }
 
 /* 화면을 껐다 켜면 잠금은 자동으로 풀리고, 오디오도 멈춘 채로 남는다.
    돌아왔을 때 둘 다 되살린다. */
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState !== 'visible') return;
+  if(document.visibilityState !== 'visible'){
+    // 백그라운드에서는 스케줄러가 눌려 소리가 튀거나 첫박만 반복된다.
+    // 깔끔하게 멈추는 편이 낫다.
+    stopAllTransports();
+    keepAwake(false);
+    return;
+  }
   if(audioCtx && audioCtx.state !== 'running' && audioCtx.state !== 'closed'){
     audioCtx.resume().catch(()=>{});
   }
@@ -1651,9 +1702,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
   function scheduler(){
     const ctx = getCtx();
-    if(nextNoteTime < ctx.currentTime - 0.25){   // 백그라운드에서 밀린 만큼은 버린다
+    // 밀린 시간만 버리고 박 위치는 그대로 둔다.
+    // currentStep을 0으로 되돌리면 보정이 반복될 때마다 첫박 강세만 울린다.
+    if(nextNoteTime < ctx.currentTime - 0.25){
       nextNoteTime = ctx.currentTime + 0.05;
-      currentStep = 0; scheduledBeats.length = 0;
+      scheduledBeats.length = 0;
     }
     while(nextNoteTime < ctx.currentTime + scheduleAheadTime){
       scheduleNote(currentStep, nextNoteTime);
@@ -1691,29 +1744,32 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     requestAnimationFrame(()=>visualLoop(gen));
   }
 
-  metroStart.addEventListener('click', ()=>{
-    if(!isPlaying){
-      getCtx();
-      isPlaying = true;
-      currentStep = 0;
-      rollBeat = 0;
-      scheduledBeats = [];
-      nextNoteTime = getCtx().currentTime + 0.05;
-      scheduler();
-      visualLoop(++visualGen);
-      orbLabel.textContent = '정지';
-      metroStart.classList.add('running');
-      setTabSounding('metronome', true);
-    } else {
-      isPlaying = false;
-      clearTimeout(timerID);
-      orbLabel.textContent = '시작';
-      metroStart.classList.remove('running','flash');
-      rollRight = false; parkOlive();    // 왼쪽 끝에 멈춰 쉰다
-      setTabSounding('metronome', false);
-      Array.from(beatDotsEl.children).forEach(d=>d.classList.remove('on','accent-on'));
-    }
-  });
+  function startMetro(){
+    if(isPlaying) return;
+    getCtx();
+    isPlaying = true;
+    currentStep = 0;
+    rollBeat = 0;
+    scheduledBeats = [];
+    nextNoteTime = getCtx().currentTime + 0.05;
+    scheduler();
+    visualLoop(++visualGen);
+    orbLabel.textContent = '정지';
+    metroStart.classList.add('running');
+    setTabSounding('metronome', true);
+  }
+  function stopMetro(){
+    if(!isPlaying) return;
+    isPlaying = false;
+    clearTimeout(timerID);
+    orbLabel.textContent = '시작';
+    metroStart.classList.remove('running','flash');
+    rollRight = false; parkOlive();    // 왼쪽 끝에 멈춰 쉰다
+    setTabSounding('metronome', false);
+    Array.from(beatDotsEl.children).forEach(d=>d.classList.remove('on','accent-on'));
+  }
+  metroStart.addEventListener('click', ()=> isPlaying ? stopMetro() : startMetro());
+  registerTransport({ isPlaying:()=>isPlaying, stop:stopMetro });
 
   updateBpmUI();
   window.__metronome = { getBpm:()=>bpm };
@@ -2054,6 +2110,12 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   /* ---------- 마이크 ---------- */
+  function stopMic(){
+    if(!listening) return;
+    tunerStart.dispatchEvent(new Event('click'));
+  }
+  registerTransport({ isPlaying:()=>listening, stop:stopMic });
+
   tunerStart.addEventListener('click', async ()=>{
     if(listening){
       listening=false;
@@ -2061,7 +2123,6 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       // 트랙만 멈추면 노드는 그래프에 남는다. 켤 때마다 한 벌씩 쌓였다.
       micChain.forEach(n=>{ try{ n.disconnect(); }catch(e){} });
       micChain=[]; srcNode=null; analyser=null;
-      setAudioSession('playback');   // 다시 재생 전용으로
       startStrobe();                 // 곧바로 끊지 않고 잦아들게 둔다
       setTabSounding('tuner', false, 'mic');
       tunerStart.textContent='마이크 켜기';
@@ -2105,7 +2166,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       requestAnimationFrame(analyse);
       startStrobe();
     }catch(err){
-      setAudioSession('playback');
+      syncMediaState();              // 세션 종류를 실제 상태에 맞게 되돌린다
       tunerFreq.textContent = (err && err.name==='NotAllowedError')
         ? '마이크 권한 거부됨' : '마이크를 열 수 없음';
     }
@@ -2641,9 +2702,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   function schedule(){
     const ctx=getCtx();
     const steps=pattern.length || 1;
-    if(nextTime < ctx.currentTime - 0.25){      // 백그라운드 복귀 시 재동기화
+    if(nextTime < ctx.currentTime - 0.25){      // 밀린 시간만 버리고 자리는 유지
       nextTime = ctx.currentTime + 0.05;
-      cursor = 0; marks.length = 0;
+      marks.length = 0;
     }
     while(nextTime < ctx.currentTime + AHEAD){
       const i=cursor%steps;
@@ -2700,6 +2761,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     beatGrid.querySelectorAll('.gcell').forEach(c=>c.classList.remove('cursor'));
   }
   rhyPlay.addEventListener('click', ()=> playing?stop():start());
+  registerTransport({ isPlaying:()=>playing, stop });
 
   // 초기 패턴: 기본 락
   setPattern(PRESETS.rock.p.slice(), 4);
@@ -3074,9 +3136,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     for(let i=0;i<n;i++) data[i] = Math.random()*2-1;
     return buf;
   }
-  let noiseCache = null;
+  // 컨텍스트가 새로 만들어지면 예전 버퍼는 버린다
+  let noiseCache = null, noiseCtx = null;
   function getNoise(ctx){
-    if(!noiseCache) noiseCache = noiseBuffer(ctx, 1.0);
+    if(!noiseCache || noiseCtx !== ctx){ noiseCache = noiseBuffer(ctx, 1.0); noiseCtx = ctx; }
     return noiseCache;
   }
 
@@ -3225,9 +3288,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const bpm=jamBpm;
     const secPerStep=(60/bpm)/4;
     const st=STYLES[styleKey];
-    if(nextStepTime < ctx.currentTime - 0.25){  // 백그라운드 복귀 시 재동기화
+    if(nextStepTime < ctx.currentTime - 0.25){  // 밀린 시간만 버리고 자리는 유지
       nextStepTime = ctx.currentTime + 0.05;
-      stepCursor = 0; scheduledMarks.length = 0;
+      scheduledMarks.length = 0;
     }
     // scheduleStep 안에서 stop()이 불릴 수 있으므로 매 바퀴 playing을 다시 본다
     while(playing && nextStepTime < ctx.currentTime + AHEAD){
@@ -3286,6 +3349,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     jamStart.querySelector('svg').innerHTML='<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
     setTabSounding('jam', true, 'play');
   });
+
+  registerTransport({ isPlaying:()=>playing, stop });
 
   /* ---------- 초기화 ---------- */
   jamPreset.value='pop';
