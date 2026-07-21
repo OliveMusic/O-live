@@ -1169,9 +1169,32 @@
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 let audioCtx = null;
 function getCtx(){
-  if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    // iOS는 기본적으로 웹오디오를 '무음 스위치를 따르는 소리'로 본다.
+    // playback으로 선언하면 벨소리를 꺼둬도 들리고, 앱을 잠깐 벗어나도 덜 끊긴다.
+    try{ if(navigator.audioSession) navigator.audioSession.type = 'playback'; }catch(e){}
+  }
   if(audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
+}
+
+/* ===== 소리 나는 동안 화면 켜 두기 =====
+   iOS는 화면이 꺼지면 페이지 자체를 재운다. 그러면 스케줄러가 멈춰 소리도 끊긴다.
+   웹에서는 이걸 뚫을 방법이 없으므로, 대신 화면이 꺼지지 않게 붙잡는다.
+   연습 중에는 어차피 화면을 보고 있으니 이쪽이 맞다. */
+let __wakeLock = null;
+async function keepAwake(on){
+  try{
+    if(on){
+      if(!__wakeLock && navigator.wakeLock){
+        __wakeLock = await navigator.wakeLock.request('screen');
+        __wakeLock.addEventListener('release', ()=>{ __wakeLock = null; });
+      }
+    } else if(__wakeLock){
+      const w = __wakeLock; __wakeLock = null; await w.release();
+    }
+  }catch(e){ __wakeLock = null; }   // 지원하지 않거나 거부돼도 앱은 그대로 돌아간다
 }
 function midiToName(midi){ return NOTE_NAMES[((midi%12)+12)%12] + (Math.floor(midi/12)-1); }
 function midiToFreq(midi){ return 440 * Math.pow(2, (midi-69)/12); }
@@ -1476,13 +1499,25 @@ function pulseTab(tab){
   btn.classList.add('beat');
 }
 
+function anySounding(){
+  return Object.keys(__sounding).some(k => __sounding[k].size > 0);
+}
 function setTabSounding(tab, on, source){
   const key = source || tab;
   if(!__sounding[tab]) __sounding[tab] = new Set();
   on ? __sounding[tab].add(key) : __sounding[tab].delete(key);
   const btn = document.querySelector('.tab-btn[data-tab="'+tab+'"]');
   if(btn) btn.classList.toggle('sounding', __sounding[tab].size > 0);
+  keepAwake(anySounding());
 }
+
+/* 화면을 껐다 켜면 잠금은 자동으로 풀리고, 오디오도 멈춘 채로 남는다.
+   돌아왔을 때 둘 다 되살린다. */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState !== 'visible') return;
+  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+  if(anySounding()) keepAwake(true);
+});
 
 /* ===================== 탭 전환 ===================== */
 const tabTitles = {metronome:'메트로놈', tuner:'튜너', scales:'스케일', trainer:'트레이너', jam:'잼 세션'};
