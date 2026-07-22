@@ -2397,7 +2397,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     tunerFreq.textContent='연주해보세요';
     strobeCents=0;
     strobe.classList.remove('in-tune');
-    strobeDir.textContent='—';
+    strobeDir.textContent='— 조율 대기 —';
     stringBtns.querySelectorAll('.string-btn').forEach(b=>b.classList.remove('match'));
   }
 
@@ -2524,6 +2524,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     tunerStart.dispatchEvent(new Event('click'));
   }
   registerTransport({ isPlaying:()=>listening, stop:stopMic });
+
+  // 튜너가 아닌 다른 탭으로 넘어가면 마이크를 자동으로 끈다
+  document.querySelectorAll('.tab-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{ if(b.dataset.tab !== 'tuner') stopMic(); });
+  });
 
   tunerStart.addEventListener('click', async ()=>{
     if(listening){
