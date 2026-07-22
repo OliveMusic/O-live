@@ -2966,15 +2966,15 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     playFlash=setTimeout(()=>earPlayBtn.classList.remove('playing'), 900);
 
     if(mode==='interval'){
-      playTone(midiToFreq(root), 0.5, 0, 'triangle', 0.82);
-      playTone(midiToFreq(root+answer.semis), 0.5, 0.6, 'triangle', 0.82);
+      playTone(midiToFreq(root), 0.5, 0, 'triangle', 0.98);
+      playTone(midiToFreq(root+answer.semis), 0.5, 0.6, 'triangle', 0.98);
     } else if(mode==='chord'){
       // 아르페지오 후 동시 울림 — 구성음이 잘 들리도록
-      answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.36, i*0.17, 'triangle', 0.53));
+      answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.36, i*0.17, 'triangle', 0.64));
       const after = answer.iv.length*0.17 + 0.12;
-      answer.iv.forEach(iv=> playTone(midiToFreq(root+iv), 1.1, after, 'sine', 0.36));
+      answer.iv.forEach(iv=> playTone(midiToFreq(root+iv), 1.1, after, 'sine', 0.44));
     } else {
-      answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.3, i*0.23, 'triangle', 0.69));
+      answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.3, i*0.23, 'triangle', 0.84));
     }
   }
   // 다음 문제가 예약돼 있는 동안도 '소리 낼 예정'인 상태다.
