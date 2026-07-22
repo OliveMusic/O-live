@@ -110,6 +110,7 @@
 
   /* 손에 쥐는 앱이다. 모니터에서 화면 폭만큼 늘어나면 버튼이 우스꽝스럽게 길어진다. */
   main{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:4px 14px 106px;}
+  /* 프레임(칼럼)은 화면 가운데. 헤더 글씨는 그 프레임의 왼쪽 상단에 앉는다. */
   main > *, header.topbar{ max-width:520px; margin-inline:auto; }
 
   .tabpanel{display:none;}
@@ -159,6 +160,23 @@
   }
   /* 주요 트랜스포트 버튼은 스타디움 형태 */
   .btn.wide{width:100%; padding:15px; border-radius:var(--r-pill);}
+
+  /* 마이크: 글자 대신 아이콘. 꺼짐=테두리+빗금, 켜짐=세이지로 채움. */
+  .mic-btn{
+    display:flex; align-items:center; justify-content:center;
+    width:52px; height:52px; margin:14px auto 0; padding:0;
+    border-radius:50%; cursor:pointer;
+    background:var(--key); border:1px solid var(--line);
+    transition:background .15s var(--ease-out), border-color .15s var(--ease-out), transform .12s var(--ease-out);
+  }
+  .mic-btn svg{ width:26px; height:26px; fill:none;
+    stroke:var(--ink-2); stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  .mic-btn .mic-body{ fill:var(--ink-2); stroke:none; }
+  .mic-btn:active{ transform:scale(.94); }
+  .mic-btn.on{ background:var(--signal); border-color:var(--signal); }
+  .mic-btn.on svg{ stroke:var(--on-signal); }
+  .mic-btn.on .mic-body{ fill:var(--on-signal); }
+  .mic-btn.on .mic-slash{ display:none; }        /* 켜지면 빗금이 사라진다 */
   .btn.ghost{background:transparent;}
   .btn[disabled]{opacity:.35;}
 
@@ -189,6 +207,41 @@
     background-repeat:no-repeat; background-position:right 12px center; padding-right:30px;
   }
   select option{background:var(--panel); color:var(--ink);}
+
+  /* 좌우 분리 드롭다운 */
+  .dd{ position:relative; }
+  .dd-btn{
+    width:100%; display:flex; align-items:center; gap:8px;
+    background:var(--key); color:var(--ink);
+    border:1px solid var(--line); border-radius:var(--r);
+    padding:11px 30px 11px 13px; font-size:0.75rem; font-weight:500;
+    cursor:pointer; text-align:left;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' stroke='%23918f88' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 12px center;
+  }
+  .dd-btn .dd-sub{ margin-left:auto; color:var(--ink-3); font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+  .dd-menu{
+    position:absolute; z-index:40; left:0; top:calc(100% + 5px);
+    min-width:100%; width:max-content; max-width:min(340px, calc(100vw - 32px));
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+    box-shadow:0 8px 24px rgba(0,0,0,.16); overflow:auto; max-height:280px; padding:4px;
+  }
+  .dd-item .dd-sub{ padding-left:18px; }   /* 이름과 영어 표기 사이 최소 간격 */
+  .dd-menu[hidden]{ display:none; }
+  .dd-item{
+    width:100%; display:flex; align-items:center; gap:8px;
+    background:transparent; border:none; border-radius:calc(var(--r) - 3px);
+    padding:10px 11px; font-size:0.75rem; font-weight:500; color:var(--ink);
+    cursor:pointer; text-align:left;
+  }
+  .dd-item .dd-sub{ margin-left:auto; color:var(--ink-3); font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+  .dd-item:active{ background:var(--key-press); }
+  .dd-item[aria-selected="true"]{ background:var(--signal-soft); color:var(--signal); }
+  .dd-item[aria-selected="true"] .dd-sub{ color:var(--signal); }
+  /* 잼 헤더처럼 좁은 곳을 위한 컴팩트 변형 */
+  .dd.compact .dd-btn{ padding:8px 20px 8px 9px; font-size:0.6875rem; background-position:right 7px center; }
+  .dd.compact .dd-item{ padding:8px 9px; font-size:0.6875rem; }
+  .dd.compact .dd-menu{ min-width:100%; }
 
   .slider-wrap{position:relative; padding:6px 0 26px; margin-bottom:4px;}
   .slider-ticks{
@@ -227,7 +280,7 @@
   nav.tabbar{
     position:fixed; z-index:30;
     left:0; right:0; bottom:0;
-    max-width:520px; margin-inline:auto;   /* 본문과 같은 폭으로 */
+    max-width:520px; margin-inline:auto;   /* 본문 프레임과 같은 폭, 가운데 */
     display:flex;
     background:var(--body-hi);
     border-top:1px solid var(--line-soft);
@@ -405,9 +458,20 @@
   }
 
 
-  .string-btns{display:grid; grid-template-columns:repeat(6,1fr); gap:5px; margin-top:12px;}
-  .string-btn{padding:11px 2px; font-size:0.6875rem; text-align:center; border-radius:var(--r-pill);}
-  .string-btn.match{ background:var(--signal); border-color:var(--signal); color:var(--on-signal); }
+  .string-btns{display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-top:12px;}
+  .string-btn{
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    padding:9px 2px 8px; cursor:pointer;
+    background:var(--key); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:var(--r); color:var(--ink);
+    transition:background .1s var(--ease-out), border-color .1s var(--ease-out), color .1s var(--ease-out), transform .1s var(--ease-out);
+  }
+  .string-btn .sn{ font-size:0.5rem; font-weight:500; color:var(--ink-3); letter-spacing:.02em; }
+  .string-btn .nn{ font-size:0.8125rem; font-weight:400; letter-spacing:-.02em; }
+  .string-btn:active{ transform:scale(.95); border-bottom-width:1px; }
+  .string-btn.match{ background:var(--signal); border-color:var(--signal); }
+  .string-btn.match .sn{ color:var(--on-signal); opacity:.75; }
+  .string-btn.match .nn{ color:var(--on-signal); }
 
   /* ---------- Fretboard: circular note markers ---------- */
   .fretboard-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -2px; padding:0 2px;}
@@ -539,6 +603,20 @@
     content:''; position:absolute; top:6px; left:6px;
     width:3px; height:3px; border-radius:50%; background:var(--ink-3);
   }
+  .chord-cell .cc-add{
+    position:absolute; top:3px; right:3px;
+    width:22px; height:22px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.9rem; line-height:1; font-weight:400;
+    color:var(--on-signal); background:var(--signal);
+    opacity:.9;
+  }
+  .chord-cell .cc-add:active{ transform:scale(.9); opacity:1; }
+  .plus-mark{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:15px; height:15px; border-radius:50%; vertical-align:-3px;
+    background:var(--signal); color:var(--on-signal); font-weight:400; font-size:0.72rem;
+  }
   .chord-cell.fn-T::before{ background:var(--ink-2); }
   .chord-cell.fn-S::before{ background:var(--ink-3); }
   .chord-cell.fn-D::before{ background:var(--signal); }
@@ -602,6 +680,31 @@
   .play-orb.playing svg, .play-orb.on svg{ fill:var(--on-signal); }
   .play-orb.sm{ width:56px; height:56px; flex-shrink:0; }
   .play-orb.sm svg{ width:22px; height:22px; }
+
+  /* 올리브 재생 버튼 — 청음 버튼과 같은 결. 리듬·잼에서 쓴다.
+     재생/정지 아이콘은 씨 구멍 안에 앉는다. */
+  .play-orb.olive{
+    width:62px; height:51px; border-radius:50%;
+    transform:rotate(-11deg); flex-shrink:0;
+  }
+  /* 씨 구멍: 카드 색 원 */
+  .play-orb.olive::after{
+    content:''; position:absolute;
+    left:calc(50% + 13px); top:50%;
+    width:21px; height:21px; border-radius:50%;
+    background:var(--panel);
+    transform:translate(-50%,-50%);
+  }
+  /* 그 구멍 안에 재생/정지 아이콘. 세이지로 채워져도 아이콘 색은 그대로. */
+  .play-orb.olive svg{
+    position:absolute; z-index:2;
+    left:calc(50% + 13px); top:50%;
+    width:15px; height:15px;
+    transform:translate(-50%,-50%) rotate(11deg);
+    fill:var(--ink-2);
+  }
+  .play-orb.olive.on svg{ fill:var(--ink-2); }
+  .play-orb.olive:active{ transform:rotate(-11deg) scale(.94); }
 
   /* 청음의 재생 버튼만 올리브로. 크기는 그대로 두고 세로만 비율에 맞춰 줄인다.
      씨는 진짜 구멍이라 뒤 카드가 비쳐 보이고, 눌러서 색이 바뀌어도 그대로다. */
@@ -765,6 +868,44 @@
 
   /* ---------- 구성음 칩 (음이름 + 도수) ---------- */
   #scaleNotesList{ display:flex; flex-wrap:wrap; gap:6px; }
+
+  /* 피아노 건반 */
+  .piano{
+    position:relative; display:flex; gap:0;
+    height:104px; margin-top:12px; touch-action:manipulation;
+    border-radius:6px; overflow:visible;
+  }
+  .pkey{
+    display:flex; align-items:flex-end; justify-content:center; padding-bottom:8px;
+    font-size:0.625rem; font-weight:600; cursor:pointer;
+    -webkit-user-select:none; user-select:none; box-sizing:border-box;
+    font-variant-numeric:tabular-nums;
+  }
+  .pkey.white{
+    flex:1 1 0; height:100%;
+    background:var(--key); border:1px solid var(--line);
+    border-radius:0 0 5px 5px; color:var(--ink-3);
+  }
+  .pkey.white + .pkey.white{ border-left:none; }
+  .pkey.black{
+    position:absolute; top:0; height:62%; z-index:2;
+    background:var(--display); border:1px solid #14140f;
+    border-radius:0 0 4px 4px; color:var(--display-dim);
+  }
+  /* 흰건반 구성음: 은은한 세이지 · 루트는 진한 세이지. */
+  .pkey.white.in{ background:var(--signal-soft); color:var(--signal); }
+  .pkey.white.root{ background:var(--signal); border-color:var(--signal); color:var(--on-signal); }
+  /* 검은건반은 어두운 색 그대로. 구성음·루트는 아래쪽 세이지 점으로 표시해
+     '검은건반'이라는 정체성을 지키면서 스케일 여부를 알린다. */
+  .pkey.black.in span, .pkey.black.root span{
+    display:flex; align-items:center; justify-content:center;
+    width:17px; height:17px; border-radius:50%; font-size:0.5625rem; font-weight:700;
+  }
+  .pkey.black.in span{ background:var(--signal-display); color:#1e2417; }
+  .pkey.black.root span{ background:var(--signal); color:var(--on-signal); }
+  /* 스케일 밖 건반은 눌러도 소리가 안 난다 — 손가락 표시도 없앤다. */
+  .pkey.mute{ cursor:default; }
+  .pkey:active{ filter:brightness(.93); }
   .note-chip{
     display:flex; align-items:baseline; gap:6px;
     padding:8px 14px;
@@ -1014,7 +1155,7 @@
       <div class="card">
         <div class="row" style="margin-bottom:0;">
           <h2 style="margin:0;">박자</h2>
-          <select id="beatsSelect" aria-label="박자" style="width:auto;"></select>
+          <div id="beatsSelect" style="width:172px;"></div>
         </div>
         <p class="hint" style="margin:9px 0 0;">겹박자는 묶음 첫 박에 중간 강세가 붙습니다</p>
         <h2 style="margin-top:18px;">세분화</h2>
@@ -1052,17 +1193,18 @@
           <div class="strobe-hint"><span id="strobeDir">— 조율 대기 —</span></div>
           <div class="in-level"><div class="in-level-bar" id="tunerLevel"></div></div>
         </div>
-        <button class="btn primary wide" id="tunerStart" style="margin-top:14px;">마이크 켜기</button>
+        <button class="mic-btn" id="tunerStart" aria-label="마이크 켜기" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect class="mic-body" x="9" y="3" width="6" height="11" rx="3"/>
+            <path class="mic-arc" d="M6 11a6 6 0 0 0 12 0"/>
+            <path class="mic-stem" d="M12 17v3.5M9 20.5h6"/>
+            <line class="mic-slash" x1="4.5" y1="4.5" x2="19.5" y2="19.5"/>
+          </svg>
+        </button>
       </div>
       <div class="card">
         <h2>기준 튜닝</h2>
-        <select id="tuningSelect" aria-label="튜닝" style="width:100%;">
-          <option value="guitar">기타 표준  E A D G B E</option>
-          <option value="dropd">기타 드롭 D  D A D G B E</option>
-          <option value="bass">베이스 4현  E A D G</option>
-          <option value="ukulele">우쿨렐레  G C E A</option>
-          <option value="mandolin">만돌린  G D A E</option>
-        </select>
+        <div id="tuningSelect"></div>
         <div class="string-btns" id="stringBtns"></div>
         <p class="hint" style="margin-top:10px;">현을 누르면 기준음이 들립니다</p>
       </div>
@@ -1072,16 +1214,10 @@
     <section class="tabpanel" id="tab-scales">
       <div class="card">
         <div class="row">
-          <select id="scaleKey" aria-label="조"></select>
-          <select id="scaleType" aria-label="스케일 종류"></select>
+          <div id="scaleKey" style="flex:0 0 64px;"></div>
+          <div id="scaleType" style="flex:1; min-width:0;"></div>
         </div>
-        <select id="scaleTuning" aria-label="튜닝" style="width:100%; margin-top:8px;">
-          <option value="guitar">기타 표준  E A D G B E</option>
-          <option value="dropd">기타 드롭 D  D A D G B E</option>
-          <option value="bass">베이스 4현  E A D G</option>
-          <option value="ukulele">우쿨렐레  G C E A</option>
-          <option value="mandolin">만돌린  G D A E</option>
-        </select>
+        <div id="scaleTuning" style="margin-top:8px;"></div>
       </div>
       <div class="card">
         <div class="row" style="margin-bottom:12px;">
@@ -1096,6 +1232,7 @@
       <div class="card">
         <h2>구성음</h2>
         <div id="scaleNotesList" class="pill-group"></div>
+        <p class="hint" style="margin-top:10px;">건반의 숫자는 루트음(1)로부터의 도수</p>
       </div>
     </section>
 
@@ -1144,14 +1281,24 @@
 
       <div class="trainer-pane" id="pane-rhythm">
       <div class="card">
+        <h2>재생</h2>
+        <div class="transport">
+          <button class="play-orb olive" id="rhyPlay" aria-label="재생">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+          </button>
+          <div class="tempo-readout">
+            <span class="v" id="rhyBpmVal" title="두 번 누르면 기본값">100</span><span class="u">BPM</span>
+          </div>
+          <button class="btn" id="rhyTap">TAP</button>
+        </div>
+        <input type="range" id="rhyBpm" min="40" max="200" value="100">
+        <div class="pill-group" id="rhyToggles" style="margin-top:14px;"></div>
+      </div>
+
+      <div class="card">
         <div class="row" style="margin-bottom:14px;">
           <h2 style="margin:0;">패턴</h2>
-          <select id="rhySig" aria-label="박자" style="width:auto;">
-            <option value="4">4/4</option>
-            <option value="3">3/4</option>
-            <option value="2">2/4</option>
-            <option value="6">6/8</option>
-          </select>
+          <div id="rhySig" style="width:96px;"></div>
         </div>
         <div class="beat-grid" id="beatGrid"></div>
         <p class="hint" style="text-align:center; margin:6px 0 0;">칸을 눌러 직접 편집할 수 있습니다</p>
@@ -1174,21 +1321,6 @@
         </div>
       </div>
 
-      <div class="card">
-        <h2>재생</h2>
-        <div class="transport">
-          <button class="play-orb sm" id="rhyPlay" aria-label="재생">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-          </button>
-          <div class="tempo-readout">
-            <span class="v" id="rhyBpmVal" title="두 번 누르면 기본값">90</span><span class="u">BPM</span>
-          </div>
-          <button class="btn" id="rhyTap">TAP</button>
-        </div>
-        <input type="range" id="rhyBpm" min="40" max="200" value="90">
-        <div class="pill-group" id="rhyToggles" style="margin-top:14px;"></div>
-      </div>
-
 
       <div class="card">
         <h2>프리셋</h2>
@@ -1203,16 +1335,13 @@
       <div class="card">
         <div class="jam-head">
           <div class="jam-sel">
-            <select id="jamKey" aria-label="조"></select>
-            <select id="jamMode" aria-label="메이저 / 마이너">
-              <option value="major">Major</option>
-              <option value="minor">Minor</option>
-            </select>
+            <div id="jamKey" class="dd compact" style="flex:0 0 60px;"></div>
+            <div id="jamMode" class="dd compact" style="flex:1; min-width:0;"></div>
           </div>
           <div class="jam-bpm" id="jamBpmBox" title="두 번 누르면 기본값">
-            <b id="jamBpmVal">80</b><span>BPM</span>
+            <b id="jamBpmVal">100</b><span>BPM</span>
           </div>
-          <button class="play-orb sm" id="jamStart" aria-label="재생">
+          <button class="play-orb olive" id="jamStart" aria-label="재생">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
           </button>
         </div>
@@ -1221,7 +1350,7 @@
           <button class="btn key tap" id="jamTap">TAP</button>
           <button class="btn key" id="jamPlus" aria-label="빠르게">+</button>
         </div>
-        <select id="jamPreset" aria-label="코드 진행" style="width:100%; margin-top:12px;"></select>
+        <div id="jamPreset" style="margin-top:12px;"></div>
       </div>
 
       <div class="card">
@@ -1245,6 +1374,7 @@
           </div>
         </div>
         <div class="chord-palette" id="chordPalette"></div>
+        <p class="hint" style="margin:10px 0 0;">코드를 눌러 미리듣기 · <b class="plus-mark">+</b> 로 진행에 추가</p>
       </div>
 
       <div class="card">
@@ -1317,6 +1447,49 @@ async function keepAwake(on){
 function midiToName(midi){ return NOTE_NAMES[((midi%12)+12)%12] + (Math.floor(midi/12)-1); }
 function midiToFreq(midi){ return 440 * Math.pow(2, (midi-69)/12); }
 function pcName(pc){ return NOTE_NAMES[((pc%12)+12)%12]; }
+
+/* iOS 네이티브 select은 휠 피커로 열려 옵션 안을 좌우로 나눌 수 없다.
+   그래서 직접 만든다. items: [{main, sub}] — main은 왼쪽, sub는 오른쪽. */
+function splitParen(label){
+  const m=/^(.*?)\s*\((.+)\)\s*$/.exec(label);
+  return m ? {main:m[1], sub:m[2]} : {main:label, sub:''};
+}
+function makeSplitDropdown(mount, items, selected, onSelect){
+  mount.classList.add('dd');
+  mount.innerHTML='';
+  const btn=document.createElement('button');
+  btn.type='button'; btn.className='dd-btn';
+  btn.setAttribute('aria-haspopup','listbox');
+  btn.setAttribute('aria-expanded','false');
+  btn.innerHTML='<span class="dd-main"></span><span class="dd-sub"></span>';
+  const menu=document.createElement('div');
+  menu.className='dd-menu'; menu.setAttribute('role','listbox'); menu.hidden=true;
+  items.forEach((it,i)=>{
+    const o=document.createElement('button');
+    o.type='button'; o.className='dd-item'; o.setAttribute('role','option'); o.dataset.i=i;
+    o.innerHTML='<span class="dd-main">'+it.main+'</span><span class="dd-sub">'+(it.sub||'')+'</span>';
+    o.addEventListener('click', ()=>{ choose(i); close(); });
+    menu.appendChild(o);
+  });
+  mount.appendChild(btn); mount.appendChild(menu);
+  let cur=selected;
+  function render(){
+    btn.querySelector('.dd-main').textContent=items[cur].main;
+    btn.querySelector('.dd-sub').textContent=items[cur].sub||'';
+    btn.setAttribute('aria-label', items[cur].main + (items[cur].sub ? ' '+items[cur].sub : ''));
+    menu.querySelectorAll('.dd-item').forEach((o,i)=>o.setAttribute('aria-selected', i===cur?'true':'false'));
+  }
+  const outside=e=>{ if(!mount.contains(e.target)) close(); };
+  function open(){ menu.hidden=false; btn.setAttribute('aria-expanded','true');
+    setTimeout(()=>document.addEventListener('pointerdown',outside),0); }
+  function close(){ if(menu.hidden) return; menu.hidden=true; btn.setAttribute('aria-expanded','false');
+    document.removeEventListener('pointerdown',outside); }
+  function choose(i){ cur=i; render(); onSelect(i); }
+  btn.addEventListener('click', ()=> menu.hidden ? open() : close());
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') close(); });
+  render();
+  return { set(i){ cur=i; render(); }, get:()=>cur, close };
+}
 
 function playTone(freq, duration=0.6, when=0, type='sine', gainVal=0.43){
   const ctx = getCtx();
@@ -1855,17 +2028,13 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   /* ---------- 박자 · 세분화 버튼 ---------- */
-  const beatsSelect = document.getElementById('beatsSelect');
   const subdivGroup = document.getElementById('subdivGroup');
-  METERS.forEach((m,i)=>{
-    const o=document.createElement('option');
-    o.value=i; o.textContent = m.label + (m.groups.length>1 ? '  (' + m.groups.join('+') + ')' : '');
-    beatsSelect.appendChild(o);
-  });
-  beatsSelect.value = METERS.indexOf(meter);
-  beatsSelect.addEventListener('change', ()=>{
-    meter = METERS[+beatsSelect.value]; computeGroups(); renderDots();
-  });
+  makeSplitDropdown(
+    document.getElementById('beatsSelect'),
+    METERS.map(m=>({ main:m.label, sub: m.groups.length>1 ? '('+m.groups.join('+')+')' : '' })),
+    METERS.indexOf(meter),
+    i=>{ meter=METERS[i]; computeGroups(); renderDots(); }
+  );
   SUBS.forEach(v=>{
     const b=document.createElement('button');
     b.className='note-btn'+(v===sub?' active':'');
@@ -1980,12 +2149,13 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 튜너 ===================== */
 (function(){
   const TUNINGS = {
-    guitar:{label:'Guitar', strings:[40,45,50,55,59,64]},
-    dropd:{label:'Drop D', strings:[38,45,50,55,59,64]},
-    bass:{label:'Bass', strings:[28,33,38,43]},
-    ukulele:{label:'Ukulele', strings:[67,60,64,69]},
-    mandolin:{label:'Mandolin', strings:[55,62,69,76]},
+    guitar:{label:'기타 표준', strings:[40,45,50,55,59,64]},
+    dropd:{label:'기타 드롭 D', strings:[38,45,50,55,59,64]},
+    bass:{label:'베이스 4현', strings:[28,33,38,43]},
+    ukulele:{label:'우쿨렐레', strings:[67,60,64,69]},
+    mandolin:{label:'만돌린', strings:[55,62,69,76]},
   };
+  const TUNING_ORDER = ['guitar','dropd','bass','ukulele','mandolin'];
   const tunerNote   = document.getElementById('tunerNote');
   const tunerFreq   = document.getElementById('tunerFreq');
   const tunerStart  = document.getElementById('tunerStart');
@@ -2162,17 +2332,27 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const lo=Math.min(...t.strings), hi=Math.max(...t.strings);
     freqLo=midiToFreq(lo)*0.87;      // 많이 풀린 줄도 잡을 만큼의 여유
     freqHi=midiToFreq(hi+26);        // 하이 프렛까지
-    stringBtns.style.gridTemplateColumns=`repeat(${t.strings.length},1fr)`;
-    t.strings.forEach(midi=>{
+    const count = t.strings.length;
+    stringBtns.style.gridTemplateColumns=`repeat(${count},1fr)`;
+    t.strings.forEach((midi,idx)=>{
       const b=document.createElement('button');
-      b.className='btn string-btn';
-      b.textContent=midiToName(midi);
+      b.className='string-btn';
+      // 줄 번호: 가장 낮은(굵은) 줄이 가장 큰 번호. 기타 6번 ~ 1번.
+      const num = count - idx;
+      const name = midiToName(midi);
+      b.innerHTML = `<span class="sn">${num}</span><span class="nn">${name}</span>`;
       b.dataset.midi=midi;
+      b.setAttribute('aria-label', num+'번 줄 '+name);
       b.addEventListener('click', ()=> referenceTone(midi, 2.6));
       stringBtns.appendChild(b);
     });
   }
-  tuningSelect.addEventListener('change', ()=>{ currentTuning=tuningSelect.value; renderStringButtons(); });
+  makeSplitDropdown(
+    tuningSelect,
+    TUNING_ORDER.map(k=>({ main:TUNINGS[k].label, sub:TUNINGS[k].strings.map(m=>pcName(m)).join('') })),
+    0,
+    i=>{ currentTuning=TUNING_ORDER[i]; renderStringButtons(); }
+  );
   renderStringButtons();
 
   function update(freq){
@@ -2351,7 +2531,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       setAudioSession('ambient');    // 녹음용에서 되돌린다
       startStrobe();                 // 곧바로 끊지 않고 잦아들게 둔다
       setTabSounding('tuner', false, 'mic');
-      tunerStart.textContent='마이크 켜기';
+      tunerStart.classList.remove('on');
+      tunerStart.setAttribute('aria-label','마이크 켜기');
+      tunerStart.setAttribute('aria-pressed','false');
       idle();
       tunerFreq.textContent='마이크 꺼짐';
       inLevel=0;
@@ -2387,7 +2569,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
       listening=true;
       setTabSounding('tuner', true, 'mic');
-      tunerStart.textContent='마이크 끄기';
+      tunerStart.classList.add('on');
+      tunerStart.setAttribute('aria-label','마이크 끄기');
+      tunerStart.setAttribute('aria-pressed','true');
       tunerFreq.textContent='연주해보세요';
       requestAnimationFrame(analyse);
       startStrobe();
@@ -2425,9 +2609,13 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   // 루트로부터의 반음 거리를 도수 표기로
   const DEGREE = ['1','♭2','2','♭3','3','4','♭5','5','♭6','6','♭7','7'];
 
-  const scaleKey   = document.getElementById('scaleKey');
-  const scaleType  = document.getElementById('scaleType');
-  const scaleTuning= document.getElementById('scaleTuning');
+  const scaleKeyEl  = document.getElementById('scaleKey');
+  const scaleTypeEl = document.getElementById('scaleType');
+  const scaleTuneEl = document.getElementById('scaleTuning');
+  const TUNE_LABEL={guitar:'기타 표준',dropd:'기타 드롭 D',bass:'베이스 4현',ukulele:'우쿨렐레',mandolin:'만돌린'};
+  const TUNE_ORDER=['guitar','dropd','bass','ukulele','mandolin'];
+  const SC_KEYS=Object.keys(SCALE_TYPES);
+  let scaleRoot=0, scaleTypeKey=SC_KEYS[0], scaleTuneKey='guitar';
   const fretboard  = document.getElementById('fretboard');
   const fretScroll = document.getElementById('fretScroll');
   const fretZoom   = document.getElementById('fretZoom');
@@ -2441,13 +2629,20 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   ];
   let zoom = 'fit';
 
-  for(let i=0;i<12;i++){
-    const o=document.createElement('option'); o.value=i; o.textContent=pcName(i); scaleKey.appendChild(o);
-  }
-  scaleKey.value=0;
-  Object.entries(SCALE_TYPES).forEach(([k,v])=>{
-    const o=document.createElement('option'); o.value=k; o.textContent=v.label; scaleType.appendChild(o);
-  });
+  makeSplitDropdown(scaleKeyEl, Array.from({length:12},(_,i)=>({main:pcName(i),sub:''})),
+    0, i=>{ scaleRoot=i; render(); });
+  const SCALE_EN = {
+    major:'Ionian', minor:'Aeolian',
+    majpent:'Major Pent.', minpent:'Minor Pent.',
+    blues:'Blues', dorian:'Dorian', phrygian:'Phrygian', lydian:'Lydian',
+    mixolydian:'Mixolydian', locrian:'Locrian',
+    harmonicminor:'Harmonic Min.', melodicminor:'Melodic Min.',
+  };
+  makeSplitDropdown(scaleTypeEl,
+    SC_KEYS.map(k=>({ main:splitParen(SCALE_TYPES[k].label).main, sub:SCALE_EN[k]||'' })),
+    0, i=>{ scaleTypeKey=SC_KEYS[i]; render(); });
+  makeSplitDropdown(scaleTuneEl, TUNE_ORDER.map(k=>({main:TUNE_LABEL[k], sub:TUNINGS[k].strings.map(m=>pcName(m)).join('')})),
+    0, i=>{ scaleTuneKey=TUNE_ORDER[i]; render(); });
   ZOOMS.forEach(z=>{
     const b=document.createElement('button');
     b.className='pill'+(z.key===zoom?' active':'');
@@ -2481,10 +2676,45 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     return {cell, frets: FIT_FRETS};
   }
 
+  /* 한 옥타브 피아노. 스케일에 든 건반만 세이지로 칠하고 루트를 가장 진하게.
+     아이폰에서 누르기 좋게 흰건반 7개가 카드 폭을 꽉 채운다. */
+  const WHITE_PC = [0,2,4,5,7,9,11];
+  const BLACK = [ {pc:1,after:0}, {pc:3,after:1}, {pc:6,after:3}, {pc:8,after:4}, {pc:10,after:5} ];
+  function renderPiano(rootPc, scaleSet){
+    scaleNotesList.className='piano';
+    scaleNotesList.innerHTML='';
+    const bw = 'calc(100% / 7 * 0.58)';
+    const mk = (pc, black) => {
+      const el=document.createElement('button');
+      el.type='button';
+      el.className='pkey '+(black?'black':'white');
+      const inScale = scaleSet.has(pc);
+      if(inScale) el.classList.add('in');
+      if(pc===rootPc) el.classList.add('root');
+      const label = inScale ? DEGREE[scaleSet.get(pc)] : (black ? '' : pcName(pc));
+      el.innerHTML = `<span>${label}</span>`;
+      el.setAttribute('aria-label', pcName(pc)+(inScale?' '+DEGREE[scaleSet.get(pc)]+'도':''));
+      if(inScale){
+        el.addEventListener('click', ()=> guitarPluck(60+pc, 1.8, 0.55));
+      }else{
+        el.classList.add('mute');       // 스케일 밖은 눌러도 소리 안 남
+        el.setAttribute('aria-disabled','true');
+      }
+      return el;
+    };
+    WHITE_PC.forEach(pc=> scaleNotesList.appendChild(mk(pc,false)));
+    BLACK.forEach(b=>{
+      const el=mk(b.pc,true);
+      el.style.width=bw;
+      el.style.left=`calc(100% / 7 * ${b.after+1} - (${bw}) / 2)`;
+      scaleNotesList.appendChild(el);
+    });
+  }
+
   function render(){
-    const rootPc = parseInt(scaleKey.value);
-    const type   = SCALE_TYPES[scaleType.value];
-    const tuning = TUNINGS[scaleTuning.value];
+    const rootPc = scaleRoot;
+    const type   = SCALE_TYPES[scaleTypeKey];
+    const tuning = TUNINGS[scaleTuneKey];
     const lay    = layout();
     const FRETS  = lay.frets;
     const size   = lay.cell;
@@ -2535,19 +2765,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       fretboard.appendChild(row);
     }
 
-    // 구성음: 음이름 + 루트 기준 도수
-    scaleNotesList.innerHTML='';
-    type.intervals.forEach(iv=>{
-      const pc=(rootPc+iv)%12;
-      const t=document.createElement('span');
-      t.className='note-chip'+(iv===0?' root':'');
-      t.innerHTML=`<span class="nm">${pcName(pc)}</span><span class="dg">${DEGREE[iv]}</span>`;
-      t.addEventListener('click', ()=> guitarPluck(52+rootPc+iv, 1.8, 0.55));
-      scaleNotesList.appendChild(t);
-    });
+    // 구성음을 피아노 건반으로. scaleSet: pc → 루트로부터의 반음.
+    renderPiano(rootPc, scaleSet);
   }
 
-  [scaleKey, scaleType, scaleTuning].forEach(el=>el.addEventListener('change', render));
+  // (조·종류·튜닝 변경은 각 드롭다운 콜백에서 render를 부른다)
   let __rsz=null;
   window.addEventListener('resize', ()=>{
     clearTimeout(__rsz);
@@ -2763,7 +2985,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
    ================================================= */
 (function(){
   const beatGrid   = document.getElementById('beatGrid');
-  const rhySig     = document.getElementById('rhySig');
+  const rhySigEl   = document.getElementById('rhySig');
+  const RHY_SIGS   = [{b:4,label:'4/4'},{b:3,label:'3/4'},{b:2,label:'2/4'},{b:6,label:'6/8'}];
+  const sigIndex   = b => Math.max(0, RHY_SIGS.findIndex(x=>x.b===b));
+  let rhySigDD = null;
   const rhySynco   = document.getElementById('rhySynco');
   const rhyDiff    = document.getElementById('rhyDiff');
   const rhySyncoVal= document.getElementById('rhySyncoVal');
@@ -2802,7 +3027,6 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
   /* ---------- 생성 ---------- */
   function generate(){
-    beats=parseInt(rhySig.value);
     const synco=parseInt(rhySynco.value)/10;
     const dens =parseInt(rhyDiff.value)/10;
     const steps=beats*4;
@@ -2824,7 +3048,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
   function setPattern(p, b){
     pattern=p; beats=b;
-    rhySig.value=String(b);
+    if(rhySigDD) rhySigDD.set(sigIndex(b));
     renderGrid();
   }
 
@@ -2891,12 +3115,12 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   rhyClear.addEventListener('click', ()=>{
     setPattern(new Array(beats*4).fill(0), beats);
   });
-  rhySig  .addEventListener('change', ()=>{
-    const b=parseInt(rhySig.value);
-    setPattern(new Array(b*4).fill(0).map((_,i)=>i%4===0?1:0), b);
+  rhySigDD = makeSplitDropdown(rhySigEl, RHY_SIGS.map(x=>({main:x.label,sub:''})), 0, i=>{
+    const b=RHY_SIGS[i].b;
+    setPattern(new Array(b*4).fill(0).map((_,k)=>k%4===0?1:0), b);
   });
 
-  const RHY_BPM_DEFAULT = 90;
+  const RHY_BPM_DEFAULT = 100;
   function setRhyBpm(v){
     const b=Math.max(40, Math.min(200, Math.round(v)));
     rhyBpm.value=b; rhyBpmVal.textContent=b;
@@ -3146,9 +3370,12 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   let playing = false;
 
   /* ---------- DOM ---------- */
-  const jamKey        = document.getElementById('jamKey');
-  const jamMode       = document.getElementById('jamMode');
-  const jamPreset     = document.getElementById('jamPreset');
+  const jamKeyEl      = document.getElementById('jamKey');
+  const jamModeEl     = document.getElementById('jamMode');
+  const jamPresetEl   = document.getElementById('jamPreset');
+  const PRESET_KEYS   = ['custom', ...Object.keys(PRESETS)];
+  let jamRoot=0, jamModeVal='major', jamPresetKey='custom';
+  let jamKeyDD, jamModeDD, jamPresetDD;
   const progTimeline  = document.getElementById('progTimeline');
   const progMeta      = document.getElementById('progMeta');
   const chordPalette  = document.getElementById('chordPalette');
@@ -3159,22 +3386,22 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   const jamMinus      = document.getElementById('jamMinus');
   const jamPlus       = document.getElementById('jamPlus');
   const jamTap        = document.getElementById('jamTap');
-  const JAM_BPM_DEFAULT = 80;
+  const JAM_BPM_DEFAULT = 100;
   let jamBpm = JAM_BPM_DEFAULT;
   const jamStart      = document.getElementById('jamStart');
 
-  for(let i=0;i<12;i++){
-    const o=document.createElement('option'); o.value=i; o.textContent=pcName(i); jamKey.appendChild(o);
-  }
-  jamKey.value = 0;
-
-  {
-    const o=document.createElement('option');
-    o.value='custom'; o.textContent='커스텀';
-    jamPreset.appendChild(o);
-  }
-  Object.entries(PRESETS).forEach(([k,v])=>{
-    const o=document.createElement('option'); o.value=k; o.textContent=v.label; jamPreset.appendChild(o);
+  jamKeyDD = makeSplitDropdown(jamKeyEl, Array.from({length:12},(_,i)=>({main:pcName(i),sub:''})),
+    0, i=>{ jamRoot=i; renderPalette(); renderTimeline(); });
+  jamModeDD = makeSplitDropdown(jamModeEl, [{main:'Major',sub:''},{main:'Minor',sub:''}],
+    0, i=>{ jamModeVal = i===1?'minor':'major'; renderPalette(); renderTimeline(); });
+  // 프리셋: 이름은 왼쪽, 진행은 오른쪽 (라벨의 여러 칸 공백으로 나뉘어 있다)
+  const presetItems = PRESET_KEYS.map(k=>{
+    if(k==='custom') return {main:'커스텀', sub:''};
+    const parts = PRESETS[k].label.split(/\s{2,}/);
+    return {main:parts[0], sub:parts.slice(1).join(' ')};
+  });
+  jamPresetDD = makeSplitDropdown(jamPresetEl, presetItems, 0, i=>{
+    jamPresetKey = PRESET_KEYS[i]; loadPreset();
   });
 
   Object.entries(STYLES).forEach(([k,v])=>{
@@ -3213,8 +3440,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
   function chordInfo(deg, sev, fam){
     if(sev === undefined) sev = seventh;
-    const mode = jamMode.value;
-    const rootPc = parseInt(jamKey.value);
+    const mode = jamModeVal;
+    const rootPc = jamRoot;
     const idx = (deg-1) % 7;
     const semis = scaleFor(mode)[idx];
     const info = qualitiesFor(mode)[idx];
@@ -3241,17 +3468,25 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   /* ---------- 렌더 ---------- */
+  function addChord(deg){
+    progression.push({deg, beats:4, sev:seventh});
+    markCustom();
+    renderTimeline();
+  }
   function renderPalette(){
     chordPalette.innerHTML='';
     for(let deg=1; deg<=7; deg++){
       const c = chordInfo(deg);
       const b = document.createElement('button');
       b.className = 'chord-cell fn-'+c.fn;
-      b.innerHTML = `<span class="rn">${c.rn}</span><span class="nm">${c.name}</span>`;
-      b.addEventListener('click', ()=>{
-        progression.push({deg, beats:4, sev:seventh});
-        markCustom();
-        renderTimeline();
+      b.innerHTML = `<span class="rn">${c.rn}</span><span class="nm">${c.name}</span>`+
+                    `<span class="cc-add" role="button" aria-label="${c.name} 진행에 추가">+</span>`;
+      // 코드 몸통을 누르면 소리만 들어본다 (진행에는 넣지 않는다)
+      b.addEventListener('click', ()=> previewChord(deg));
+      // + 를 누르면 진행에 담는다
+      b.querySelector('.cc-add').addEventListener('click', ev=>{
+        ev.stopPropagation();
+        addChord(deg);
         previewChord(deg);
       });
       chordPalette.appendChild(b);
@@ -3259,7 +3494,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   // 사용자가 손대는 순간 프리셋 이름을 붙들고 있지 않는다
-  function markCustom(){ if(jamPreset.value!=='custom') jamPreset.value='custom'; }
+  function markCustom(){ if(jamPresetKey!=='custom'){ jamPresetKey='custom'; jamPresetDD.set(0); } }
 
   function renderTimeline(){
     progTimeline.innerHTML='';
@@ -3329,14 +3564,14 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   function loadPreset(){
-    if(jamPreset.value==='custom'){       // 빈 상태에서 직접 쌓아 올린다
+    if(jamPresetKey==='custom'){          // 빈 상태에서 직접 쌓아 올린다
       progression = [];
       renderPalette(); renderTimeline();
       return;
     }
-    const p = PRESETS[jamPreset.value];
+    const p = PRESETS[jamPresetKey];
     if(!p) return;
-    jamMode.value = p.mode;
+    jamModeVal = p.mode; jamModeDD.set(p.mode==='minor'?1:0);
     setVoicing(p.seventh);
     progression = p.deg.map((d,i)=>({
       deg:d, beats:4, sev:!!p.seventh, fam:(p.fam ? p.fam[i] : null)
@@ -3344,11 +3579,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     renderPalette();
     renderTimeline();
   }
-  jamPreset.addEventListener('change', loadPreset);
   // 한 번에 비우고 커스텀으로 — loadPreset이 'custom'에서 하는 일과 같으므로 거기에 맡긴다
   document.getElementById('jamClear').addEventListener('click', ()=>{
     if(playing) stop();
-    jamPreset.value = 'custom';
+    jamPresetKey = 'custom'; jamPresetDD.set(0);
     loadPreset();
   });
   document.getElementById('jamVoicing').addEventListener('click', e=>{
@@ -3363,8 +3597,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('#jamVoicing .pill')
       .forEach(x=> x.classList.toggle('active', (x.dataset.seventh==='1')===seventh));
   }
-  jamKey.addEventListener('change', ()=>{ renderPalette(); renderTimeline(); });
-  jamMode.addEventListener('change', ()=>{ renderPalette(); renderTimeline(); });
+  // (조·모드 변경은 각 드롭다운 콜백에서 renderPalette/renderTimeline을 부른다)
 
   /* ---------- 사운드 ---------- */
   function noiseBuffer(ctx, dur){
@@ -3591,7 +3824,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   registerTransport({ isPlaying:()=>playing, stop });
 
   /* ---------- 초기화 ---------- */
-  jamPreset.value='pop';
+  jamPresetKey='pop'; jamPresetDD.set(PRESET_KEYS.indexOf('pop'));
   loadPreset();
 })();
 
