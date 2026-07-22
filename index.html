@@ -2554,8 +2554,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   tunerStart.addEventListener('click', async ()=>{
     if(listening){
       listening=false;
-      // 스트림은 살려두고 트랙만 음소거한다 — 다시 켤 때 권한을 재요청하지 않게.
-      if(stream) stream.getAudioTracks().forEach(t=>{ t.enabled=false; });
+      // 트랙을 완전히 멈춰 마이크를 놓아준다 → iOS "사용중" 표시가 꺼진다.
+      // 권한은 세션 동안 기억되므로 다시 켜도 (앱을 새로 열지 않는 한) 재요청하지 않는다.
+      if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
       micChain.forEach(n=>{ try{ n.disconnect(); }catch(e){} });
       micChain=[]; srcNode=null; analyser=null;
       setAudioSession('ambient');    // 녹음용에서 되돌린다
