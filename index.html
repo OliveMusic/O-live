@@ -1238,7 +1238,7 @@
           <span class="hint" style="margin:0;">둔감 · 시끄러운 곳</span>
           <span class="hint" style="margin:0;">예민 · 조용한 곳</span>
         </div>
-        <p class="hint" style="margin-top:10px;">손잡이를 두 번 누르면 기본값으로 돌아갑니다</p>
+        <p class="hint" style="margin-top:10px;">올리브를 두 번 누르면 기본값으로 돌아갑니다</p>
       </div>
     </section>
 
@@ -2588,7 +2588,14 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   const sensEl = document.getElementById('tunerSens');
   if(sensEl){
     sensEl.addEventListener('input', ()=> setSens(sensEl.value));
-    bindResetOnDouble(sensEl, ()=> setSens(SENS_DEFAULT));
+    // 손잡이(thumb)를 정확히 누르면 range의 click은 드래그로 취급돼 안 뜬다.
+    // 손잡이 위에서도 잡히도록 pointerdown 두 번(400ms 이내)으로 더블탭을 감지한다.
+    let sensTapLast = -1e9;   // 첫 탭이 오검출되지 않도록 먼 과거로 초기화
+    sensEl.addEventListener('pointerdown', ()=>{
+      const now = performance.now();
+      if(now - sensTapLast < 400){ setSens(SENS_DEFAULT); sensTapLast = -1e9; }
+      else sensTapLast = now;
+    });
     setSens(SENS_DEFAULT);
   }
 
