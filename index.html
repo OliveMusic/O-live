@@ -629,15 +629,16 @@
     position:absolute; top:3px; right:3px;
     width:22px; height:22px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
-    font-size:0.9rem; line-height:1; font-weight:400;
+    font-size:0.95rem; line-height:1; font-weight:400;
     color:var(--on-signal); background:var(--signal);
     opacity:.9;
   }
   .chord-cell .cc-add:active{ transform:scale(.9); opacity:1; }
   .plus-mark{
     display:inline-flex; align-items:center; justify-content:center;
-    width:1.25em; height:1.25em; border-radius:50%; vertical-align:-0.22em;
-    background:var(--signal); color:var(--on-signal); font-weight:400; font-size:0.85em;
+    width:1.45em; height:1.45em; border-radius:50%; line-height:1;
+    vertical-align:middle; position:relative; top:-0.14em;
+    background:var(--signal); color:var(--on-signal); font-weight:400; font-size:0.72em;
   }
   .chord-cell.fn-T::before{ background:var(--ink-2); }
   .chord-cell.fn-S::before{ background:var(--ink-3); }
@@ -843,11 +844,13 @@
 
   /* ---------- 리듬: 트랜스포트 ---------- */
   .transport{ display:flex; align-items:center; gap:14px; margin-bottom:4px; }
-  .rhy-keys{ display:flex; gap:5px; flex-shrink:0; }
-  .rhy-keys .key{ height:40px; padding:0 17px; min-width:48px; line-height:1;
+  /* −, + 는 윗줄에 나란히, TAP 은 아랫줄 전체 폭 (메트로놈과 같은 배치).
+     한 줄에 셋을 늘어놓으면 좁은 화면에서 재생 박스 밖으로 넘쳤다. */
+  .rhy-keys{ display:grid; grid-template-columns:1fr 1fr; gap:5px; flex-shrink:0; }
+  .rhy-keys .key{ height:34px; padding:0 10px; min-width:44px; line-height:1;
     display:flex; align-items:center; justify-content:center; touch-action:none; }
   .rhy-keys .key:not(.tap){ font-size:1.0625rem; font-weight:400; }
-  .rhy-keys .tap{ font-size:0.75rem; letter-spacing:.08em; }
+  .rhy-keys .tap{ grid-column:1 / -1; font-size:0.75rem; letter-spacing:.08em; }
   .tempo-readout{ flex:1; display:flex; align-items:baseline; gap:5px; }
   .tempo-readout .v{
     font-size:2.25rem; font-weight:250; letter-spacing:-.04em;
@@ -1140,7 +1143,7 @@
         <div class="metro-main">
           <div class="metro-left">
             <div class="bpm-display">
-              <div class="num" id="bpmNum" title="두 번 누르면 기본값">100</div>
+              <div class="num" id="bpmNum" title="두 번 누르면 기본값">90</div>
               <div class="lbl">BPM</div>
             </div>
             <div class="tempo-keys">
@@ -1225,6 +1228,18 @@
         <div class="string-btns" id="stringBtns"></div>
         <p class="hint" style="margin-top:10px;">현을 누르면 기준음이 들립니다</p>
       </div>
+      <div class="card">
+        <div class="row">
+          <h2 style="margin:0;">감도</h2>
+          <span id="tunerSensVal" style="font-weight:500; font-variant-numeric:tabular-nums;" title="두 번 누르면 기본값">50</span>
+        </div>
+        <input type="range" id="tunerSens" min="0" max="100" value="50">
+        <div class="row" style="margin-top:2px; align-items:baseline;">
+          <span class="hint" style="margin:0;">둔감 · 시끄러운 곳</span>
+          <span class="hint" style="margin:0;">예민 · 조용한 곳</span>
+        </div>
+        <p class="hint" style="margin-top:10px;">손잡이를 두 번 누르면 기본값으로 돌아갑니다</p>
+      </div>
     </section>
 
     <!-- SCALES -->
@@ -1304,15 +1319,15 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
           </button>
           <div class="tempo-readout">
-            <span class="v" id="rhyBpmVal" title="두 번 누르면 기본값">100</span><span class="u">BPM</span>
+            <span class="v" id="rhyBpmVal" title="두 번 누르면 기본값">90</span><span class="u">BPM</span>
           </div>
           <div class="rhy-keys">
             <button class="btn key" id="rhyMinus" aria-label="느리게">−</button>
-            <button class="btn key tap" id="rhyTap">TAP</button>
             <button class="btn key" id="rhyPlus" aria-label="빠르게">+</button>
+            <button class="btn key tap" id="rhyTap">TAP</button>
           </div>
         </div>
-        <input type="hidden" id="rhyBpm" value="100">
+        <input type="hidden" id="rhyBpm" value="90">
         <div class="pill-group" id="rhyToggles" style="margin-top:22px;"></div>
       </div>
 
@@ -1360,7 +1375,7 @@
             <div id="jamMode" class="dd compact" style="flex:0 0 78px;"></div>
           </div>
           <div class="jam-bpm" id="jamBpmBox" title="두 번 누르면 기본값">
-            <b id="jamBpmVal">100</b><span>BPM</span>
+            <b id="jamBpmVal">90</b><span>BPM</span>
           </div>
           <button class="play-orb olive" id="jamStart" aria-label="재생">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
@@ -1439,8 +1454,11 @@ function releaseCtx(){
 }
 
 function getCtx(){
-  if(!audioCtx || audioCtx.state === 'closed'){
-    if(audioCtx){ __master = null; __send = null; __gtrCache.clear(); }
+  // 'interrupted'는 마이크(play-and-record) 세션을 쓰고 나면 iOS가 컨텍스트를 떨어뜨리는 상태다.
+  // resume()으로 되살아나지 않는 경우가 많아, 소리가 스케줄돼도 아무 데도 안 나간다
+  // (튜너 쓴 뒤 메트로놈이 안 들리던 원인). 'closed'와 똑같이 통째로 새로 만든다.
+  if(!audioCtx || audioCtx.state === 'closed' || audioCtx.state === 'interrupted'){
+    if(audioCtx){ try{ audioCtx.close(); }catch(e){} __master = null; __send = null; __gtrCache.clear(); }
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     setAudioSession('ambient');    // 다른 앱 음악 위에 얹힌다 (위젯도 뜨지 않는다)
   }
@@ -1872,7 +1890,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 /* ===================== 메트로놈 ===================== */
 (function(){
-  const BPM_DEFAULT = 100;
+  const BPM_DEFAULT = 90;
   let bpm = BPM_DEFAULT, accentOn = true;
 
   /* ---------- 박자 ----------
@@ -2200,6 +2218,21 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   let lastNote=null, quietFrames=0, inLevel=0;
   let freqLo=70, freqHi=1400;   // 선택된 튜닝에 따라 정해진다
 
+  /* 감도(민감도): 슬라이더 0~100 → clarity 게이트 0.95~0.61 (기본 50=0.78 중심).
+     값이 클수록 게이트가 낮아 더 예민하게 잡는다(조용한 곳).
+     값이 작으면 게이트가 높아 소음 환경에서 오검출이 준다.
+     양 끝 차이가 눈에 띄도록 폭을 ±0.17로 넓혔다. */
+  const SENS_DEFAULT = 50;
+  let clarityGate = 0.78;
+  function setSens(v){
+    v = Math.max(0, Math.min(100, Math.round(v)));
+    clarityGate = 0.78 + ((50 - v)/100)*0.34;
+    const el = document.getElementById('tunerSens');
+    const val = document.getElementById('tunerSensVal');
+    if(el) el.value = v;
+    if(val) val.textContent = v;
+  }
+
   /* =========================================================
      YIN 피치 검출 (de Cheveigné & Kawahara, 2002)
      모노포닉 악기 피치 검출의 표준. 옥타브 오류에 강하다.
@@ -2443,7 +2476,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       // 실측(신호 480 · 소음 200): 0.72는 검출 66%/틀린음 18, 0.78은 53%/7.
       // 분석이 초당 45번 도니 53%면 초당 24번 갱신 — 눈에는 끊김 없이 이어진다.
       // 검출률보다 틀린 값이 덜 뜨는 쪽이 튜닝에는 낫다.
-      if(r && r.clarity>0.78 && r.freq>freqLo && r.freq<freqHi){
+      if(r && r.clarity>clarityGate && r.freq>freqLo && r.freq<freqHi){
         const nRaw=Math.round(69+12*Math.log2(r.freq/440));
         if(nRaw!==lastNote) hist.length=0;   // 다른 음이면 이력을 비워 즉시 반응
         update(stabilize(r.freq));
@@ -2550,6 +2583,14 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   document.querySelectorAll('.tab-btn').forEach(b=>{
     b.addEventListener('click', ()=>{ if(b.dataset.tab !== 'tuner') stopMic(); });
   });
+
+  // 감도 슬라이더 — 실시간으로 게이트를 조절. 손잡이 더블클릭/더블탭이면 기본값.
+  const sensEl = document.getElementById('tunerSens');
+  if(sensEl){
+    sensEl.addEventListener('input', ()=> setSens(sensEl.value));
+    bindResetOnDouble(sensEl, ()=> setSens(SENS_DEFAULT));
+    setSens(SENS_DEFAULT);
+  }
 
   tunerStart.addEventListener('click', async ()=>{
     if(listening){
@@ -3156,7 +3197,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     setPattern(new Array(b*4).fill(0).map((_,k)=>k%4===0?1:0), b);
   });
 
-  const RHY_BPM_DEFAULT = 100;
+  const RHY_BPM_DEFAULT = 90;
   function setRhyBpm(v){
     const b=Math.max(40, Math.min(200, Math.round(v)));
     rhyBpm.value=b; rhyBpmVal.textContent=b;
@@ -3425,7 +3466,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   const jamMinus      = document.getElementById('jamMinus');
   const jamPlus       = document.getElementById('jamPlus');
   const jamTap        = document.getElementById('jamTap');
-  const JAM_BPM_DEFAULT = 100;
+  const JAM_BPM_DEFAULT = 90;
   let jamBpm = JAM_BPM_DEFAULT;
   const jamStart      = document.getElementById('jamStart');
 
