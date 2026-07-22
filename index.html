@@ -1038,16 +1038,16 @@
   .trainer-pane.active{ display:block; animation:in .24s var(--ease-out); }
 
   /* ---------- 잼: 상단 트랜스포트 ---------- */
+  /* 키·모드 드롭다운이 남는 공간을 다 갖고, BPM은 재생 버튼 왼쪽에 붙는다.
+     예전엔 BPM을 정중앙에 둬서 세 자리가 되면 드롭다운이 찌그러졌다. */
   .jam-head{
     display:grid;
-    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);  /* BPM이 카드 정중앙 */
+    grid-template-columns:minmax(0,1fr) auto auto;
     align-items:center; gap:8px;
   }
-  .jam-head .play-orb{ justify-self:end; }
   .jam-sel{ display:flex; gap:5px; min-width:0; }
-  .jam-sel select{ padding:8px 7px; font-size:0.6875rem; padding-right:21px; background-position:right 6px center; min-width:0; }
   .jam-bpm{
-    display:flex; align-items:baseline; justify-content:center; gap:4px; grid-column:2;
+    display:flex; align-items:baseline; gap:4px; margin-left:4px;
     -webkit-user-select:none; user-select:none;
   }
   .jam-bpm b{ cursor:pointer;
@@ -1336,7 +1336,7 @@
         <div class="jam-head">
           <div class="jam-sel">
             <div id="jamKey" class="dd compact" style="flex:0 0 60px;"></div>
-            <div id="jamMode" class="dd compact" style="flex:1; min-width:0;"></div>
+            <div id="jamMode" class="dd compact" style="flex:0 0 78px;"></div>
           </div>
           <div class="jam-bpm" id="jamBpmBox" title="두 번 누르면 기본값">
             <b id="jamBpmVal">100</b><span>BPM</span>
