@@ -1842,6 +1842,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const id = btn.dataset.tab;
     document.getElementById('tab-'+id).classList.add('active');
     document.getElementById('pageTitle').textContent = tabTitles[id];
+    // main은 탭들이 공유하는 스크롤 컨테이너다. 긴 탭에서 내려둔 스크롤이
+    // 짧은 탭으로 넘어오면 위가 잘려 보인다. 탭을 바꿀 때 맨 위로 올린다.
+    const mainEl = document.querySelector('main');
+    if(mainEl) mainEl.scrollTop = 0;
   });
 });
 
