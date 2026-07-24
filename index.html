@@ -531,6 +531,80 @@
     font-weight:500; letter-spacing:0.0182em;
   }
 
+  /* ---------- 청음 기록 달력 ---------- */
+  .ear-history{padding:0; overflow:hidden;}
+  .ear-history > summary{
+    min-height:54px; padding:0 18px;
+    display:flex; align-items:center; gap:10px;
+    cursor:pointer; list-style:none; touch-action:manipulation; outline:none;
+  }
+  .ear-history > summary:focus-visible{
+    box-shadow:inset 0 0 0 1px var(--signal);
+    border-radius:var(--r-lg) var(--r-lg) 0 0;
+  }
+  .ear-history > summary::-webkit-details-marker{display:none;}
+  .ear-history-title{
+    font-size:0.7188rem; font-weight:500; letter-spacing:0.0182em;
+  }
+  .ear-history > summary::after{
+    content:''; width:7px; height:7px; flex:0 0 auto; margin-left:auto;
+    border-right:1.5px solid var(--ink-3);
+    border-bottom:1.5px solid var(--ink-3);
+    transform:rotate(45deg) translate(-1px,-1px);
+    transition:transform .18s var(--ease-out);
+  }
+  .ear-history[open] > summary::after{
+    transform:rotate(225deg) translate(-1px,-1px);
+  }
+  .ear-history-body{
+    border-top:1px solid var(--line-soft);
+    padding:10px 14px 15px;
+  }
+  .ear-calendar-head{
+    display:grid; grid-template-columns:44px 1fr 44px;
+    align-items:center; margin-bottom:3px;
+  }
+  .ear-calendar-head strong{
+    text-align:center; font-size:0.7188rem; font-weight:500;
+    letter-spacing:0.0182em; font-variant-numeric:tabular-nums;
+  }
+  .ear-month-btn{
+    width:44px; height:44px; padding:0;
+    border:0; border-radius:50%; background:transparent;
+    color:var(--ink-2); cursor:pointer; font-size:1.125rem;
+  }
+  .ear-month-btn:active{background:var(--key-press);}
+  .ear-month-btn:disabled{opacity:.24; cursor:default;}
+  .ear-weekdays, .ear-calendar-grid{
+    display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px;
+  }
+  .ear-weekdays span{
+    height:22px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink-3); font-size:0.5312rem; font-weight:500;
+  }
+  .ear-day, .ear-day-empty{
+    width:100%; min-width:0; min-height:46px;
+  }
+  .ear-day{
+    padding:5px 1px 4px; border:1px solid transparent; border-radius:10px;
+    background:transparent; color:var(--ink-2); cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    font-variant-numeric:tabular-nums;
+  }
+  .ear-day:active{background:var(--key-press);}
+  .ear-day .d{font-size:0.6562rem; line-height:1;}
+  .ear-day .s{font-size:0.5rem; line-height:1; color:var(--ink-3); font-weight:500;}
+  .ear-day.has-record{background:var(--signal-soft);}
+  .ear-day.has-record .d{color:var(--ink); font-weight:600;}
+  .ear-day.has-record .s{color:var(--signal); font-weight:600;}
+  .ear-day.today{border-color:var(--line);}
+  .ear-day.selected{border-color:var(--signal);}
+  .ear-day-detail{
+    min-height:18px; margin:11px 0 0; text-align:center;
+    color:var(--ink-3); font-size:0.625rem; font-weight:500;
+    font-variant-numeric:tabular-nums;
+  }
+
   .choice-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:6px;}
   .choice-grid.cols3{grid-template-columns:repeat(3,1fr);}
   .choice-btn{padding:14px 4px; font-size:0.6875rem; border-radius:var(--r-pill);}
@@ -626,14 +700,21 @@
     width:3px; height:3px; border-radius:50%; background:var(--ink-3);
   }
   .chord-cell .cc-add{
-    position:absolute; top:3px; right:3px;
+    position:absolute; top:0; right:0;
+    width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0; line-height:1; font-weight:400;
+    color:transparent; background:transparent;
+    opacity:1;
+  }
+  .chord-cell .cc-add::before{
+    content:'+'; position:absolute; top:3px; right:3px;
     width:22px; height:22px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
     font-size:0.95rem; line-height:1; font-weight:400;
     color:var(--on-signal); background:var(--signal);
-    opacity:.9;
   }
-  .chord-cell .cc-add:active{ transform:scale(.9); opacity:1; }
+  .chord-cell .cc-add:active::before{ transform:scale(.9); }
   .plus-mark{
     display:inline-flex; align-items:center; justify-content:center;
     width:1.45em; height:1.45em; border-radius:50%; line-height:1;
@@ -1308,6 +1389,25 @@
         <div class="feedback-msg" id="earFeedback"></div>
         <div class="choice-list" id="earChoices"></div>
       </div>
+
+      <details class="card ear-history" id="earHistory">
+        <summary>
+          <span class="ear-history-title">청음 기록</span>
+        </summary>
+        <div class="ear-history-body">
+          <div class="ear-calendar-head">
+            <button class="ear-month-btn" id="earMonthPrev" type="button" aria-label="이전 달">‹</button>
+            <strong id="earMonthLabel"></strong>
+            <button class="ear-month-btn" id="earMonthNext" type="button" aria-label="다음 달">›</button>
+          </div>
+          <div class="ear-weekdays" aria-hidden="true">
+            <span>일</span><span>월</span><span>화</span><span>수</span>
+            <span>목</span><span>금</span><span>토</span>
+          </div>
+          <div class="ear-calendar-grid" id="earCalendarGrid"></div>
+          <p class="ear-day-detail" id="earDayDetail">날짜를 누르면 기록을 볼 수 있습니다</p>
+        </div>
+      </details>
     
       </div>
 
@@ -1396,7 +1496,7 @@
         </div>
         <div class="prog-timeline" id="progTimeline"></div>
         <div class="row" style="margin:9px 0 0; align-items:flex-end; margin-bottom:0;">
-          <p class="hint" style="margin:0;">코드를 눌러 추가 · 이름을 눌러 3↔7화음 · 길게 눌러 삭제</p>
+          <p class="hint" style="margin:0;">이름을 눌러 3↔7화음 · 길게 눌러 삭제</p>
           <button class="btn" id="jamClear" style="flex:0 0 auto; padding:8px 13px;">비우기</button>
         </div>
       </div>
@@ -1875,10 +1975,17 @@ document.addEventListener('visibilitychange', ()=>{
 const tabTitles = {metronome:'메트로놈', tuner:'튜너', scales:'스케일', trainer:'트레이너', jam:'잼 세션'};
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
+    const id = btn.dataset.tab;
+    const enteringTuner = id === 'tuner' && !btn.classList.contains('active');
+    if(enteringTuner){
+      // 튜닝을 방해하지 않도록 루프와 예약된 다음 문제를 모두 멈춘다.
+      // 이미 오디오 클럭에 예약된 짧은 소리도 남지 않게 컨텍스트를 닫는다.
+      stopAllTransports();
+      if(audioCtx) releaseCtx();
+    }
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
-    const id = btn.dataset.tab;
     document.getElementById('tab-'+id).classList.add('active');
     document.getElementById('pageTitle').textContent = tabTitles[id];
     // main은 탭들이 공유하는 스크롤 컨테이너다. 긴 탭에서 내려둔 스크롤이
@@ -2074,7 +2181,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   const subdivGroup = document.getElementById('subdivGroup');
   makeSplitDropdown(
     document.getElementById('beatsSelect'),
-    METERS.map(m=>({ main:m.label, sub: m.groups.length>1 ? '('+m.groups.join('+')+')' : '' })),
+    METERS.map(m=>({ main:m.label, sub: m.groups.length>1 ? m.groups.join('+') : '' })),
     METERS.indexOf(meter),
     i=>{ meter=METERS[i]; computeGroups(); renderDots(); }
   );
@@ -2930,6 +3037,124 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   const earPrompt   = document.getElementById('earPrompt');
   const earFeedback = document.getElementById('earFeedback');
   const earChoices  = document.getElementById('earChoices');
+  const earHistory  = document.getElementById('earHistory');
+  const earMonthLabel = document.getElementById('earMonthLabel');
+  const earMonthPrev = document.getElementById('earMonthPrev');
+  const earMonthNext = document.getElementById('earMonthNext');
+  const earCalendarGrid = document.getElementById('earCalendarGrid');
+  const earDayDetail = document.getElementById('earDayDetail');
+
+  /* ---------- 날짜별 청음 기록 ----------
+     모드와 난이도를 바꿔도 하루 기록은 합산하고, 기기 안에만 보관한다. */
+  const EAR_HISTORY_KEY = 'olive-ear-history-v1';
+  function loadEarHistory(){
+    try{
+      const parsed=JSON.parse(localStorage.getItem(EAR_HISTORY_KEY)||'{}');
+      return parsed && typeof parsed==='object' ? parsed : {};
+    }catch(e){ return {}; }
+  }
+  let earHistoryData = loadEarHistory();
+  const now = new Date();
+  let historyMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  let selectedHistoryKey = '';
+
+  function dateKey(date){
+    const y=date.getFullYear();
+    const m=String(date.getMonth()+1).padStart(2,'0');
+    const d=String(date.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+  function saveEarHistory(){
+    try{ localStorage.setItem(EAR_HISTORY_KEY, JSON.stringify(earHistoryData)); }catch(e){}
+  }
+  function dayLabel(y,m,d){
+    return `${y}년 ${m+1}월 ${d}일`;
+  }
+  function showEarDay(key, y, m, d){
+    selectedHistoryKey=key;
+    const rec=earHistoryData[key];
+    if(rec && rec.total){
+      const acc=Math.round(rec.correct/rec.total*100);
+      earDayDetail.textContent=`${m+1}월 ${d}일 · ${rec.correct}/${rec.total} 정답 · ${acc}%`;
+    }else{
+      earDayDetail.textContent=`${m+1}월 ${d}일 · 기록 없음`;
+    }
+    earCalendarGrid.querySelectorAll('.ear-day').forEach(b=>
+      b.classList.toggle('selected', b.dataset.date===key));
+  }
+  function renderEarCalendar(){
+    const y=historyMonth.getFullYear(), m=historyMonth.getMonth();
+    const today=new Date();
+    const currentMonth=new Date(today.getFullYear(), today.getMonth(), 1);
+    earMonthLabel.textContent=`${y}년 ${m+1}월`;
+    earMonthNext.disabled=historyMonth>=currentMonth;
+    earCalendarGrid.innerHTML='';
+
+    const firstDay=new Date(y,m,1).getDay();
+    const days=new Date(y,m+1,0).getDate();
+    for(let i=0;i<firstDay;i++){
+      const blank=document.createElement('span');
+      blank.className='ear-day-empty';
+      blank.setAttribute('aria-hidden','true');
+      earCalendarGrid.appendChild(blank);
+    }
+
+    for(let d=1;d<=days;d++){
+      const date=new Date(y,m,d);
+      const key=dateKey(date);
+      const rec=earHistoryData[key];
+      const b=document.createElement('button');
+      b.type='button';
+      b.className='ear-day'+(rec&&rec.total?' has-record':'');
+      b.dataset.date=key;
+      if(key===dateKey(today)) b.classList.add('today');
+      if(key===selectedHistoryKey) b.classList.add('selected');
+      const scoreText=rec&&rec.total ? `${rec.correct}/${rec.total}` : '';
+      b.innerHTML=`<span class="d">${d}</span><span class="s">${scoreText}</span>`;
+      b.setAttribute('aria-label', rec&&rec.total
+        ? `${dayLabel(y,m,d)}, ${rec.total}문제 중 ${rec.correct}개 정답`
+        : `${dayLabel(y,m,d)}, 기록 없음`);
+      b.addEventListener('click', ()=>showEarDay(key,y,m,d));
+      earCalendarGrid.appendChild(b);
+    }
+
+    const selected=selectedHistoryKey && selectedHistoryKey.startsWith(
+      `${y}-${String(m+1).padStart(2,'0')}-`);
+    if(selected){
+      // 선택된 날짜의 점수도 답변 직후 다시 계산해 하단 설명에 즉시 반영한다.
+      showEarDay(selectedHistoryKey,y,m,Number(selectedHistoryKey.slice(-2)));
+    }else{
+      const todayKey=dateKey(today);
+      if(y===today.getFullYear() && m===today.getMonth()){
+        showEarDay(todayKey,y,m,today.getDate());
+      }else{
+        selectedHistoryKey='';
+        earDayDetail.textContent='날짜를 누르면 기록을 볼 수 있습니다';
+      }
+    }
+  }
+  function recordEarResult(correct){
+    const key=dateKey(new Date());
+    const rec=earHistoryData[key] && typeof earHistoryData[key]==='object'
+      ? earHistoryData[key] : {correct:0,total:0};
+    rec.total=(Number(rec.total)||0)+1;
+    rec.correct=(Number(rec.correct)||0)+(correct?1:0);
+    earHistoryData[key]=rec;
+    saveEarHistory();
+    renderEarCalendar();
+  }
+  earMonthPrev.addEventListener('click', ()=>{
+    historyMonth=new Date(historyMonth.getFullYear(),historyMonth.getMonth()-1,1);
+    selectedHistoryKey='';
+    renderEarCalendar();
+  });
+  earMonthNext.addEventListener('click', ()=>{
+    if(earMonthNext.disabled) return;
+    historyMonth=new Date(historyMonth.getFullYear(),historyMonth.getMonth()+1,1);
+    selectedHistoryKey='';
+    renderEarCalendar();
+  });
+  earHistory.addEventListener('toggle', ()=>{ if(earHistory.open) renderEarCalendar(); });
 
   MODES.forEach(m=>{
     const b=document.createElement('button');
@@ -3010,7 +3235,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     answered=true;
     earChoices.querySelectorAll('.choice-row').forEach(b=>b.disabled=true);
     total++;
-    if(picked===answer){
+    const correct=picked===answer;
+    if(correct){
       score++; streak++;
       el.classList.add('correct');
       earFeedback.textContent='정답';
@@ -3025,6 +3251,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       });
     }
     renderStats();
+    recordEarResult(correct);
     nextTimer=setTimeout(()=>newQuestion(true), 1500);
   }
 
@@ -3053,13 +3280,20 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   // 화면이 꺼질 때 같이 세우지 않으면 세션 밖에서 울린다.
   registerTransport({
     isPlaying: ()=> nextTimer !== null,
-    stop: ()=>{ clearTimeout(nextTimer); nextTimer=null; }
+    stop: ()=>{
+      const wasWaiting=nextTimer !== null;
+      clearTimeout(nextTimer); nextTimer=null;
+      // 정답 직후 튜너로 갔다 돌아와도 비활성화된 보기에 갇히지 않게
+      // 소리는 재생하지 않고 다음 문제만 준비한다.
+      if(wasWaiting) newQuestion(false);
+    }
   });
 
   earPlayBtn.addEventListener('click', playCurrent);
   earReplay.addEventListener('click', playCurrent);
 
   renderStats();
+  renderEarCalendar();
   newQuestion(false);
 })();
 
@@ -3104,7 +3338,6 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     bossa:   {label:'보사노바',    beats:4, p:[1,0,0,1, 0,0,1,0, 0,1,0,0, 1,0,0,1]},
     reggae:  {label:'레게',        beats:4, p:[0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0]},
     waltz:   {label:'왈츠',        beats:3, p:[1,0,0,0, 1,0,0,0, 1,0,0,0]},
-    sixeight:{label:'6/8',         beats:6, p:[1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]},
   };
 
   let pattern=[], beats=4;
@@ -3502,7 +3735,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     stylePresets.appendChild(b);
   });
 
-  [['drum','드럼'],['bass','베이스'],['chord','코드'],['click','클릭']].forEach(([k,label])=>{
+  [['drum','드럼'],['bass','베이스'],['chord','코드'],['click','메트로놈']].forEach(([k,label])=>{
     const b=document.createElement('button');
     b.className='pill'+(tracks[k]?' active':'');
     b.textContent=label; b.dataset.track=k;
@@ -3603,9 +3836,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
         `<span class="rn">${c.rn}</span>`+
         `<span class="nm" role="button" title="눌러서 3↔7화음">${c.name}</span>`+
         `<span class="beats">`+
-          `<button class="stp" data-act="dec">−</button>`+
+          `<button class="stp" data-act="dec" aria-label="${i+1}마디 박자 줄이기">−</button>`+
           `<span class="bv">${item.beats}</span>`+
-          `<button class="stp" data-act="inc">+</button>`+
+          `<button class="stp" data-act="inc" aria-label="${i+1}마디 박자 늘리기">+</button>`+
         `</span>`;
       // 코드 이름 = 3화음/7화음 전환
       const nm = el.querySelector('.nm');
