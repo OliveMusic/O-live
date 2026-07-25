@@ -1,0 +1,10 @@
+{
+  "name": "olive-music-pwa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "O'live — 브라우저에서 사용하는 음악 연습 도구",
+  "scripts": {
+    "check": "node --check cloud-config.js && node --check cloud-sync.js && node --check service-worker.js",
+    "test": "npm run check && node tests/cloud-sync.test.cjs && node tests/cloud-features.test.cjs && node tests/public-pages.test.cjs && node tests/touch-targets.test.cjs"
+  }
+}

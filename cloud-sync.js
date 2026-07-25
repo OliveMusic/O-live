@@ -16,6 +16,8 @@
   let currentUser=null;
   let activeUserId='';
   let syncing=false;
+  let preferenceTimer=null;
+  let preferenceReady=true;
   let handlers=null;
   let ui={};
 
@@ -109,7 +111,7 @@
     const copy={
       unconfigured:['클라우드 저장 설정 필요','현재 이 기기에만 기록 중'],
       signedout:['계정에 기록 보관','Google 계정으로 연결'],
-      syncing:['기록 동기화 중','잠시만 기다려 주세요'],
+      syncing:['데이터 동기화 중','잠시만 기다려 주세요'],
       synced:['클라우드에 저장됨',detail||'다른 기기에서도 이어서 연습할 수 있어요'],
       offline:['오프라인 기록 중',detail||'연결되면 자동으로 동기화됩니다'],
       error:['동기화 확인 필요',detail||'계정 화면에서 다시 시도해 주세요'],
@@ -144,6 +146,10 @@
     ui.loggedOut.hidden=Boolean(currentUser);
     ui.loggedIn.hidden=!currentUser;
     ui.google.disabled=!configured || syncing;
+    if(ui.sync) ui.sync.disabled=syncing;
+    if(ui.logout) ui.logout.disabled=syncing;
+    if(ui.deleteData) ui.deleteData.disabled=syncing;
+    if(ui.deleteAccount) ui.deleteAccount.disabled=syncing;
     ui.setupHint.hidden=configured;
     if(currentUser){
       ui.provider.textContent=providerLabel(currentUser)+'로 연결됨';
@@ -166,6 +172,8 @@
       google:document.getElementById('cloudGoogleLogin'),
       logout:document.getElementById('cloudLogout'),
       sync:document.getElementById('cloudSyncNow'),
+      deleteData:document.getElementById('cloudDeleteData'),
+      deleteAccount:document.getElementById('cloudDeleteAccount'),
       provider:document.getElementById('cloudProviderName'),
       identity:document.getElementById('cloudIdentity'),
       sheetSync:document.getElementById('cloudSheetSync'),
@@ -184,6 +192,8 @@
     ui.google.addEventListener('click',signInWithGoogle);
     ui.logout.addEventListener('click',signOut);
     ui.sync.addEventListener('click',()=>syncAndRefresh(true));
+    if(ui.deleteData) ui.deleteData.addEventListener('click',deleteCloudData);
+    if(ui.deleteAccount) ui.deleteAccount.addEventListener('click',deleteAccount);
   }
 
   async function signInWithGoogle(){
@@ -272,6 +282,110 @@
     writeJSON(USER_HISTORY_PREFIX+activeUserId,history);
     handlers.useUserHistory(activeUserId,history);
   }
+  function validPreferenceRecord(record){
+    return record && typeof record==='object' &&
+      record.data && typeof record.data==='object' && !Array.isArray(record.data) &&
+      typeof record.updatedAt==='string' && Number.isFinite(Date.parse(record.updatedAt));
+  }
+  function isPreferenceSetupMissing(error){
+    return Boolean(error && (
+      error.code==='42P01' ||
+      error.code==='PGRST205' ||
+      /user_preferences|schema cache/i.test(error.message||'')
+    ));
+  }
+  async function uploadPreferences(record){
+    if(!preferenceReady || !validPreferenceRecord(record) || !client || !currentUser) return;
+    const {error}=await client.from('user_preferences').upsert({
+      user_id:activeUserId,
+      preferences:record.data,
+      client_updated_at:record.updatedAt,
+      updated_at:new Date().toISOString(),
+    },{onConflict:'user_id'});
+    if(error){
+      if(isPreferenceSetupMissing(error)){ preferenceReady=false; return; }
+      throw error;
+    }
+  }
+  async function syncPreferences(){
+    if(!handlers.getPreferences || !client || !currentUser) return;
+    const local=handlers.getPreferences();
+    const {data,error}=await client
+      .from('user_preferences')
+      .select('preferences,client_updated_at')
+      .eq('user_id',activeUserId)
+      .maybeSingle();
+    if(error){
+      if(isPreferenceSetupMissing(error)){ preferenceReady=false; return; }
+      throw error;
+    }
+    preferenceReady=true;
+
+    const remoteTime=data && typeof data.client_updated_at==='string'
+      ? Date.parse(data.client_updated_at) : NaN;
+    const localTime=validPreferenceRecord(local) ? Date.parse(local.updatedAt) : NaN;
+    if(Number.isFinite(remoteTime) && (!Number.isFinite(localTime) || remoteTime>=localTime)){
+      handlers.applyPreferences(data.preferences||{},data.client_updated_at);
+    }else if(Number.isFinite(localTime)){
+      await uploadPreferences(local);
+    }
+  }
+  function clearLocalAccountData(){
+    if(activeUserId){
+      try{
+        localStorage.removeItem(USER_HISTORY_PREFIX+activeUserId);
+        localStorage.removeItem(QUEUE_PREFIX+activeUserId);
+      }catch(e){}
+    }
+    if(handlers.clearPreferences) handlers.clearPreferences();
+  }
+  async function deleteCloudData(){
+    if(!client || !currentUser || syncing) return;
+    const accepted=window.confirm(
+      '클라우드의 청음 기록과 연습 설정을 모두 삭제할까요? 계정은 유지되며, 삭제한 데이터는 복구할 수 없습니다.'
+    );
+    if(!accepted) return;
+    syncing=true;
+    renderSheet();
+    setMessage('클라우드 데이터를 삭제하는 중입니다');
+    try{
+      const {error}=await client.rpc('delete_my_cloud_data');
+      if(error) throw error;
+      clearLocalAccountData();
+      handlers.useUserHistory(activeUserId,{});
+      setMessage('클라우드 데이터를 삭제했습니다');
+      if(location.reload) location.reload();
+    }catch(error){
+      setMessage('데이터를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요',true);
+      console.warn('[O\'live data deletion]',error);
+    }finally{
+      syncing=false;
+      renderSheet();
+    }
+  }
+  async function deleteAccount(){
+    if(!client || !currentUser || syncing) return;
+    const accepted=window.confirm(
+      'O’live 계정을 완전히 삭제할까요? 청음 기록과 연습 설정도 함께 삭제되며 복구할 수 없습니다.'
+    );
+    if(!accepted) return;
+    syncing=true;
+    renderSheet();
+    setMessage('계정을 삭제하는 중입니다');
+    try{
+      const {error}=await client.functions.invoke('delete-account',{body:{confirm:true}});
+      if(error) throw error;
+      clearLocalAccountData();
+      try{ await client.auth.signOut({scope:'local'}); }catch(e){}
+      if(location.reload) location.reload();
+    }catch(error){
+      setMessage('계정을 삭제하지 못했습니다. 관리자 설정을 확인해 주세요',true);
+      console.warn('[O\'live account deletion]',error);
+    }finally{
+      syncing=false;
+      renderSheet();
+    }
+  }
   async function syncAndRefresh(fromButton){
     if(!currentUser || syncing) return;
     if(!navigator.onLine){
@@ -283,12 +397,13 @@
       setMessage('');
       await syncQueue();
       await fetchHistory();
-      setState('synced');
+      await syncPreferences();
+      setState('synced',preferenceReady ? '' : '청음 기록 저장됨 · 설정 동기화 준비 필요');
       if(fromButton) setMessage('최신 기록으로 동기화했습니다');
     }catch(error){
       setState('error');
       setMessage('동기화하지 못했습니다. 잠시 후 다시 시도해 주세요',true);
-      console.warn('[O\'live cloud]',error);
+      console.warn('[O\'live cloud]',error && error.code || '',error && error.message || error);
     }
   }
   async function applySession(session){
@@ -355,6 +470,18 @@
     window.addEventListener('offline',()=>{ if(currentUser) setState('offline'); });
     document.addEventListener('visibilitychange',()=>{
       if(document.visibilityState==='visible' && currentUser) syncAndRefresh(false);
+    });
+    window.addEventListener('olive-preferences-change',()=>{
+      clearTimeout(preferenceTimer);
+      preferenceTimer=setTimeout(()=>{
+        if(!currentUser || !navigator.onLine || syncing) return;
+        uploadPreferences(handlers.getPreferences()).then(()=>{
+          setState('synced',preferenceReady ? '' : '청음 기록 저장됨 · 설정 동기화 준비 필요');
+        }).catch(error=>{
+          setState('error');
+          console.warn('[O\'live preference sync]',error && error.code || '',error && error.message || error);
+        });
+      },700);
     });
     if(location.search && /[?&](code|error|error_description)=/.test(location.search)){
       const url=new URL(location.href);

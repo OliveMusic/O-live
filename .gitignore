@@ -1,0 +1,10 @@
+.DS_Store
+node_modules/
+*.log
+.env
+.env.*
+supabase/.temp/
+
+# 작업 중 생성한 백업 및 미리보기는 배포 저장소에 올리지 않습니다.
+_backup/
+_preview_olive_ui.png
