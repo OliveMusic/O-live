@@ -4654,19 +4654,12 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const view=progTimeline;
     const viewRect=view.getBoundingClientRect();
     const curRect=cur.getBoundingClientRect();
-    const edge=10;
-    let next=view.scrollLeft;
+    const viewCenter=viewRect.left + viewRect.width/2;
+    const curCenter=curRect.left + curRect.width/2;
 
-    // offsetLeft는 위치 기준이 타임라인이 아닐 수 있다. 실제 화면 좌표의
-    // 보이는 영역과 비교해 필요한 거리만 움직이면 iOS Safari에서도 정확하다.
-    if(curRect.left < viewRect.left + edge){
-      next += curRect.left - viewRect.left - edge;
-    }else if(curRect.right > viewRect.right - edge){
-      next += curRect.right - viewRect.right + edge;
-    }else{
-      return;
-    }
-
+    // 실제 화면 좌표의 두 중심을 맞춘다. 활성 코드 뒤의 다음 코드까지
+    // 미리 보이면서도 iOS Safari의 offsetLeft 기준 차이를 피할 수 있다.
+    const next=view.scrollLeft + (curCenter - viewCenter);
     const max=Math.max(0, view.scrollWidth - view.clientWidth);
     const want=Math.max(0, Math.min(max, next));
     if(Math.abs(view.scrollLeft - want)<=1) return;
@@ -4682,7 +4675,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       bars.forEach((b,i)=> b.classList.toggle('now', i===m.barIdx));
       pulseTab('jam');
       // 같은 마디 안의 16분음표마다 스크롤을 덮어쓰지 않는다.
-      // 마디가 바뀔 때만 활성 카드가 화면 밖이면 필요한 만큼 따라간다.
+      // 마디가 바뀔 때만 활성 카드를 가운데로 옮겨 다음 코드도 보여준다.
       if(m.barIdx!==visualBarIdx){
         visualBarIdx=m.barIdx;
         revealActiveBar(bars[m.barIdx]);
@@ -4811,7 +4804,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=94').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=95').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{
