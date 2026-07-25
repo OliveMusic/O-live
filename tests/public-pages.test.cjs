@@ -29,8 +29,8 @@ assert.match(privacy,/데이터%20삭제%20요청/);
 assert.match(privacy,/클라우드 데이터 삭제/);
 assert.match(privacy,/계정 삭제/);
 assert.match(terms,/개인정보처리방침/);
-assert.match(index,/service-worker\.js\?v=93/);
-assert.match(worker,/const VERSION = 'v93'/);
+assert.match(index,/service-worker\.js\?v=94/);
+assert.match(worker,/const VERSION = 'v94'/);
 assert.match(worker,/'\.\/og\.png'/);
 
 console.log('public pages tests passed');

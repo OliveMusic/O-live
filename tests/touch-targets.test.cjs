@@ -48,4 +48,12 @@ assert.match(index,/\.btn\{[\s\S]*?min-height:40px;/);
 assert.match(index,/\.dd-btn\{[\s\S]*?min-height:44px;/);
 assert.match(index,/input\[type=range\]\{[\s\S]*?height:44px;/);
 
+// 긴 잼 진행은 실제 화면 좌표로 활성 마디를 확인하고, 마디가 바뀔 때만 따라간다.
+assert.match(index,/function revealActiveBar\(cur\)\{/);
+assert.match(index,/const viewRect=view\.getBoundingClientRect\(\)/);
+assert.match(index,/const curRect=cur\.getBoundingClientRect\(\)/);
+assert.match(index,/if\(m\.barIdx!==visualBarIdx\)\{/);
+assert.match(index,/view\.scrollTo\(\{left:want, behavior\}\)/);
+assert.doesNotMatch(index,/cur\.offsetLeft - \(view\.clientWidth - cur\.offsetWidth\)\/2/);
+
 console.log('touch target tests passed');

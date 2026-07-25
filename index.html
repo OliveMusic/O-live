@@ -4648,7 +4648,31 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(playing) timerID=setTimeout(scheduler, LOOKAHEAD);
   }
 
-  let visualGen=0;
+  let visualGen=0, visualBarIdx=-1;
+  function revealActiveBar(cur){
+    if(!cur) return;
+    const view=progTimeline;
+    const viewRect=view.getBoundingClientRect();
+    const curRect=cur.getBoundingClientRect();
+    const edge=10;
+    let next=view.scrollLeft;
+
+    // offsetLeft는 위치 기준이 타임라인이 아닐 수 있다. 실제 화면 좌표의
+    // 보이는 영역과 비교해 필요한 거리만 움직이면 iOS Safari에서도 정확하다.
+    if(curRect.left < viewRect.left + edge){
+      next += curRect.left - viewRect.left - edge;
+    }else if(curRect.right > viewRect.right - edge){
+      next += curRect.right - viewRect.right + edge;
+    }else{
+      return;
+    }
+
+    const max=Math.max(0, view.scrollWidth - view.clientWidth);
+    const want=Math.max(0, Math.min(max, next));
+    if(Math.abs(view.scrollLeft - want)<=1) return;
+    const behavior=window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    view.scrollTo({left:want, behavior});
+  }
   function visualLoop(gen){
     if(!playing || gen!==visualGen) return;
     const ctx=getCtx();
@@ -4657,15 +4681,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       const bars=progTimeline.querySelectorAll('.prog-bar');
       bars.forEach((b,i)=> b.classList.toggle('now', i===m.barIdx));
       pulseTab('jam');
-      const cur=bars[m.barIdx];
-      // scrollIntoView는 조상 요소까지 세로로 끌어올린다.
-      // 타임라인 컨테이너의 가로 스크롤만 직접 움직인다.
-      if(cur){
-        const view = progTimeline;
-        const left = cur.offsetLeft - (view.clientWidth - cur.offsetWidth)/2;
-        const max  = view.scrollWidth - view.clientWidth;
-        const want = Math.max(0, Math.min(max, left));
-        if(Math.abs(view.scrollLeft - want) > 2) view.scrollLeft = want;
+      // 같은 마디 안의 16분음표마다 스크롤을 덮어쓰지 않는다.
+      // 마디가 바뀔 때만 활성 카드가 화면 밖이면 필요한 만큼 따라간다.
+      if(m.barIdx!==visualBarIdx){
+        visualBarIdx=m.barIdx;
+        revealActiveBar(bars[m.barIdx]);
       }
     }
     requestAnimationFrame(()=>visualLoop(gen));
@@ -4675,6 +4695,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     playing=false;
     clearTimeout(timerID);
     scheduledMarks=[];
+    visualBarIdx=-1;
     jamStart.classList.remove('on');
     jamStart.querySelector('svg').innerHTML='<path d="M8 5.5v13l11-6.5z"/>';
     setTabSounding('jam', false, 'play');
@@ -4687,6 +4708,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const ctx=getCtx();
     playing=true;
     stepCursor=0; scheduledMarks=[];
+    visualBarIdx=-1;
     nextStepTime=ctx.currentTime+0.06;
     scheduler();
     visualLoop(++visualGen);
@@ -4789,7 +4811,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=93').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=94').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{
