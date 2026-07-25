@@ -23,6 +23,36 @@
 4. Google의 Authorized JavaScript origins에 앱의 origin을 추가합니다.
 5. Google의 Authorized redirect URIs에는 Supabase Google Provider 화면에 표시된 callback URL을 그대로 추가합니다.
 
+## 정식 공개 URL
+
+GitHub Pages 배포 주소는 다음 값을 사용합니다.
+
+- 앱: `https://olivemusic.github.io/O-live/`
+- 앱 소개: `https://olivemusic.github.io/O-live/about.html`
+- 개인정보처리방침: `https://olivemusic.github.io/O-live/privacy.html`
+- 이용약관: `https://olivemusic.github.io/O-live/terms.html`
+
+Supabase Authentication > URL Configuration:
+
+- Site URL: `https://olivemusic.github.io/O-live/`
+- Redirect URLs:
+  - `https://olivemusic.github.io/O-live/`
+  - `https://olivemusic.github.io/O-live/index.html`
+
+Google 인증 플랫폼 > 브랜딩:
+
+- 애플리케이션 홈페이지: `https://olivemusic.github.io/O-live/about.html`
+- 애플리케이션 개인정보처리방침 링크: `https://olivemusic.github.io/O-live/privacy.html`
+- 애플리케이션 서비스 약관 링크: `https://olivemusic.github.io/O-live/terms.html`
+
+Google OAuth 웹 클라이언트:
+
+- 승인된 JavaScript 원본: `https://olivemusic.github.io`
+- 승인된 리디렉션 URI:
+  `https://mowbkjoccuylfisbypvi.supabase.co/auth/v1/callback`
+
+브랜딩 인증을 제출하기 전 Google Search Console에서 배포 주소의 소유권을 확인합니다.
+
 ## 3. 동작 방식
 
 - 로그인 전: 지금처럼 기기 안에 날짜별 기록을 저장합니다.

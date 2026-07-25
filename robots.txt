@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://olivemusic.github.io/O-live/sitemap.xml
