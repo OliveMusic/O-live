@@ -23,12 +23,15 @@ class FakeElement{
     this.classList=new FakeClassList();
     this.listeners={};
     this.attributes=new Map();
+    this.inert=false;
+    this.isConnected=true;
   }
   addEventListener(name,handler){ this.listeners[name]=handler; }
   setAttribute(name,value){ this.attributes.set(name,String(value)); }
   getAttribute(name){ return this.attributes.has(name)?this.attributes.get(name):null; }
   removeAttribute(name){ this.attributes.delete(name); }
-  focus(){}
+  querySelectorAll(){ return []; }
+  focus(){ this.focused=true; }
 }
 class FakeStorage{
   constructor(seed={}){ this.values=new Map(Object.entries(seed)); }
@@ -43,7 +46,7 @@ const elementIds=[
   'cloudAuthSheet','cloudAuthClose','cloudLoggedOut','cloudLoggedIn',
   'cloudGoogleLogin','cloudLogout','cloudSyncNow','cloudDeleteData','cloudDeleteAccount',
   'cloudProviderName','cloudIdentity','cloudSheetSync','cloudSetupHint',
-  'cloudAuthMessage',
+  'cloudAuthMessage','app',
 ];
 
 function makeContext({config,storage,supabase}){
@@ -104,6 +107,10 @@ async function testUnconfigured(){
   assert.equal(elements.cloudGoogleLogin.disabled,true);
   context.OliveCloud.openAccount();
   assert.equal(elements.cloudAuthSheet.hidden,false);
+  assert.equal(elements.app.getAttribute('inert'),'');
+  elements.cloudAuthClose.listeners.click();
+  await new Promise(resolve=>setTimeout(resolve,230));
+  assert.equal(elements.app.getAttribute('inert'),null);
 }
 
 async function testConfiguredQueueAndMigration(){
@@ -113,6 +120,7 @@ async function testConfiguredQueueAndMigration(){
   const rpcCalls=[];
   const preferenceUpserts=[];
   const functionCalls=[];
+  const oauthCalls=[];
   let recordCount=0;
   const client={
     auth:{
@@ -129,7 +137,7 @@ async function testConfiguredQueueAndMigration(){
         }}},error:null};
       },
       async signOut(){ return {error:null}; },
-      async signInWithOAuth(){ return {error:null}; },
+      async signInWithOAuth(options){ oauthCalls.push(options); return {error:null}; },
     },
     functions:{async invoke(name,args){
       functionCalls.push({name,args});
@@ -226,6 +234,9 @@ async function testConfiguredQueueAndMigration(){
   assert.equal(appliedPreferences.data.metronome.bpm,112);
   assert.equal(appliedPreferences.updatedAt,'2026-07-25T00:00:00.000Z');
   assert.equal(preferenceUpserts.length,0);
+
+  await elements.cloudGoogleLogin.listeners.click();
+  assert.equal(oauthCalls[0].options.redirectTo,'http://127.0.0.1:8765/');
 
   context.OliveCloud.recordAnswer('2026-07-24',true);
   context.OliveCloud.recordAnswer('2026-07-24',false);

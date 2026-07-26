@@ -20,6 +20,7 @@
   let preferenceReady=true;
   let handlers=null;
   let ui={};
+  let sheetTrigger=null;
 
   function readJSON(key,fallback){
     try{
@@ -103,7 +104,7 @@
     else ui.avatar.removeAttribute('src');
   }
   function redirectUrl(){
-    return config.redirectUrl || location.origin+location.pathname;
+    return config.redirectUrl || new URL('./',location.href).href;
   }
 
   function setState(state,detail){
@@ -129,6 +130,10 @@
   }
   function openSheet(){
     if(!ui.sheet) return;
+    sheetTrigger=document.activeElement && typeof document.activeElement.focus==='function'
+      ? document.activeElement
+      : null;
+    if(ui.app) ui.app.setAttribute('inert','');
     ui.sheet.hidden=false;
     requestAnimationFrame(()=>ui.sheet.classList.add('open'));
     document.body.classList.add('cloud-sheet-open');
@@ -139,7 +144,39 @@
     if(!ui.sheet) return;
     ui.sheet.classList.remove('open');
     document.body.classList.remove('cloud-sheet-open');
-    setTimeout(()=>{ if(!ui.sheet.classList.contains('open')) ui.sheet.hidden=true; },220);
+    setTimeout(()=>{
+      if(ui.sheet.classList.contains('open')) return;
+      ui.sheet.hidden=true;
+      if(ui.app) ui.app.removeAttribute('inert');
+      if(sheetTrigger && sheetTrigger.isConnected) sheetTrigger.focus();
+      sheetTrigger=null;
+    },220);
+  }
+  function handleSheetKeydown(event){
+    if(ui.sheet.hidden) return;
+    if(event.key==='Escape'){
+      event.preventDefault();
+      closeSheet();
+      return;
+    }
+    if(event.key!=='Tab') return;
+    const focusable=Array.from(ui.sheet.querySelectorAll(
+      'button:not([disabled]),a[href],summary,input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+    )).filter(element=>!element.hidden && element.offsetParent!==null);
+    if(!focusable.length){
+      event.preventDefault();
+      ui.close.focus();
+      return;
+    }
+    const first=focusable[0];
+    const last=focusable[focusable.length-1];
+    if(event.shiftKey && document.activeElement===first){
+      event.preventDefault();
+      last.focus();
+    }else if(!event.shiftKey && document.activeElement===last){
+      event.preventDefault();
+      first.focus();
+    }
   }
   function renderSheet(){
     if(!ui.loggedOut) return;
@@ -165,6 +202,7 @@
       actionLabel:document.getElementById('earCloudActionLabel'),
       avatar:document.getElementById('earCloudAvatar'),
       avatarFallback:document.getElementById('earCloudAvatarFallback'),
+      app:document.getElementById('app'),
       sheet:document.getElementById('cloudAuthSheet'),
       close:document.getElementById('cloudAuthClose'),
       loggedOut:document.getElementById('cloudLoggedOut'),
@@ -184,7 +222,7 @@
     ui.action.addEventListener('click',openSheet);
     ui.close.addEventListener('click',closeSheet);
     ui.sheet.addEventListener('click',e=>{ if(e.target===ui.sheet) closeSheet(); });
-    document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !ui.sheet.hidden) closeSheet(); });
+    ui.sheet.addEventListener('keydown',handleSheetKeydown);
     ui.avatar.addEventListener('error',()=>{
       ui.avatar.hidden=true;
       ui.avatarFallback.hidden=!currentUser;

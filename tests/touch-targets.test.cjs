@@ -30,6 +30,9 @@ assert.match(
   index,
   /\.chord-cell \.cc-add\{[\s\S]*?width:38px; height:38px;/,
 );
+assert.match(index,/<button type="button" class="chord-preview" aria-label="\$\{c\.name\} 코드 미리 듣기">/);
+assert.match(index,/<button type="button" class="cc-add" aria-label="\$\{c\.name\} 진행에 추가">/);
+assert.doesNotMatch(index,/<span class="cc-add" role="button"/);
 
 // 짧은 텍스트 버튼은 외형을 해치지 않으면서 44pt 터치 높이를 확보한다.
 assert.match(

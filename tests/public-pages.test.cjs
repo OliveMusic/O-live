@@ -8,6 +8,7 @@ const about=read('about.html');
 const privacy=read('privacy.html');
 const terms=read('terms.html');
 const worker=read('service-worker.js');
+const manifest=JSON.parse(read('manifest.json'));
 const sitemap=read('sitemap.xml');
 
 for(const [label,html] of Object.entries({index,about,privacy,terms})){
@@ -28,9 +29,19 @@ assert.match(privacy,/Google API 서비스 사용자 데이터 정책/);
 assert.match(privacy,/데이터%20삭제%20요청/);
 assert.match(privacy,/클라우드 데이터 삭제/);
 assert.match(privacy,/계정 삭제/);
+assert.match(privacy,/개인정보의 국외 이전/);
+assert.match(privacy,/싱가포르/);
+assert.match(privacy,/90일이 지나면 자동 삭제/);
+assert.match(privacy,/O’live \(OliveMusic\)/);
 assert.match(terms,/개인정보처리방침/);
-assert.match(index,/service-worker\.js\?v=95/);
-assert.match(worker,/const VERSION = 'v95'/);
+assert.match(index,/service-worker\.js\?v=97/);
+assert.match(index,/cloud-sync\.js\?v=97/);
+assert.match(worker,/const VERSION = 'v97'/);
+assert.match(worker,/url\.origin !== self\.location\.origin/);
+assert.match(worker,/documentUrl\.search = ''/);
+assert.doesNotMatch(worker,/addAll\(ASSETS\)\)\.catch/);
 assert.match(worker,/'\.\/og\.png'/);
+assert.equal(manifest.id,'./');
+assert.equal(manifest.start_url,'./');
 
 console.log('public pages tests passed');
