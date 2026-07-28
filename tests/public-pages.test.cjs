@@ -34,14 +34,22 @@ assert.match(privacy,/싱가포르/);
 assert.match(privacy,/90일이 지나면 자동 삭제/);
 assert.match(privacy,/O’live \(OliveMusic\)/);
 assert.match(terms,/개인정보처리방침/);
-assert.match(index,/service-worker\.js\?v=97/);
+assert.match(index,/service-worker\.js\?v=98/);
 assert.match(index,/cloud-sync\.js\?v=97/);
-assert.match(worker,/const VERSION = 'v97'/);
+assert.match(worker,/const VERSION = 'v98'/);
 assert.match(worker,/url\.origin !== self\.location\.origin/);
 assert.match(worker,/documentUrl\.search = ''/);
 assert.doesNotMatch(worker,/addAll\(ASSETS\)\)\.catch/);
 assert.match(worker,/'\.\/og\.png'/);
 assert.equal(manifest.id,'./');
 assert.equal(manifest.start_url,'./');
+
+assert.match(index,/id="startupSplash"/);
+assert.match(index,/class="startup-splash-icon" src="icons\/apple-touch-icon\.png"/);
+assert.match(index,/rel="preload" href="icons\/apple-touch-icon\.png" as="image"/);
+assert.match(index,/const minimumVisibleMs=1500/);
+assert.match(index,/window\.addEventListener\('load',leaveWhenReady,\{once:true\}\)/);
+assert.match(index,/html\.skip-startup \.startup-splash\{display:none;\}/);
+assert.match(index,/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?\.startup-splash/);
 
 console.log('public pages tests passed');

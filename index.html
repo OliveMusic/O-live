@@ -30,6 +30,30 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="manifest" href="manifest.json">
+<link rel="preload" href="icons/apple-touch-icon.png" as="image">
+<script>
+/* 한 번 시작된 앱 세션에서는 화면 이동·OAuth 복귀·새로고침 때마다
+   시작 화면을 반복하지 않는다. 업데이트로 즉시 재시작되면 처음 시작 시각은 유지한다. */
+(function(){
+  const stateKey='olive-startup-state-v1';
+  const timeKey='olive-startup-time-v1';
+  let skip=false;
+  let startedAt=Date.now();
+  try{
+    const state=sessionStorage.getItem(stateKey);
+    const savedAt=Number(sessionStorage.getItem(timeKey))||0;
+    skip=state==='shown';
+    if(!skip){
+      if(state==='showing' && Date.now()-savedAt<10000) startedAt=savedAt;
+      else sessionStorage.setItem(timeKey,String(startedAt));
+      sessionStorage.setItem(stateKey,'showing');
+    }
+  }catch(e){}
+  window.__OLIVE_STARTUP__={skip,startedAt,stateKey,timeKey};
+  document.documentElement.classList.add(skip?'skip-startup':'startup-active');
+})();
+</script>
+<noscript><style>.startup-splash{display:none!important}</style></noscript>
 <style>
   /* ============================================================
      Braun · Dieter Rams
@@ -114,6 +138,37 @@
   }
 
   #app{display:flex; flex-direction:column; height:100vh; height:100dvh;}
+
+  /* ---------- 시작 화면 ----------
+     홈 화면에서 앱을 열 때 실제 내용이 준비되는 짧은 시간을 브랜드 화면으로 잇는다. */
+  .startup-splash{
+    position:fixed; inset:0; z-index:1000;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background:var(--body); color:var(--ink-2);
+    opacity:1; visibility:visible;
+    transition:opacity .28s var(--ease-out), visibility 0s linear .28s;
+  }
+  html.skip-startup .startup-splash{display:none;}
+  .startup-splash.is-leaving{
+    opacity:0; visibility:hidden; pointer-events:none;
+  }
+  .startup-splash-icon{
+    width:92px; height:92px; display:block;
+    border-radius:21px;
+    box-shadow:0 10px 30px rgba(20,20,18,.12), 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .startup-splash-name{
+    margin-top:15px;
+    font-size:0.6875rem; font-weight:600; letter-spacing:0.145em;
+  }
+  @media (prefers-color-scheme:dark){
+    .startup-splash-icon{box-shadow:0 10px 30px rgba(0,0,0,.24), 0 0 0 1px rgba(255,255,255,.06);}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .startup-splash{transition:opacity .12s linear, visibility 0s linear .12s;}
+  }
 
   header.topbar{
     padding:15px 18px 13px; display:flex; align-items:center; gap:9px; flex-shrink:0;
@@ -1452,6 +1507,10 @@
 </style>
 </head>
 <body>
+<div class="startup-splash" id="startupSplash" aria-hidden="true">
+  <img class="startup-splash-icon" src="icons/apple-touch-icon.png" alt="">
+  <span class="startup-splash-name">O’LIVE</span>
+</div>
 <div id="app">
   <header class="topbar">
     <svg class="logo" viewBox="0 0 16 16" aria-hidden="true">
@@ -4818,10 +4877,49 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }, {passive:true});
 })();
 
+/* ===================== 시작 화면 =====================
+   첫 페인트부터 최소 1.5초를 채우고, 로딩이 더 길면 준비가 끝날 때까지 기다린다.
+   0.28초 페이드까지 합치면 일반적인 실행에서는 약 1.8초 보인다. */
+(function(){
+  const splash=document.getElementById('startupSplash');
+  const startup=window.__OLIVE_STARTUP__||{};
+  if(!splash || startup.skip){
+    if(splash) splash.hidden=true;
+    document.documentElement.classList.remove('startup-active');
+    return;
+  }
+
+  const minimumVisibleMs=1500;
+  let leaving=false;
+  function rememberCompletion(){
+    try{
+      sessionStorage.setItem(startup.stateKey,'shown');
+      sessionStorage.removeItem(startup.timeKey);
+    }catch(e){}
+  }
+  function leave(){
+    if(leaving) return;
+    leaving=true;
+    splash.classList.add('is-leaving');
+    setTimeout(()=>{
+      splash.hidden=true;
+      document.documentElement.classList.remove('startup-active');
+      rememberCompletion();
+    },300);
+  }
+  function leaveWhenReady(){
+    const elapsed=Date.now()-(startup.startedAt||Date.now());
+    setTimeout(leave,Math.max(0,minimumVisibleMs-elapsed));
+  }
+
+  if(document.readyState==='complete') leaveWhenReady();
+  else window.addEventListener('load',leaveWhenReady,{once:true});
+})();
+
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=97').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=98').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{
