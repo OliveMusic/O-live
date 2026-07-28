@@ -1481,15 +1481,21 @@
      가장자리가 완전히 투명해지는 큰 방사형 그라데이션으로 직접 그린다. */
   nav.tabbar button.sounding::after{
     content:''; position:absolute;
-    left:50%; top:-4px; width:54px; height:54px; margin-left:-27px;
+    left:50%; top:50%; width:60px; height:40px;
+    margin:-20px 0 0 -30px;
     border-radius:50%;
-    background:radial-gradient(circle,
+    background:radial-gradient(ellipse at center,
       rgba(var(--signal-rgb),1) 0%,
-      rgba(var(--signal-rgb),.88) 16%,
-      rgba(var(--signal-rgb),.58) 34%,
-      rgba(var(--signal-rgb),.26) 52%,
-      rgba(var(--signal-rgb),.08) 68%,
-      rgba(var(--signal-rgb),0) 84%);
+      rgba(var(--signal-rgb),.9) 8%,
+      rgba(var(--signal-rgb),.7) 18%,
+      rgba(var(--signal-rgb),.48) 28%,
+      rgba(var(--signal-rgb),.29) 39%,
+      rgba(var(--signal-rgb),.16) 49%,
+      rgba(var(--signal-rgb),.075) 59%,
+      rgba(var(--signal-rgb),.03) 69%,
+      rgba(var(--signal-rgb),.009) 79%,
+      rgba(var(--signal-rgb),.002) 89%,
+      rgba(var(--signal-rgb),0) 100%);
     opacity:.22;
     pointer-events:none; z-index:-1;
   }
@@ -4924,7 +4930,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=100').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=103').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{
