@@ -1481,8 +1481,8 @@
      가장자리가 완전히 투명해지는 큰 방사형 그라데이션으로 직접 그린다. */
   nav.tabbar button.sounding::after{
     content:''; position:absolute;
-    left:50%; top:50%; width:40px; height:40px;
-    margin:-20px 0 0 -20px;
+    left:50%; top:50%; width:44px; height:44px;
+    margin:-22px 0 0 -22px;
     background:radial-gradient(circle at center,
       rgba(var(--signal-rgb),1) 0%,
       rgba(var(--signal-rgb),.88) 8%,
@@ -1498,7 +1498,7 @@
     pointer-events:none; z-index:-1;
   }
   @keyframes tabPulse{
-    0%   { opacity:.85; transform:scale(1.25); }
+    0%   { opacity:.85; transform:scale(1.18); }
     22%  { opacity:.55; transform:scale(1.05); }
     100% { opacity:.22; transform:scale(1);    }
   }
@@ -4935,7 +4935,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=104').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=105').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{

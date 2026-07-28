@@ -6,7 +6,7 @@
    - HTML: 항상 네트워크 먼저. 실패했을 때만 캐시(오프라인 대비).
    - 그 외(아이콘 등): 캐시 먼저 쓰되 뒤에서 조용히 갱신.
    앱을 수정하면 아래 버전만 올리면 이전 캐시가 정리된다. */
-const VERSION = 'v104';
+const VERSION = 'v105';
 const CACHE = 'olive-practice-' + VERSION;
 
 const ASSETS = [
