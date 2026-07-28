@@ -1481,20 +1481,18 @@
      가장자리가 완전히 투명해지는 큰 방사형 그라데이션으로 직접 그린다. */
   nav.tabbar button.sounding::after{
     content:''; position:absolute;
-    left:50%; top:50%; width:60px; height:40px;
-    margin:-20px 0 0 -30px;
-    border-radius:50%;
-    background:radial-gradient(ellipse at center,
+    left:50%; top:50%; width:40px; height:40px;
+    margin:-20px 0 0 -20px;
+    background:radial-gradient(circle at center,
       rgba(var(--signal-rgb),1) 0%,
-      rgba(var(--signal-rgb),.9) 8%,
-      rgba(var(--signal-rgb),.7) 18%,
-      rgba(var(--signal-rgb),.48) 28%,
-      rgba(var(--signal-rgb),.29) 39%,
-      rgba(var(--signal-rgb),.16) 49%,
-      rgba(var(--signal-rgb),.075) 59%,
-      rgba(var(--signal-rgb),.03) 69%,
-      rgba(var(--signal-rgb),.009) 79%,
-      rgba(var(--signal-rgb),.002) 89%,
+      rgba(var(--signal-rgb),.88) 8%,
+      rgba(var(--signal-rgb),.62) 18%,
+      rgba(var(--signal-rgb),.36) 28%,
+      rgba(var(--signal-rgb),.18) 38%,
+      rgba(var(--signal-rgb),.075) 48%,
+      rgba(var(--signal-rgb),.025) 58%,
+      rgba(var(--signal-rgb),.006) 66%,
+      rgba(var(--signal-rgb),0) 78%,
       rgba(var(--signal-rgb),0) 100%);
     opacity:.22;
     pointer-events:none; z-index:-1;
@@ -1507,9 +1505,15 @@
   nav.tabbar button.sounding.beat::after{
     animation:tabPulse .42s cubic-bezier(.16,.7,.3,1) forwards;
   }
+  @keyframes tabPulseReduced{
+    0%   { opacity:.65; }
+    100% { opacity:.22; }
+  }
   @media (prefers-reduced-motion: reduce){
-    nav.tabbar button.sounding::after{ opacity:.5; }
-    nav.tabbar button.sounding.beat::after{ animation:none; opacity:.7; }
+    nav.tabbar button.sounding::after{ opacity:.22; }
+    nav.tabbar button.sounding.beat::after{
+      animation:tabPulseReduced .36s linear forwards;
+    }
   }
 </style>
 </head>
@@ -2391,9 +2395,10 @@ function pulseTab(tab){
   const btn=document.querySelector('.tab-btn[data-tab="'+tab+'"]');
   if(!btn || !btn.classList.contains('sounding')) return;
   // 같은 클래스를 다시 붙여도 애니메이션은 재생되지 않는다.
-  // 뗀 뒤 강제로 리플로우를 일으켜야 매 박마다 새로 시작한다.
+  // iOS는 버튼의 폭만 읽으면 가상 요소 애니메이션을 캐시할 때가 있어,
+  // ::after의 계산된 스타일을 직접 읽어 매 박마다 새로 시작하게 한다.
   btn.classList.remove('beat');
-  void btn.offsetWidth;
+  void getComputedStyle(btn,'::after').animationName;
   btn.classList.add('beat');
 }
 
@@ -4930,7 +4935,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=103').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=104').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{
