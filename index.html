@@ -1476,14 +1476,20 @@
 
   /* 지금 소리를 내고 있는 탭 */
   nav.tabbar button.sounding{ color:var(--signal); }
-  /* 아이콘 주변에만 동그랗게. 박마다 pulseTab()이 .beat를 붙였다 뗀다.
-     여기도 blur로 번지게 하고, 감쇠는 keyframe으로 처리한다. */
+  /* 아이콘 주변에만 부드럽게 번진다. 박마다 pulseTab()이 .beat를 붙였다 뗀다.
+     iOS WebKit에서 filter:blur()의 첫 합성 영역이 네모로 잘리는 경우가 있어,
+     가장자리가 완전히 투명해지는 큰 방사형 그라데이션으로 직접 그린다. */
   nav.tabbar button.sounding::after{
     content:''; position:absolute;
-    left:50%; top:10px; width:26px; height:26px; margin-left:-13px;
+    left:50%; top:-4px; width:54px; height:54px; margin-left:-27px;
     border-radius:50%;
-    background:rgb(var(--signal-rgb));
-    filter:blur(9px);
+    background:radial-gradient(circle,
+      rgba(var(--signal-rgb),1) 0%,
+      rgba(var(--signal-rgb),.88) 16%,
+      rgba(var(--signal-rgb),.58) 34%,
+      rgba(var(--signal-rgb),.26) 52%,
+      rgba(var(--signal-rgb),.08) 68%,
+      rgba(var(--signal-rgb),0) 84%);
     opacity:.22;
     pointer-events:none; z-index:-1;
   }
@@ -4918,7 +4924,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=99').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=100').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{
