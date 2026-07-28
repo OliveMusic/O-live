@@ -30,13 +30,12 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="manifest" href="manifest.json">
-<link rel="preload" href="icons/apple-touch-icon.png" as="image">
 <script>
 /* 한 번 시작된 앱 세션에서는 화면 이동·OAuth 복귀·새로고침 때마다
    시작 화면을 반복하지 않는다. 업데이트로 즉시 재시작되면 처음 시작 시각은 유지한다. */
 (function(){
-  const stateKey='olive-startup-state-v1';
-  const timeKey='olive-startup-time-v1';
+  const stateKey='olive-startup-state-v2';
+  const timeKey='olive-startup-time-v2';
   let skip=false;
   let startedAt=Date.now();
   try{
@@ -155,16 +154,12 @@
     opacity:0; visibility:hidden; pointer-events:none;
   }
   .startup-splash-icon{
-    width:92px; height:92px; display:block;
-    border-radius:21px;
-    box-shadow:0 10px 30px rgba(20,20,18,.12), 0 0 0 1px rgba(255,255,255,.05);
+    width:92px; height:76px; display:block;
+    color:var(--signal);
   }
   .startup-splash-name{
     margin-top:15px;
     font-size:0.6875rem; font-weight:600; letter-spacing:0.145em;
-  }
-  @media (prefers-color-scheme:dark){
-    .startup-splash-icon{box-shadow:0 10px 30px rgba(0,0,0,.24), 0 0 0 1px rgba(255,255,255,.06);}
   }
   @media (prefers-reduced-motion:reduce){
     .startup-splash{transition:opacity .12s linear, visibility 0s linear .12s;}
@@ -1508,7 +1503,11 @@
 </head>
 <body>
 <div class="startup-splash" id="startupSplash" aria-hidden="true">
-  <img class="startup-splash-icon" src="icons/apple-touch-icon.png" alt="">
+  <svg class="startup-splash-icon" viewBox="0 0 16 16" aria-hidden="true">
+    <path fill="currentColor" fill-rule="evenodd"
+          d="M2.4 8 A 5.6 4.6 0 1 0 13.6 8 A 5.6 4.6 0 1 0 2.4 8 Z
+             M8.5 8 A 1.7 1.7 0 1 0 11.9 8 A 1.7 1.7 0 1 0 8.5 8 Z"/>
+  </svg>
   <span class="startup-splash-name">O’LIVE</span>
 </div>
 <div id="app">
@@ -4919,7 +4918,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=98').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=99').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{
