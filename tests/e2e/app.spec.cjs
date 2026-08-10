@@ -41,12 +41,17 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
     }
     if(micMode!=='native'){
       let analyserSampleCursor=0;
+      const harness={requests:0,stops:0,pending:false,contexts:0,zeroGainConnections:0};
       class FakeNode{
-        connect(next){ return next||this; }
+        connect(next){
+          if(this.gain && this.gain.value===0) harness.zeroGainConnections++;
+          return next||this;
+        }
         disconnect(){}
       }
       class FakeAudioContext{
         constructor(){
+          harness.contexts++;
           this.state='suspended';
           this.currentTime=0;
           this.sampleRate=48000;
@@ -67,7 +72,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           node.fftSize=4096;
           node.smoothingTimeConstant=0;
           node.getFloatTimeDomainData=array=>{
-            if(micMode!=='weak-signal'){
+            if(micMode!=='weak-signal' && micMode!=='scope-error'){
               array.fill(0);
               return;
             }
@@ -85,7 +90,16 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           return node;
         }
       }
-      const harness={requests:0,stops:0,pending:false};
+      if(micMode==='scope-error'){
+        const nativeGetContext=HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext=function(...args){
+          const context=nativeGetContext.apply(this,args);
+          if(this.id==='tunerScope' && context){
+            context.setLineDash=()=>{ throw new Error('simulated iOS canvas failure'); };
+          }
+          return context;
+        };
+      }
       const makeStream=()=>{
         const listeners=new Map();
         const track={
@@ -124,7 +138,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.2');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.3');
 }
 
 test.afterEach(async({page})=>{
@@ -150,7 +164,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=122');
+  expect(workerUrl).toContain('service-worker.js?v=123');
 });
 
 test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{
@@ -203,6 +217,31 @@ test('튜너가 마이크를 연결하고 정지할 때 트랙을 확실히 놓�
   await expect(mic).not.toHaveClass(/on|starting/);
   await expect(page.locator('#tunerFreq')).toHaveText('마이크 꺼짐');
   expect(await page.evaluate(()=>window.__micHarness)).toMatchObject({requests:1,stops:1});
+});
+
+test('iOS형 무음 오디오 그래프를 출력 없이 한 번 자동 복구한다',async({page})=>{
+  await preparePage(page,{microphone:'success'});
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  const mic=page.locator('#tunerStart');
+  await mic.click();
+  await expect(mic).toHaveClass(/on/);
+  await expect.poll(()=>page.evaluate(()=>window.__micHarness.contexts),{timeout:5000})
+    .toBeGreaterThanOrEqual(3);
+  const state=await page.evaluate(()=>window.__micHarness);
+  expect(state.requests).toBe(1);
+  expect(state.zeroGainConnections).toBeGreaterThanOrEqual(2);
+  await expect(mic).toHaveClass(/on/);
+  await mic.click();
+});
+
+test('파형 Canvas 오류가 나도 튜너 음정 분석은 계속된다',async({page})=>{
+  await preparePage(page,{microphone:'scope-error'});
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  await page.locator('#tunerSens').fill('80');
+  await page.locator('#tunerStart').click();
+  await expect(page.locator('#tunerNote')).toHaveText('E',{timeout:5000});
+  await expect(page.locator('#tunerLevel')).toHaveClass(/ready/);
+  await page.locator('#tunerStart').click();
 });
 
 test('튜너 약한 입력 모드가 기존 음량 문턱 아래의 일렉기타 신호를 잡는다',async({page})=>{

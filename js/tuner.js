@@ -27,8 +27,9 @@
 
   let currentTuning='guitar';
   let listening=false, micStarting=false, micStartToken=0;
-  let stream=null, analyser=null, buf=null, srcNode=null, micBoost=null;
+  let stream=null, analyser=null, buf=null, srcNode=null, micBoost=null, monitorSink=null;
   let micChain=[];              // 껐을 때 확실히 끊기 위해 들고 있는다
+  let micRecovering=false, inputRecoveryUsed=false, zeroInputSince=0;
   let strobeCents=0, strobeAngle=0, strobeLast=0;
   let spin=0, lock=0;            // 화면에 실제로 그려지는 값. 목표를 향해 천천히 따라간다.
   let lastNote=null, quietFrames=0, inLevel=0;
@@ -42,7 +43,7 @@
 
   /* ---------- 감도 설정용 실시간 입력 모니터 ---------- */
   const scopeCtx=scopeCanvas ? scopeCanvas.getContext('2d') : null;
-  let scopeWidth=0,scopeHeight=0,scopeSizeDirty=true;
+  let scopeWidth=0,scopeHeight=0,scopeSizeDirty=true,scopeDrawingDisabled=false;
   let lastScopeDraw=0,lastScopeText=0;
   let scopeColors={line:'#777',dim:'#777',signal:'#687c52',signalRgb:'104,124,82'};
 
@@ -128,10 +129,21 @@
     scopeCtx.stroke();
   }
 
+  /* 파형은 보조 표시다. 일부 iOS Safari 버전에서 Canvas 호출이 실패해도
+     실제 음정 분석까지 함께 멈추지 않도록 별도로 격리한다. */
+  function safeDrawScopeFrame(samples,gate,accepted){
+    if(scopeDrawingDisabled) return;
+    try{
+      drawScopeFrame(samples,gate,accepted);
+    }catch(e){
+      scopeDrawingDisabled=true;
+    }
+  }
+
   function updateScope(samples,rms,gate,accepted,ts){
     if(!scopeCtx || ts-lastScopeDraw<40) return;
     lastScopeDraw=ts;
-    drawScopeFrame(samples,gate,accepted);
+    safeDrawScopeFrame(samples,gate,accepted);
     if(ts-lastScopeText<160) return;
     lastScopeText=ts;
     const margin=20*Math.log10(Math.max(1e-7,rms)/Math.max(1e-7,gate.effectiveThreshold));
@@ -146,7 +158,7 @@
 
   function resetScope(label='마이크 꺼짐'){
     lastScopeDraw=0; lastScopeText=0;
-    drawScopeFrame(null,null,false);
+    safeDrawScopeFrame(null,null,false);
     if(inputDbEl) inputDbEl.textContent='—';
     if(noiseDbEl) noiseDbEl.textContent='—';
     if(marginDbEl) marginDbEl.textContent='—';
@@ -188,6 +200,70 @@
   }
 
   const N=tunerEngine.FRAME_SIZE;
+
+  function disconnectMicGraph(){
+    micChain.forEach(n=>{ try{ n.disconnect(); }catch(e){} });
+    micChain=[];
+    srcNode=null; analyser=null; micBoost=null; monitorSink=null; buf=null;
+  }
+
+  function buildMicGraph(ctx){
+    disconnectMicGraph();
+    srcNode=ctx.createMediaStreamSource(stream);
+
+    // 대역 제한: 럼블과 고차 배음을 걷어내 검출 안정성을 높인다
+    const hp=ctx.createBiquadFilter();
+    hp.type='highpass'; hp.frequency.value=55; hp.Q.value=0.7;
+    const lp=ctx.createBiquadFilter();
+    lp.type='lowpass'; lp.frequency.value=2200; lp.Q.value=0.7;
+
+    analyser=ctx.createAnalyser();
+    analyser.fftSize=N;
+    analyser.smoothingTimeConstant=0;
+    buf=new Float32Array(N);
+
+    // 기기 마이크가 조용한 경우가 많아 분석 전에 키워준다.
+    micBoost=ctx.createGain();
+    micBoost.gain.value=sensitivity.inputGain;
+
+    /* AnalyserNode는 원칙상 출력 연결 없이도 동작하지만, 일부 iOS WebKit에서는
+       그래프가 끌려가지 않아 계속 0만 반환하는 경우가 있다. 0 gain 경로를
+       destination까지 연결해 분석은 활성화하되 마이크 소리는 절대 재생하지 않는다. */
+    monitorSink=ctx.createGain();
+    monitorSink.gain.value=0;
+
+    srcNode.connect(hp);
+    hp.connect(lp);
+    lp.connect(micBoost);
+    micBoost.connect(analyser);
+    analyser.connect(monitorSink);
+    monitorSink.connect(ctx.destination);
+    micChain=[srcNode,hp,lp,micBoost,analyser,monitorSink];
+    signalGate.reset();
+  }
+
+  async function recoverMicGraph(token){
+    if(micRecovering || !listening || !stream || token!==micStartToken) return;
+    micRecovering=true;
+    if(scopeStateEl){
+      scopeStateEl.textContent='입력 다시 연결 중';
+      scopeStateEl.classList.remove('active');
+    }
+    try{
+      const ctx=await ensureCtx('play-and-record',true);
+      if(!listening || !stream || token!==micStartToken) return;
+      buildMicGraph(ctx);
+      zeroInputSince=0;
+      lastRun=0;
+      if(scopeStateEl) scopeStateEl.textContent='입력 측정 중';
+    }catch(e){
+      if(listening && token===micStartToken){
+        stopMic('입력 연결 실패 · 다시 눌러주세요');
+      }
+    }finally{
+      micRecovering=false;
+    }
+  }
 
   /* ---------- 안정화: 중앙값 + 지수 평활 ---------- */
   const hist=[];
@@ -280,52 +356,74 @@
   let lastRun=0;
   function analyse(ts){
     if(!listening) return;
-    if(ts-lastRun > 22){                 // 25Hz -> 45Hz
-      lastRun=ts;
-      analyser.getFloatTimeDomainData(buf);
-      const rms=tunerEngine.frameRms(buf,4);
-      // 적응형 문턱보다 훨씬 작은 무음에서는 FFT를 생략해 배터리를 아낀다.
-      // 새 음은 absoluteFloor 이상이어야 열리므로 검출 가능한 신호는 건드리지 않는다.
-      const minimumDetectLevel=sensitivity.absoluteFloor*(haveLock ? 0.55 : 0.85);
-      const r=rms>=minimumDetectLevel
-        ? tunerEngine.detectPitch(buf,audioCtx.sampleRate,{
-            minFrequency:freqLo,
-            maxFrequency:freqHi,
-          })
-        : null;
-      const inRange=Boolean(r && r.freq>freqLo && r.freq<freqHi);
-      const likelyPitch=Boolean(inRange && r.clarity>Math.max(0.50,clarityGate-0.10));
-      const gate=signalGate.evaluate(rms,sensitivity,{pitched:likelyPitch,locked:haveLock});
-      const cleanWeakSignal=Boolean(
-        sensitivity.value>=67 && inRange &&
-        r.clarity>Math.min(0.96,clarityGate+0.13) &&
-        rms>=sensitivity.absoluteFloor
-      );
-      const accepted=Boolean(inRange && r.clarity>clarityGate && (gate.open || cleanWeakSignal));
-      updateScope(buf,rms,gate,accepted,ts);
+    try{
+      if(ts-lastRun > 22){                 // 약 45Hz
+        lastRun=ts;
+        if(!analyser || !buf || !audioCtx) return;
+        analyser.getFloatTimeDomainData(buf);
+        const rms=tunerEngine.frameRms(buf,4);
 
-      // 로그에 가까운 반응으로 작은 입력도 막대에서 확인할 수 있게 한다.
-      const meterRatio=rms/Math.max(gate.threshold,1e-8);
-      const meterTarget=Math.min(1,Math.sqrt(meterRatio)*0.55);
-      inLevel=inLevel*0.72+meterTarget*0.28;
-      if(levelEl){
-        levelEl.style.transform='scaleX('+inLevel.toFixed(3)+')';
-        levelEl.classList.toggle('ready',accepted);
-      }
+        /* 정상 마이크는 조용한 방에서도 아주 작은 바닥 잡음이 들어온다.
+           정확한 0만 1.4초 이상 계속되면 iOS 오디오 그래프가 멈춘 것으로 보고
+           컨텍스트와 분석 경로를 한 번만 새로 만든다. */
+        if(rms>1e-7){
+          zeroInputSince=0;
+        }else if(!inputRecoveryUsed){
+          if(!zeroInputSince) zeroInputSince=ts;
+          else if(ts-zeroInputSince>1400){
+            inputRecoveryUsed=true;
+            recoverMicGraph(micStartToken);
+          }
+        }
 
-      // 선풍기·에어컨은 '음정이 있는' 소음이라 게이트로는 못 거른다.
-      // 주기성·악기 음역·적응형 소음 문턱을 모두 통과한 경우만 표시한다.
-      if(accepted){
-        const nRaw=Math.round(69+12*Math.log2(r.freq/440));
-        if(nRaw!==lastNote) hist.length=0;   // 다른 음이면 이력을 비워 즉시 반응
-        update(stabilize(r.freq));
-        quietFrames=0;
-      } else {
-        // 소리가 끊기면 잠시 뒤 대기 상태로 (마지막 값이 계속 떠 있지 않게)
-        if(++quietFrames > 45) { quietFrames=0; idle(); }
+        // 적응형 문턱보다 훨씬 작은 무음에서는 FFT를 생략해 배터리를 아낀다.
+        const minimumDetectLevel=sensitivity.absoluteFloor*(haveLock ? 0.55 : 0.85);
+        const r=rms>=minimumDetectLevel
+          ? tunerEngine.detectPitch(buf,audioCtx.sampleRate,{
+              minFrequency:freqLo,
+              maxFrequency:freqHi,
+            })
+          : null;
+        const inRange=Boolean(r && r.freq>freqLo && r.freq<freqHi);
+        const likelyPitch=Boolean(inRange && r.clarity>Math.max(0.50,clarityGate-0.10));
+        const gate=signalGate.evaluate(rms,sensitivity,{pitched:likelyPitch,locked:haveLock});
+        const cleanWeakSignal=Boolean(
+          sensitivity.value>=67 && inRange &&
+          r.clarity>Math.min(0.96,clarityGate+0.13) &&
+          rms>=sensitivity.absoluteFloor
+        );
+        const accepted=Boolean(inRange && r.clarity>clarityGate && (gate.open || cleanWeakSignal));
+        updateScope(buf,rms,gate,accepted,ts);
+
+        // 로그에 가까운 반응으로 작은 입력도 막대에서 확인할 수 있게 한다.
+        const meterRatio=rms/Math.max(gate.threshold,1e-8);
+        const meterTarget=Math.min(1,Math.sqrt(meterRatio)*0.55);
+        inLevel=inLevel*0.72+meterTarget*0.28;
+        if(levelEl){
+          levelEl.style.transform='scaleX('+inLevel.toFixed(3)+')';
+          levelEl.classList.toggle('ready',accepted);
+        }
+
+        // 주기성·악기 음역·적응형 소음 문턱을 모두 통과한 경우만 표시한다.
+        if(accepted){
+          const nRaw=Math.round(69+12*Math.log2(r.freq/440));
+          if(nRaw!==lastNote) hist.length=0;
+          update(stabilize(r.freq));
+          quietFrames=0;
+        } else if(++quietFrames > 45) {
+          quietFrames=0;
+          idle();
+        }
       }
+    }catch(e){
+      // 일시적인 iOS 오디오 경로 오류가 분석 루프 자체를 끝내지 않게 한다.
+      if(!inputRecoveryUsed){
+        inputRecoveryUsed=true;
+        recoverMicGraph(micStartToken);
+      }
+    }finally{
+      if(listening) requestAnimationFrame(analyse);
     }
-    requestAnimationFrame(analyse);
   }
 
   /* ---------- 스트로보 회전 ---------- */
@@ -419,8 +517,8 @@
     micStarting=false;
     // 트랙을 완전히 멈춰 마이크를 놓아준다 → iOS "사용중" 표시가 꺼진다.
     if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-    micChain.forEach(n=>{ try{ n.disconnect(); }catch(e){} });
-    micChain=[]; srcNode=null; analyser=null; micBoost=null; buf=null;
+    disconnectMicGraph();
+    micRecovering=false; inputRecoveryUsed=false; zeroInputSince=0;
     signalGate.reset();
     setAudioSession('ambient');
     // play-and-record에서 돌아온 컨텍스트는 state가 running이어도 무음일 수 있다.
@@ -515,27 +613,10 @@
       // interrupted 및 running-but-silent 상태를 제거한다.
       const ctx=await ensureCtx('play-and-record',true);
       if(token!==micStartToken || !micStarting){ stopMic(); return; }
-      srcNode=ctx.createMediaStreamSource(stream);
-
-      // 대역 제한: 럼블과 고차 배음을 걷어내 검출 안정성을 높인다
-      const hp=ctx.createBiquadFilter();
-      hp.type='highpass'; hp.frequency.value=55; hp.Q.value=0.7;
-      const lp=ctx.createBiquadFilter();
-      lp.type='lowpass';  lp.frequency.value=2200; lp.Q.value=0.7;
-
-      analyser=ctx.createAnalyser();
-      analyser.fftSize=N;
-      analyser.smoothingTimeConstant=0;
-      buf=new Float32Array(N);
-
-      // 기기 마이크가 조용한 경우가 많아 분석 전에 키워준다.
-      // YIN은 신호 크기와 무관하지만 게이트 통과와 수치 정밀도에 도움이 된다.
-      micBoost=ctx.createGain();
-      micBoost.gain.value=sensitivity.inputGain;
-      signalGate.reset();
-
-      srcNode.connect(hp); hp.connect(lp); lp.connect(micBoost); micBoost.connect(analyser);
-      micChain=[srcNode, hp, lp, micBoost, analyser];
+      buildMicGraph(ctx);
+      inputRecoveryUsed=false;
+      zeroInputSince=0;
+      scopeDrawingDisabled=false;
 
       listening=true;
       micStarting=false;
@@ -551,6 +632,18 @@
         track.addEventListener('ended',()=>{
           if(listening && token===micStartToken) stopMic('마이크 연결 끊김');
         },{once:true});
+        track.addEventListener('mute',()=>{
+          if(listening && token===micStartToken && scopeStateEl){
+            scopeStateEl.textContent='마이크 입력 대기 중';
+            scopeStateEl.classList.remove('active');
+          }
+        });
+        track.addEventListener('unmute',()=>{
+          if(listening && token===micStartToken){
+            zeroInputSince=0;
+            if(scopeStateEl) scopeStateEl.textContent='입력 측정 중';
+          }
+        });
       });
       requestAnimationFrame(analyse);
       startStrobe();
