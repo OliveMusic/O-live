@@ -18,8 +18,11 @@
   const strobeOlive = document.getElementById('strobeOlive');
   const strobeDir   = document.getElementById('strobeDir');
   const levelEl     = document.getElementById('tunerLevel');
-  const sensValueEl = document.getElementById('tunerSensVal');
-  const sensHintEl  = document.getElementById('tunerSensHint');
+  const scopeCanvas = document.getElementById('tunerScope');
+  const scopeStateEl= document.getElementById('tunerScopeState');
+  const inputDbEl   = document.getElementById('tunerInputDb');
+  const noiseDbEl   = document.getElementById('tunerNoiseDb');
+  const marginDbEl  = document.getElementById('tunerMarginDb');
   const tunerEngine = window.OliveTunerEngine;
 
   let currentTuning='guitar';
@@ -36,6 +39,127 @@
   let sensitivity=tunerEngine.sensitivityProfile(SENS_DEFAULT);
   let clarityGate=sensitivity.clarityGate;
   const signalGate=tunerEngine.createSignalGate();
+
+  /* ---------- 감도 설정용 실시간 입력 모니터 ---------- */
+  const scopeCtx=scopeCanvas ? scopeCanvas.getContext('2d') : null;
+  let scopeWidth=0,scopeHeight=0,scopeSizeDirty=true;
+  let lastScopeDraw=0,lastScopeText=0;
+  let scopeColors={line:'#777',dim:'#777',signal:'#687c52',signalRgb:'104,124,82'};
+
+  function fitScopeCanvas(){
+    if(!scopeCanvas || !scopeCtx) return false;
+    const rect=scopeCanvas.getBoundingClientRect();
+    if(rect.width<1 || rect.height<1) return false;
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const pixelWidth=Math.max(1,Math.round(rect.width*dpr));
+    const pixelHeight=Math.max(1,Math.round(rect.height*dpr));
+    if(scopeSizeDirty || scopeCanvas.width!==pixelWidth || scopeCanvas.height!==pixelHeight){
+      scopeCanvas.width=pixelWidth;
+      scopeCanvas.height=pixelHeight;
+      scopeCtx.setTransform(dpr,0,0,dpr,0,0);
+      scopeWidth=rect.width;
+      scopeHeight=rect.height;
+      const style=getComputedStyle(document.documentElement);
+      scopeColors={
+        line:style.getPropertyValue('--line-soft').trim()||'#777',
+        dim:style.getPropertyValue('--ink-3').trim()||'#777',
+        signal:style.getPropertyValue('--signal').trim()||'#687c52',
+        signalRgb:style.getPropertyValue('--signal-rgb').trim()||'104,124,82',
+      };
+      scopeSizeDirty=false;
+    }
+    return true;
+  }
+
+  function scopeAmplitude(value,halfHeight){
+    return Math.min(0.92,Math.sqrt(Math.max(0,Math.abs(value))*30))*halfHeight;
+  }
+
+  function levelDb(value){
+    return Math.max(-96,Math.min(0,20*Math.log10(Math.max(1e-7,value))));
+  }
+
+  function drawScopeFrame(samples,gate,accepted){
+    if(!fitScopeCanvas()) return;
+    const width=scopeWidth,height=scopeHeight,center=height/2,half=height*0.46;
+    scopeCtx.clearRect(0,0,width,height);
+
+    scopeCtx.strokeStyle=scopeColors.line;
+    scopeCtx.lineWidth=1;
+    scopeCtx.beginPath();
+    scopeCtx.moveTo(0,center+0.5);
+    scopeCtx.lineTo(width,center+0.5);
+    scopeCtx.stroke();
+
+    if(gate){
+      const noiseHeight=Math.max(1.5,scopeAmplitude(gate.noiseFloor,half));
+      const gateHeight=Math.max(2,scopeAmplitude(gate.effectiveThreshold,half));
+      scopeCtx.fillStyle=`rgba(${scopeColors.signalRgb},0.09)`;
+      scopeCtx.fillRect(0,center-noiseHeight,width,noiseHeight*2);
+
+      scopeCtx.save();
+      scopeCtx.setLineDash([3,4]);
+      scopeCtx.strokeStyle=`rgba(${scopeColors.signalRgb},0.52)`;
+      scopeCtx.beginPath();
+      scopeCtx.moveTo(0,center-gateHeight);
+      scopeCtx.lineTo(width,center-gateHeight);
+      scopeCtx.moveTo(0,center+gateHeight);
+      scopeCtx.lineTo(width,center+gateHeight);
+      scopeCtx.stroke();
+      scopeCtx.restore();
+    }
+
+    scopeCtx.strokeStyle=accepted ? scopeColors.signal : scopeColors.dim;
+    scopeCtx.lineWidth=accepted ? 1.45 : 1.05;
+    scopeCtx.beginPath();
+    if(!samples || !samples.length){
+      scopeCtx.moveTo(0,center);
+      scopeCtx.lineTo(width,center);
+    }else{
+      const last=samples.length-1;
+      const columns=Math.max(2,Math.floor(width));
+      for(let x=0;x<columns;x++){
+        const sample=samples[Math.min(last,Math.floor(x*last/(columns-1)))];
+        const y=center-Math.sign(sample)*scopeAmplitude(sample,half);
+        if(x===0) scopeCtx.moveTo(x,y);
+        else scopeCtx.lineTo(x,y);
+      }
+    }
+    scopeCtx.stroke();
+  }
+
+  function updateScope(samples,rms,gate,accepted,ts){
+    if(!scopeCtx || ts-lastScopeDraw<40) return;
+    lastScopeDraw=ts;
+    drawScopeFrame(samples,gate,accepted);
+    if(ts-lastScopeText<160) return;
+    lastScopeText=ts;
+    const margin=20*Math.log10(Math.max(1e-7,rms)/Math.max(1e-7,gate.effectiveThreshold));
+    if(inputDbEl) inputDbEl.textContent=Math.round(levelDb(rms))+' dB';
+    if(noiseDbEl) noiseDbEl.textContent=Math.round(levelDb(gate.noiseFloor))+' dB';
+    if(marginDbEl) marginDbEl.textContent=(margin>=0?'+':'')+Math.round(Math.max(-60,Math.min(60,margin)))+' dB';
+    if(scopeStateEl){
+      scopeStateEl.textContent=accepted ? '인식 중' : gate.open ? '음정 확인 중' : '문턱 아래';
+      scopeStateEl.classList.toggle('active',accepted);
+    }
+  }
+
+  function resetScope(label='마이크 꺼짐'){
+    lastScopeDraw=0; lastScopeText=0;
+    drawScopeFrame(null,null,false);
+    if(inputDbEl) inputDbEl.textContent='—';
+    if(noiseDbEl) noiseDbEl.textContent='—';
+    if(marginDbEl) marginDbEl.textContent='—';
+    if(scopeStateEl){
+      scopeStateEl.textContent=label;
+      scopeStateEl.classList.remove('active');
+    }
+  }
+
+  window.addEventListener('resize',()=>{
+    scopeSizeDirty=true;
+    if(!listening) requestAnimationFrame(()=>resetScope());
+  });
 
   function applyInputGain(){
     if(!micBoost || !micBoost.gain) return;
@@ -57,14 +181,6 @@
     if(el){
       el.value = v;
       el.setAttribute('aria-valuetext',v+' '+sensitivity.label);
-    }
-    if(sensValueEl) sensValueEl.textContent = v+' · '+sensitivity.label;
-    if(sensHintEl){
-      sensHintEl.textContent = v>=67
-        ? '앰프 없이 연주하는 일렉기타처럼 작은 입력에 적합합니다'
-        : v<34
-          ? '주변 소음이 큰 곳에서 잘못된 음 인식을 줄입니다'
-          : '주변 소음을 자동으로 반영해 입력 문턱을 조절합니다';
     }
     signalGate.reset();
     applyInputGain();
@@ -186,6 +302,7 @@
         rms>=sensitivity.absoluteFloor
       );
       const accepted=Boolean(inRange && r.clarity>clarityGate && (gate.open || cleanWeakSignal));
+      updateScope(buf,rms,gate,accepted,ts);
 
       // 로그에 가까운 반응으로 작은 입력도 막대에서 확인할 수 있게 한다.
       const meterRatio=rms/Math.max(gate.threshold,1e-8);
@@ -322,12 +439,16 @@
       levelEl.style.transform='scaleX(0)';
       levelEl.classList.remove('ready');
     }
+    resetScope();
   }
   registerTransport({ isPlaying:()=>listening || micStarting, stop:stopMic });
 
   // 튜너가 아닌 다른 탭으로 넘어가면 마이크를 자동으로 끈다
   document.querySelectorAll('.tab-btn').forEach(b=>{
-    b.addEventListener('click', ()=>{ if(b.dataset.tab !== 'tuner') stopMic(); });
+    b.addEventListener('click', ()=>{
+      if(b.dataset.tab !== 'tuner') stopMic();
+      else if(!listening && !micStarting) requestAnimationFrame(()=>resetScope());
+    });
   });
 
   // 감도 슬라이더 — 실시간으로 게이트를 조절. 손잡이 더블클릭/더블탭이면 기본값.
@@ -372,6 +493,7 @@
     tunerStart.setAttribute('aria-pressed','false');
     tunerStart.setAttribute('aria-busy','true');
     tunerFreq.textContent='마이크 연결 중…';
+    resetScope('연결 중');
     try{
       setAudioSession('play-and-record');
       // 사용자 탭 안에서 먼저 컨텍스트를 활성화해 iOS 자동재생 제한을 통과한다.
@@ -424,6 +546,7 @@
       tunerStart.setAttribute('aria-pressed','true');
       tunerStart.setAttribute('aria-busy','false');
       tunerFreq.textContent='연주해보세요';
+      resetScope('입력 측정 중');
       stream.getAudioTracks().forEach(track=>{
         track.addEventListener('ended',()=>{
           if(listening && token===micStartToken) stopMic('마이크 연결 끊김');

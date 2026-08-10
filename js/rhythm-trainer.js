@@ -131,14 +131,32 @@
     rhyPresets.appendChild(b);
   });
 
-  rhySynco.addEventListener('input', ()=>{
-    rhySyncoVal.textContent=rhySynco.value;
+  const RHY_SLIDER_DEFAULT=5;
+  function setRhySlider(input,output,value){
+    const numeric=Number(value);
+    if(!Number.isFinite(numeric)) return;
+    const next=Math.max(0,Math.min(10,Math.round(numeric)));
+    input.value=next;
+    input.setAttribute('aria-valuetext',String(next));
+    output.textContent=next;
     window.OlivePreferences.changed();
-  });
-  rhyDiff.addEventListener('input', ()=>{
-    rhyDiffVal.textContent=rhyDiff.value;
-    window.OlivePreferences.changed();
-  });
+  }
+  function bindRhySliderReset(input,output){
+    let lastTap=-1e9;
+    input.addEventListener('pointerdown',()=>{
+      const now=performance.now();
+      if(now-lastTap<400){
+        setRhySlider(input,output,RHY_SLIDER_DEFAULT);
+        lastTap=-1e9;
+      }else{
+        lastTap=now;
+      }
+    });
+  }
+  rhySynco.addEventListener('input', ()=>setRhySlider(rhySynco,rhySyncoVal,rhySynco.value));
+  rhyDiff.addEventListener('input', ()=>setRhySlider(rhyDiff,rhyDiffVal,rhyDiff.value));
+  bindRhySliderReset(rhySynco,rhySyncoVal);
+  bindRhySliderReset(rhyDiff,rhyDiffVal);
   rhyBpm.addEventListener('input', ()=>setRhyBpm(rhyBpm.value));
   rhyGen  .addEventListener('click', ()=>{ getCtx(); generate(); });
   rhyClear.addEventListener('click', ()=>{
@@ -327,4 +345,3 @@
     }
   );
 })();
-

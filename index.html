@@ -507,11 +507,47 @@
     transition:background .12s var(--ease-out);
   }
   .in-level-bar.ready{background:var(--signal-display);}
-  .tuner-sens-value{
-    color:var(--ink-2); font-size:0.625rem; font-weight:500;
-    font-variant-numeric:tabular-nums; letter-spacing:.01em;
+  .tuner-monitor{margin-top:19px;}
+  .tuner-monitor-head{
+    display:flex; align-items:center; justify-content:space-between;
+    min-height:20px; margin-bottom:7px;
+    color:var(--ink-3); font-size:0.5938rem; font-weight:500;
+    letter-spacing:.0182em;
   }
-  .tuner-sens-hint{min-height:1.5em;}
+  .tuner-monitor-state{
+    color:var(--ink-3); transition:color .12s var(--ease-out);
+  }
+  .tuner-monitor-state.active{color:var(--signal);}
+  .tuner-scope-wrap{
+    height:104px; overflow:hidden; border:1px solid var(--line-soft);
+    border-radius:var(--r); background:var(--body-hi);
+  }
+  .tuner-scope{display:block; width:100%; height:104px;}
+  .tuner-scope-values{
+    display:grid; grid-template-columns:repeat(3,1fr); margin-top:7px;
+  }
+  .tuner-scope-values span{
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    min-width:0; color:var(--ink-2); font-size:0.5938rem;
+    font-variant-numeric:tabular-nums;
+  }
+  .tuner-scope-values small{
+    color:var(--ink-3); font-size:0.5rem; font-weight:500;
+    letter-spacing:.0182em;
+  }
+  .tuner-scope-values b{font-weight:500;}
+  .tuner-scope-legend{
+    display:flex; flex-wrap:wrap; justify-content:center; gap:4px 10px;
+    margin-top:7px; color:var(--ink-3); font-size:0.5rem;
+  }
+  .tuner-scope-legend span{display:inline-flex; align-items:center; gap:4px;}
+  .tuner-scope-legend i{display:inline-block; width:11px; height:2px; border-radius:2px;}
+  .tuner-scope-legend .wave{background:var(--signal);}
+  .tuner-scope-legend .noise{height:5px; background:var(--signal-soft);}
+  .tuner-scope-legend .gate{
+    height:1px; border-radius:0;
+    background:repeating-linear-gradient(to right,var(--ink-3) 0 2px,transparent 2px 4px);
+  }
 
   .strobe{
     --spin:0;      /* 회전 속도 0~1 — 빠를수록 쐐기가 밝다 */
@@ -1682,17 +1718,31 @@
         <p class="hint" style="margin-top:10px;">현을 누르면 기준음이 들립니다</p>
       </div>
       <div class="card">
-        <div class="row">
-          <h2 style="margin:0;">감도</h2>
-          <span class="tuner-sens-value" id="tunerSensVal" title="두 번 누르면 기본값">50 · 균형</span>
-        </div>
+        <h2>감도</h2>
         <input type="range" id="tunerSens" min="0" max="100" value="50" aria-label="튜너 감도" aria-valuetext="50 균형">
         <div class="row" style="margin-top:2px; align-items:baseline;">
           <span class="hint" style="margin:0;">둔감 · 시끄러운 곳</span>
           <span class="hint" style="margin:0;">예민 · 조용한 곳</span>
         </div>
-        <p class="hint tuner-sens-hint" id="tunerSensHint" style="margin-top:10px;">주변 소음을 자동으로 반영해 입력 문턱을 조절합니다</p>
-        <p class="hint" style="margin-top:5px;">올리브를 두 번 누르면 기본값으로 돌아갑니다</p>
+        <div class="tuner-monitor" aria-labelledby="tunerMonitorTitle">
+          <div class="tuner-monitor-head">
+            <span id="tunerMonitorTitle">실시간 입력</span>
+            <span class="tuner-monitor-state" id="tunerScopeState" aria-live="polite">마이크 꺼짐</span>
+          </div>
+          <div class="tuner-scope-wrap">
+            <canvas class="tuner-scope" id="tunerScope" width="640" height="208" role="img" aria-label="튜너가 분석하는 마이크 입력 파형">마이크 입력 파형</canvas>
+          </div>
+          <div class="tuner-scope-values">
+            <span><small>입력</small><b id="tunerInputDb">—</b></span>
+            <span><small>노이즈</small><b id="tunerNoiseDb">—</b></span>
+            <span><small>문턱 여유</small><b id="tunerMarginDb">—</b></span>
+          </div>
+          <div class="tuner-scope-legend" aria-hidden="true">
+            <span><i class="wave"></i>입력 파형</span>
+            <span><i class="noise"></i>주변 소음</span>
+            <span><i class="gate"></i>인식 문턱</span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1832,12 +1882,12 @@
           <span style="font-size:12px;">당김음</span>
           <span id="rhySyncoVal" style="font-weight:500; font-variant-numeric:tabular-nums;">5</span>
         </div>
-        <input type="range" id="rhySynco" min="0" max="10" value="5">
+        <input type="range" id="rhySynco" min="0" max="10" value="5" aria-label="당김음" aria-valuetext="5">
         <div class="row">
           <span style="font-size:12px;">밀도</span>
           <span id="rhyDiffVal" style="font-weight:500; font-variant-numeric:tabular-nums;">5</span>
         </div>
-        <input type="range" id="rhyDiff" min="0" max="10" value="5">
+        <input type="range" id="rhyDiff" min="0" max="10" value="5" aria-label="밀도" aria-valuetext="5">
         <div class="switch-row" style="margin-top:16px;">
           <button class="btn" id="rhyGen" style="flex:1;">새 리듬 생성</button>
           <button class="btn" id="rhyClear" style="flex:0 0 auto;">비우기</button>
@@ -1985,19 +2035,19 @@
   </section>
 </div>
 
-<script src="app-version.js?v=120"></script>
+<script src="app-version.js?v=122"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=120"></script>
-<script src="js/audio-runtime.js?v=120"></script>
-<script src="js/core.js?v=120"></script>
-<script src="js/metronome.js?v=120"></script>
-<script src="js/tuner-engine.js?v=120"></script>
-<script src="js/tuner.js?v=120"></script>
-<script src="js/scales.js?v=120"></script>
-<script src="js/ear-trainer.js?v=120"></script>
-<script src="js/rhythm-trainer.js?v=120"></script>
-<script src="js/jam-session.js?v=120"></script>
-<script src="js/app-shell.js?v=120"></script>
+<script src="cloud-sync.js?v=122"></script>
+<script src="js/audio-runtime.js?v=122"></script>
+<script src="js/core.js?v=122"></script>
+<script src="js/metronome.js?v=122"></script>
+<script src="js/tuner-engine.js?v=122"></script>
+<script src="js/tuner.js?v=122"></script>
+<script src="js/scales.js?v=122"></script>
+<script src="js/ear-trainer.js?v=122"></script>
+<script src="js/rhythm-trainer.js?v=122"></script>
+<script src="js/jam-session.js?v=122"></script>
+<script src="js/app-shell.js?v=122"></script>
 </body>
 </html>

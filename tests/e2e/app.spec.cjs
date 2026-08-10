@@ -124,7 +124,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.0');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.2');
 }
 
 test.afterEach(async({page})=>{
@@ -150,7 +150,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=120');
+  expect(workerUrl).toContain('service-worker.js?v=122');
 });
 
 test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{
@@ -210,14 +210,45 @@ test('튜너 약한 입력 모드가 기존 음량 문턱 아래의 일렉기타
   await page.locator('.tab-btn[data-tab="tuner"]').click();
   const sensitivity=page.locator('#tunerSens');
   await sensitivity.fill('80');
-  await expect(page.locator('#tunerSensVal')).toHaveText('80 · 약한 입력');
-  await expect(page.locator('#tunerSensHint')).toContainText('앰프 없이');
+  await expect(sensitivity).toHaveAttribute('aria-valuetext','80 약한 입력');
+  await expect(page.locator('#tunerSensVal')).toHaveCount(0);
+  await expect(page.locator('#tunerSensHint')).toHaveCount(0);
 
   const mic=page.locator('#tunerStart');
   await mic.click();
   await expect(page.locator('#tunerNote')).toHaveText('E',{timeout:5000});
   await expect(page.locator('#tunerLevel')).toHaveClass(/ready/);
+  await expect(page.locator('#tunerScopeState')).toHaveText('인식 중');
+  await expect(page.locator('#tunerInputDb')).not.toHaveText('—');
+  await expect(page.locator('#tunerNoiseDb')).not.toHaveText('—');
+  await expect(page.locator('#tunerMarginDb')).not.toHaveText('—');
+  const scopeSize=await page.locator('#tunerScope').evaluate(canvas=>({
+    width:canvas.width,
+    height:canvas.height,
+  }));
+  expect(scopeSize.width).toBeGreaterThan(0);
+  expect(scopeSize.height).toBeGreaterThan(0);
   await mic.click();
+  await expect(page.locator('#tunerScopeState')).toHaveText('마이크 꺼짐');
+});
+
+test('리듬 트레이너 슬라이더를 두 번 누르면 기본값으로 돌아간다',async({page})=>{
+  await preparePage(page);
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn[data-mode="rhythm"]').click();
+
+  for(const [sliderId,valueId] of [['rhySynco','rhySyncoVal'],['rhyDiff','rhyDiffVal']]){
+    const slider=page.locator('#'+sliderId);
+    await slider.fill('8');
+    await expect(page.locator('#'+valueId)).toHaveText('8');
+    await slider.evaluate(element=>{
+      element.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+      element.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    });
+    await expect(slider).toHaveValue('5');
+    await expect(slider).toHaveAttribute('aria-valuetext','5');
+    await expect(page.locator('#'+valueId)).toHaveText('5');
+  }
 });
 
 test('튜너 연결 중 취소하면 늦게 열린 마이크도 즉시 닫는다',async({page})=>{

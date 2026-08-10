@@ -92,6 +92,24 @@ assert.match(index,/tunerFreq\.textContent='마이크 연결 중…'/);
 assert.match(index,/if\(listening \|\| micStarting\)\{ stopMic\(\); return; \}/);
 assert.match(index,/await ensureCtx\('play-and-record',true\)/);
 assert.match(index,/stopMic\('마이크 연결 끊김'\)/);
+assert.match(index,/id="tunerScope"/);
+assert.match(index,/id="tunerInputDb"/);
+assert.match(index,/id="tunerNoiseDb"/);
+assert.match(index,/id="tunerMarginDb"/);
+assert.match(index,/입력 파형/);
+assert.match(index,/주변 소음/);
+assert.match(index,/인식 문턱/);
+assert.match(index,/function drawScopeFrame\(/);
+assert.match(index,/updateScope\(buf,rms,gate,accepted,ts\)/);
+assert.match(index,/scopeStateEl\.textContent=accepted \? '인식 중'/);
+assert.doesNotMatch(index,/id="tunerSensVal"/);
+assert.doesNotMatch(index,/id="tunerSensHint"/);
+assert.doesNotMatch(index,/주변 소음을 자동으로 반영/);
+assert.doesNotMatch(index,/튜너가 실제로 분석하는 입력이며/);
+assert.match(index,/\.tuner-monitor\{margin-top:19px;\}/);
+assert.match(index,/function bindRhySliderReset\(/);
+assert.match(index,/bindRhySliderReset\(rhySynco,rhySyncoVal\)/);
+assert.match(index,/bindRhySliderReset\(rhyDiff,rhyDiffVal\)/);
 
 for(const degrees of ['1–3–5','1–♭3–5','1–♭3–♭5','1–3–♯5','1–3–5–7','1–♭3–5–♭7']){
   assert.match(index,new RegExp(degrees));
