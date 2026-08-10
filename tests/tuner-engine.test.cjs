@@ -158,6 +158,24 @@ const confirmedOctave={...a2,freq:220};
 assert.deepEqual(tracker.update(confirmedOctave),confirmedOctave,'a real new note is accepted on the second frame');
 tracker.reset();
 assert.equal(tracker.isLocked(),false);
+const attackPitch={freq:146.832,clarity:0.82,harmonicity:0.58,confidence:0.64};
+assert.equal(
+  tracker.update(attackPitch,{minConfidence:0.48,attackConfirmed:true}),
+  attackPitch,
+  'a separately confirmed pluck acquires a moderate-confidence pitch on its first frame',
+);
+tracker.reset();
+assert.equal(
+  tracker.update(attackPitch,{minConfidence:0.48}),
+  null,
+  'the same pitch still waits for confirmation without attack evidence',
+);
+tracker.reset();
+assert.equal(
+  tracker.update({...attackPitch,confidence:0.47},{minConfidence:0.48,attackConfirmed:true}),
+  null,
+  'attack evidence never bypasses the existing confidence threshold',
+);
 
 const activity=engine.createToneActivityDetector();
 let firstBackground=-1,fanAnalysis,fanState;

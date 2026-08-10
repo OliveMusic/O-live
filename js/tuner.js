@@ -276,14 +276,24 @@
     }
   }
 
-  /* ---------- 안정화: 중앙값 + 지수 평활 ---------- */
+  /* ---------- 안정화: 고립된 튐 제거 + 최근 입력 우선 평활 ---------- */
   const hist=[];
   let smoothCents=0, haveLock=false, wasInTune=false;
   function stabilize(freq){
     hist.push(freq);
-    if(hist.length>3) hist.shift();     // 5개는 지연이 200ms나 됐다
-    const s=hist.slice().sort((a,b)=>a-b);
-    return s[s.length>>1];              // 중앙값 — 튀는 값 제거
+    if(hist.length>3) hist.shift();
+    if(hist.length<3) return freq;
+
+    const [older,previous,current]=hist;
+    const recentGap=Math.abs(1200*Math.log2(current/previous));
+    const earlierGap=Math.abs(1200*Math.log2(previous/older));
+    if(recentGap<=5){
+      // 최근 두 값이 동의하면 최신값 쪽을 따라가 중앙값의 한 프레임 지연을 없앤다.
+      return previous*Math.pow(current/previous,0.78);
+    }
+    if(earlierGap<=5) return previous;   // 최신값 하나만 튀었으면 직전값을 유지
+    const sorted=hist.slice().sort((a,b)=>a-b);
+    return sorted[1];                    // 급격한 전환 중에는 중앙값으로 보호
   }
 
   /* ---------- 표시 ---------- */
@@ -329,7 +339,7 @@
     // 새 현을 치면 즉시 따라가고, 미세 조정 중일 때만 부드럽게 한다.
     // 항상 느리게 평활하면 줄을 바꿔도 바늘이 천천히 기어가 답답하다.
     const jumped = !haveLock || nearest!==lastNote || Math.abs(cents-smoothCents)>35;
-    smoothCents = jumped ? cents : smoothCents + (cents-smoothCents)*0.45;
+    smoothCents = jumped ? cents : smoothCents + (cents-smoothCents)*0.58;
     lastNote = nearest;
     haveLock = true;
 
@@ -364,7 +374,7 @@
     stringBtns.querySelectorAll('.string-btn').forEach(b=>b.classList.remove('match'));
   }
 
-  /* ---------- 분석 루프 (25Hz로 제한 — 60fps로 돌릴 이유가 없다) ---------- */
+  /* ---------- 분석 루프 (약 45Hz — 반응성과 모바일 배터리의 균형) ---------- */
   let lastRun=0;
   function analyse(ts){
     if(!listening) return;
@@ -440,6 +450,7 @@
           confidence:pitchConfidence,
         } : null,{
           minConfidence:sensitivity.value>=67 ? 0.43 : 0.48,
+          attackConfirmed:toneState.onset,
         });
         let accepted=Boolean(tracked);
         // 어택 없이 오래 유지된 음높이는 팬·모터 배경음으로 보고 즉시 표시를 놓는다.
@@ -488,9 +499,8 @@
   let strobeRunning=false;
 
   /* 값이 목표로 곧장 튀지 않고 지수적으로 다가가게 한다.
-     TAU가 크면 굼뜨고 작으면 딱딱하다. 0.13초면 대략 3~4프레임 안에 반쯤 따라가
-     '서서히 변한다'고 느끼면서도 굼뜨지 않는다. */
-  const TAU = 0.13;
+     0.10초면 발광이 빠르게 따라오면서도 프레임 사이가 딱딱해 보이지 않는다. */
+  const TAU = 0.10;
   const SPIN_FULL = 330;   // deg/s. 약 24센트 어긋나면 최대 밝기에 닿는다.
 
   /* ---------- 링 안쪽을 구르는 올리브 ----------

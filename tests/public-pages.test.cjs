@@ -106,6 +106,7 @@ assert.match(index,/function createToneActivityDetector\(/);
 assert.match(index,/tunerEngine\.analyzePitch\(buf,audioCtx\.sampleRate/);
 assert.match(index,/r\.harmonicity>=sensitivity\.harmonicityGate/);
 assert.match(index,/pitchTracker\.update\(rawAccepted/);
+assert.match(index,/attackConfirmed:toneState\.onset/);
 assert.match(index,/toneActivityDetector\.update\(/);
 assert.match(index,/r\.humLikelihood\*0\.18-toneState\.penalty/);
 assert.match(index,/toneState\.background && !toneState\.attackActive/);

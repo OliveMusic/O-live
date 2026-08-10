@@ -114,7 +114,8 @@
   }
 
   /* 한 프레임의 우연한 결과를 바로 표시하지 않는다. 새 음은 두 프레임이
-     일치해야 확정하고, 이미 잠긴 음은 즉시 따라가 반응 속도를 유지한다. */
+     일치해야 확정하되, 별도의 시간 변화 분석에서 실제 어택이 확인된 순간은
+     같은 판정 문턱을 통과한 첫 프레임부터 받아 반응 지연만 없앤다. */
   function createPitchTracker(){
     let lockedNote=null,pendingNote=null,pendingCount=0,misses=0;
     function reset(){ lockedNote=null; pendingNote=null; pendingCount=0; misses=0; }
@@ -141,8 +142,10 @@
         if(pendingNote===note) pendingCount++;
         else { pendingNote=note; pendingCount=1; }
 
-        const immediate=lockedNote===null &&
+        const highConfidence=lockedNote===null &&
           candidate.confidence>=0.90 && candidate.clarity>=0.94 && candidate.harmonicity>=0.52;
+        const confirmedAttack=options.attackConfirmed===true;
+        const immediate=highConfidence || confirmedAttack;
         if(!immediate && pendingCount<2) return null;
 
         lockedNote=note;
