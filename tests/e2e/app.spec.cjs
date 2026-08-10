@@ -40,6 +40,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
       window.supabase={createClient:()=>client};
     }
     if(micMode!=='native'){
+      let analyserSampleCursor=0;
       class FakeNode{
         connect(next){ return next||this; }
         disconnect(){}
@@ -65,7 +66,17 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           const node=new FakeNode();
           node.fftSize=4096;
           node.smoothingTimeConstant=0;
-          node.getFloatTimeDomainData=array=>array.fill(0);
+          node.getFloatTimeDomainData=array=>{
+            if(micMode!=='weak-signal'){
+              array.fill(0);
+              return;
+            }
+            for(let i=0;i<array.length;i++){
+              const phase=2*Math.PI*82.4069*(analyserSampleCursor+i)/48000;
+              array[i]=Math.sin(phase)*0.0003;
+            }
+            analyserSampleCursor+=array.length;
+          };
           return node;
         }
         createGain(){
@@ -113,7 +124,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.1.1');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.0');
 }
 
 test.afterEach(async({page})=>{
@@ -139,7 +150,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=111');
+  expect(workerUrl).toContain('service-worker.js?v=120');
 });
 
 test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{
@@ -192,6 +203,21 @@ test('튜너가 마이크를 연결하고 정지할 때 트랙을 확실히 놓�
   await expect(mic).not.toHaveClass(/on|starting/);
   await expect(page.locator('#tunerFreq')).toHaveText('마이크 꺼짐');
   expect(await page.evaluate(()=>window.__micHarness)).toMatchObject({requests:1,stops:1});
+});
+
+test('튜너 약한 입력 모드가 기존 음량 문턱 아래의 일렉기타 신호를 잡는다',async({page})=>{
+  await preparePage(page,{microphone:'weak-signal'});
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  const sensitivity=page.locator('#tunerSens');
+  await sensitivity.fill('80');
+  await expect(page.locator('#tunerSensVal')).toHaveText('80 · 약한 입력');
+  await expect(page.locator('#tunerSensHint')).toContainText('앰프 없이');
+
+  const mic=page.locator('#tunerStart');
+  await mic.click();
+  await expect(page.locator('#tunerNote')).toHaveText('E',{timeout:5000});
+  await expect(page.locator('#tunerLevel')).toHaveClass(/ready/);
+  await mic.click();
 });
 
 test('튜너 연결 중 취소하면 늦게 열린 마이크도 즉시 닫는다',async({page})=>{

@@ -24,7 +24,7 @@ assert.match(worker,/const VERSION='v'\+RELEASE\.build/,'cache uses release buil
 assert.match(schema,new RegExp(`select ${release.schemaVersion}::integer`),'database contract matches app');
 
 const versionedAssets=[
-  'cloud-sync.js','js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner.js','js/scales.js',
+  'cloud-sync.js','js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner-engine.js','js/tuner.js','js/scales.js',
   'js/ear-trainer.js','js/rhythm-trainer.js','js/jam-session.js','js/app-shell.js',
 ];
 for(const asset of versionedAssets){

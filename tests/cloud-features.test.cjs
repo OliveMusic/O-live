@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 
-const index=['index.html','js/core.js','js/metronome.js','js/tuner.js','js/scales.js',
+const index=['index.html','js/core.js','js/metronome.js','js/tuner-engine.js','js/tuner.js','js/scales.js',
   'js/ear-trainer.js','js/rhythm-trainer.js','js/jam-session.js','js/app-shell.js']
   .map(file=>fs.readFileSync(file,'utf8')).join('\n');
 const sync=fs.readFileSync('cloud-sync.js','utf8');

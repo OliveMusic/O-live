@@ -6,7 +6,7 @@ const read=file=>fs.readFileSync(file,'utf8');
 
 const indexHtml=read('index.html');
 const appScripts=[
-  'js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner.js','js/scales.js',
+  'js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner-engine.js','js/tuner.js','js/scales.js',
   'js/ear-trainer.js','js/rhythm-trainer.js','js/jam-session.js','js/app-shell.js',
 ].map(read).join('\n');
 const index=indexHtml+'\n'+appScripts;

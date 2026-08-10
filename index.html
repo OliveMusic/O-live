@@ -497,6 +497,22 @@
   .strobe.in-tune ~ .strobe-hint,
   .display .strobe.in-tune + .tuner-freq + .strobe-hint{ color:var(--signal); }
 
+  .in-level{
+    width:94px; height:3px; margin:9px auto 0; overflow:hidden;
+    border-radius:var(--r-pill); background:var(--line-soft);
+  }
+  .in-level-bar{
+    width:100%; height:100%; transform:scaleX(0); transform-origin:left center;
+    border-radius:inherit; background:var(--ink-3);
+    transition:background .12s var(--ease-out);
+  }
+  .in-level-bar.ready{background:var(--signal-display);}
+  .tuner-sens-value{
+    color:var(--ink-2); font-size:0.625rem; font-weight:500;
+    font-variant-numeric:tabular-nums; letter-spacing:.01em;
+  }
+  .tuner-sens-hint{min-height:1.5em;}
+
   .strobe{
     --spin:0;      /* 회전 속도 0~1 — 빠를수록 쐐기가 밝다 */
     --lock:0;      /* 인튠 정도 0~1 — 테두리가 물든다 */
@@ -1668,14 +1684,15 @@
       <div class="card">
         <div class="row">
           <h2 style="margin:0;">감도</h2>
-          <span id="tunerSensVal" style="font-weight:500; font-variant-numeric:tabular-nums;" title="두 번 누르면 기본값">50</span>
+          <span class="tuner-sens-value" id="tunerSensVal" title="두 번 누르면 기본값">50 · 균형</span>
         </div>
-        <input type="range" id="tunerSens" min="0" max="100" value="50">
+        <input type="range" id="tunerSens" min="0" max="100" value="50" aria-label="튜너 감도" aria-valuetext="50 균형">
         <div class="row" style="margin-top:2px; align-items:baseline;">
           <span class="hint" style="margin:0;">둔감 · 시끄러운 곳</span>
           <span class="hint" style="margin:0;">예민 · 조용한 곳</span>
         </div>
-        <p class="hint" style="margin-top:10px;">올리브를 두 번 누르면 기본값으로 돌아갑니다</p>
+        <p class="hint tuner-sens-hint" id="tunerSensHint" style="margin-top:10px;">주변 소음을 자동으로 반영해 입력 문턱을 조절합니다</p>
+        <p class="hint" style="margin-top:5px;">올리브를 두 번 누르면 기본값으로 돌아갑니다</p>
       </div>
     </section>
 
@@ -1968,18 +1985,19 @@
   </section>
 </div>
 
-<script src="app-version.js?v=111"></script>
+<script src="app-version.js?v=120"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=111"></script>
-<script src="js/audio-runtime.js?v=111"></script>
-<script src="js/core.js?v=111"></script>
-<script src="js/metronome.js?v=111"></script>
-<script src="js/tuner.js?v=111"></script>
-<script src="js/scales.js?v=111"></script>
-<script src="js/ear-trainer.js?v=111"></script>
-<script src="js/rhythm-trainer.js?v=111"></script>
-<script src="js/jam-session.js?v=111"></script>
-<script src="js/app-shell.js?v=111"></script>
+<script src="cloud-sync.js?v=120"></script>
+<script src="js/audio-runtime.js?v=120"></script>
+<script src="js/core.js?v=120"></script>
+<script src="js/metronome.js?v=120"></script>
+<script src="js/tuner-engine.js?v=120"></script>
+<script src="js/tuner.js?v=120"></script>
+<script src="js/scales.js?v=120"></script>
+<script src="js/ear-trainer.js?v=120"></script>
+<script src="js/rhythm-trainer.js?v=120"></script>
+<script src="js/jam-session.js?v=120"></script>
+<script src="js/app-shell.js?v=120"></script>
 </body>
 </html>
