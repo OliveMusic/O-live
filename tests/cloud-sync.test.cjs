@@ -80,6 +80,7 @@ function makeContext({config,storage,supabase}){
       addEventListener:(name,handler)=>{ documentListeners[name]=handler; },
     },
     addEventListener:(name,handler)=>{ windowListeners[name]=handler; },
+    OLIVE_RELEASE:{version:'1.1.0',build:110,schemaVersion:5},
     OLIVE_CLOUD_CONFIG:config,
     supabase,
   };
@@ -145,6 +146,7 @@ async function testConfiguredQueueAndMigration(){
     }},
     async rpc(name,args){
       rpcCalls.push({name,args});
+      if(name==='olive_schema_version') return {data:5,error:null};
       if(name==='record_ear_answer'){
         recordCount++;
         if(recordCount===1) await new Promise(resolve=>setTimeout(resolve,20));
@@ -278,9 +280,60 @@ async function testConfiguredQueueAndMigration(){
   assert.equal(functionCalls.filter(call=>call.name==='delete-account').length,1);
 }
 
+async function testSchemaUpgradeMessage(){
+  const storage=new FakeStorage();
+  let dataReadCount=0;
+  const client={
+    auth:{
+      onAuthStateChange(){ return {data:{subscription:{unsubscribe(){}}}}; },
+      async getSession(){
+        return {data:{session:{user:{
+          id:'schema-user',email:'schema@example.com',
+          app_metadata:{provider:'google'},user_metadata:{},
+        }}},error:null};
+      },
+    },
+    async rpc(name){
+      assert.equal(name,'olive_schema_version');
+      return {data:null,error:{
+        code:'PGRST202',
+        message:'Could not find the function public.olive_schema_version in the schema cache',
+      }};
+    },
+    from(){
+      dataReadCount++;
+      throw new Error('schema mismatch must stop before reading cloud data');
+    },
+  };
+  const {context,elements}=makeContext({
+    config:{
+      supabaseUrl:'https://olive-test.supabase.co',
+      supabasePublishableKey:'publishable-test-key',
+      redirectUrl:'',
+    },
+    storage,
+    supabase:{createClient:()=>client},
+  });
+
+  await context.OliveCloud.init({
+    getAnonymousHistory:()=>({}),
+    clearAnonymousHistory(){},
+    useUserHistory(){},
+    useAnonymousHistory(){},
+  });
+
+  assert.equal(elements.earCloudTitle.textContent,'클라우드 업데이트 필요');
+  assert.match(elements.earCloudStatus.textContent,/DB-005/);
+  assert.equal(dataReadCount,0);
+  await elements.cloudSyncNow.listeners.click();
+  assert.match(elements.cloudAuthMessage.textContent,/오류 코드 DB-005/);
+  assert.equal(elements.cloudAuthMessage.classList.contains('error'),true);
+}
+
 (async()=>{
   await testUnconfigured();
   await testConfiguredQueueAndMigration();
+  await testSchemaUpgradeMessage();
   console.log('cloud-sync tests passed');
 })().catch(error=>{
   console.error(error);

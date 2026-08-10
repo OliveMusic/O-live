@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 
-const html=fs.readFileSync('index.html','utf8');
+const html=fs.readFileSync('js/core.js','utf8');
 const start=html.indexOf('let audioCtx = null;');
 const end=html.indexOf('/* ===== 소리 나는 동안 화면 켜 두기 =====');
 assert.ok(start>=0 && end>start,'audio lifecycle source is present');

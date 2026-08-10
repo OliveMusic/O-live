@@ -1,15 +1,25 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
+const vm=require('node:vm');
 
 const read=file=>fs.readFileSync(file,'utf8');
 
-const index=read('index.html');
+const indexHtml=read('index.html');
+const appScripts=[
+  'js/core.js','js/metronome.js','js/tuner.js','js/scales.js',
+  'js/ear-trainer.js','js/rhythm-trainer.js','js/jam-session.js','js/app-shell.js',
+].map(read).join('\n');
+const index=indexHtml+'\n'+appScripts;
 const about=read('about.html');
 const privacy=read('privacy.html');
 const terms=read('terms.html');
 const worker=read('service-worker.js');
 const manifest=JSON.parse(read('manifest.json'));
 const sitemap=read('sitemap.xml');
+const releaseContext={globalThis:{}};
+vm.createContext(releaseContext);
+vm.runInContext(read('app-version.js'),releaseContext,{filename:'app-version.js'});
+const release=releaseContext.globalThis.OLIVE_RELEASE;
 
 for(const [label,html] of Object.entries({index,about,privacy,terms})){
   assert.match(html,/lang="ko"/,`${label}: Korean language declaration`);
@@ -34,14 +44,15 @@ assert.match(privacy,/싱가포르/);
 assert.match(privacy,/90일이 지나면 자동 삭제/);
 assert.match(privacy,/O’live \(OliveMusic\)/);
 assert.match(terms,/개인정보처리방침/);
-assert.match(index,/service-worker\.js\?v=109/);
-assert.match(index,/cloud-sync\.js\?v=108/);
-assert.match(worker,/const VERSION = 'v109'/);
-assert.match(worker,/'\.\/cloud-sync\.js\?v=108'/);
+assert.match(index,/service-worker\.js\?v=['"`]\+release\.build/);
+assert.match(index,/cloud-sync\.js\?v=110/);
+assert.match(worker,/importScripts\('\.\/app-version\.js\?v=110'\)/);
+assert.match(worker,/const VERSION='v'\+RELEASE\.build/);
+assert.match(worker,/'\.\/cloud-sync\.js\?v=110'/);
 assert.match(index,/class="app-version"/);
-assert.match(index,/버전 1\.0\.9/);
-assert.match(index,/aria-label="현재 앱 버전 1\.0\.9"/);
-assert.doesNotMatch(index,/빌드 109/);
+assert.match(index,/appVersion\.textContent='버전 '\+release\.version/);
+assert.match(index,/appVersion\.setAttribute\('aria-label','현재 앱 버전 '\+release\.version\)/);
+assert.doesNotMatch(index,new RegExp(`빌드 ${release.build}`));
 assert.match(worker,/url\.origin !== self\.location\.origin/);
 assert.match(worker,/documentUrl\.search = ''/);
 assert.doesNotMatch(worker,/addAll\(ASSETS\)\)\.catch/);
@@ -87,6 +98,8 @@ for(const degrees of ['1–3–5','1–♭3–5','1–♭3–♭5','1–3–♯5
 assert.match(index,/class="degrees"/);
 assert.match(index,/class="choice-primary"/);
 assert.match(index,/\.choice-row \.degrees\{[\s\S]*?margin-left:auto; flex:0 0 auto;/);
+assert.match(index,/\.choice-row \.choice-primary\{[\s\S]*?gap:6px;/);
+assert.match(index,/\.choice-row \.ko\{[\s\S]*?white-space:nowrap;/);
 assert.match(index,/구성 도수 \$\{item\.degrees\}/);
 assert.match(index,/const EAR_HISTORY_MODES = \[/);
 assert.match(index,/class="ear-day-breakdown"/);

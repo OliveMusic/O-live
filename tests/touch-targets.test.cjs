@@ -1,7 +1,8 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 
-const index=fs.readFileSync('index.html','utf8');
+const index=['index.html','js/jam-session.js']
+  .map(file=>fs.readFileSync(file,'utf8')).join('\n');
 
 // 잼 진행의 시각적 크기는 원본을 유지한다.
 assert.match(index,/\.prog-bar \.stp\{[\s\S]*?width:19px; height:19px;/);

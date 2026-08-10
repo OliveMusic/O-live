@@ -1,3 +1,5 @@
+importScripts('./app-version.js?v=110');
+
 /* 파일을 갱신했는데 화면이 그대로라면 대개 이 파일 때문이다.
    예전 방식(캐시 우선)은 캐시에 있으면 네트워크를 아예 보지 않아
    새로 올린 index.html이 영영 반영되지 않았다.
@@ -6,7 +8,8 @@
    - HTML: 항상 네트워크 먼저. 실패했을 때만 캐시(오프라인 대비).
    - 그 외(아이콘 등): 캐시 먼저 쓰되 뒤에서 조용히 갱신.
    앱을 수정하면 아래 버전만 올리면 이전 캐시가 정리된다. */
-const VERSION = 'v109';
+const RELEASE=self.OLIVE_RELEASE||{build:'dev'};
+const VERSION='v'+RELEASE.build;
 const CACHE = 'olive-practice-' + VERSION;
 
 const ASSETS = [
@@ -18,8 +21,17 @@ const ASSETS = [
   './info.css',
   './og.png',
   './manifest.json',
+  './app-version.js?v=110',
   './cloud-config.js?v=92',
-  './cloud-sync.js?v=108',
+  './cloud-sync.js?v=110',
+  './js/core.js?v=110',
+  './js/metronome.js?v=110',
+  './js/tuner.js?v=110',
+  './js/scales.js?v=110',
+  './js/ear-trainer.js?v=110',
+  './js/rhythm-trainer.js?v=110',
+  './js/jam-session.js?v=110',
+  './js/app-shell.js?v=110',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',

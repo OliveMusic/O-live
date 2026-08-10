@@ -8,6 +8,9 @@
   const HISTORY_MODES=['interval','chord','scale'];
 
   const config=window.OLIVE_CLOUD_CONFIG||{};
+  const EXPECTED_SCHEMA_VERSION=Math.max(0,Number(
+    window.OLIVE_RELEASE&&window.OLIVE_RELEASE.schemaVersion
+  )||0);
   const configured=Boolean(
     /^https:\/\/[^/]+\.supabase\.co\/?$/.test(config.supabaseUrl||'') &&
     config.supabasePublishableKey
@@ -22,6 +25,7 @@
   let handlers=null;
   let ui={};
   let sheetTrigger=null;
+  let schemaContract={ready:false,version:0,checkedAt:0};
 
   function readJSON(key,fallback){
     try{
@@ -130,6 +134,7 @@
       syncing:['데이터 동기화 중','잠시만 기다려 주세요'],
       synced:['클라우드에 저장됨',detail||'다른 기기에서도 이어서 연습할 수 있어요'],
       offline:['오프라인 기록 중',detail||'연결되면 자동으로 동기화됩니다'],
+      upgrade:['클라우드 업데이트 필요',detail||'저장소 준비 상태를 확인해 주세요'],
       error:['동기화 확인 필요',detail||'계정 화면에서 다시 시도해 주세요'],
     }[state]||['클라우드 저장',''];
     ui.title.textContent=copy[0];
@@ -142,6 +147,54 @@
     if(!ui.message) return;
     ui.message.textContent=message||'';
     ui.message.classList.toggle('error',Boolean(isError));
+  }
+  function schemaErrorCode(){
+    return 'DB-'+String(EXPECTED_SCHEMA_VERSION||0).padStart(3,'0');
+  }
+  function isSchemaMismatchError(error){
+    const code=String(error&&error.code||'');
+    const message=String(error&&error.message||'');
+    return ['42703','42883','PGRST202','PGRST204'].includes(code) ||
+      /olive_schema_version|record_ear_answer|p_training_mode|interval_correct_count|chord_correct_count|scale_correct_count|schema cache/i.test(message);
+  }
+  function showSchemaUpgrade(fromButton){
+    const code=schemaErrorCode();
+    setState('upgrade',`클라우드 저장소 준비 필요 · ${code}`);
+    if(fromButton){
+      setMessage(`클라우드 저장소 업데이트가 필요합니다 · 오류 코드 ${code}`,true);
+    }
+  }
+  async function checkSchemaContract(force){
+    if(!EXPECTED_SCHEMA_VERSION) return true;
+    if(!force && schemaContract.ready && Date.now()-schemaContract.checkedAt<300000){
+      return true;
+    }
+    const {data,error}=await client.rpc('olive_schema_version');
+    if(error){
+      if(isSchemaMismatchError(error)){
+        schemaContract={ready:false,version:0,checkedAt:Date.now()};
+        return false;
+      }
+      throw error;
+    }
+    const version=Math.max(0,Math.floor(Number(data)||0));
+    schemaContract={
+      ready:version>=EXPECTED_SCHEMA_VERSION,
+      version,
+      checkedAt:Date.now(),
+    };
+    return schemaContract.ready;
+  }
+  function friendlySyncFailure(error){
+    const code=String(error&&error.code||'');
+    if(!navigator.onLine) return '인터넷 연결을 확인해 주세요 · 오류 코드 NET-001';
+    if(code==='401' || code==='PGRST301'){
+      return '로그인 정보가 만료되었습니다. 다시 로그인해 주세요 · 오류 코드 AUTH-401';
+    }
+    if(code==='42501'){
+      return '클라우드 접근 권한을 확인해 주세요 · 오류 코드 AUTH-403';
+    }
+    return '네트워크 또는 서버 응답을 확인해 주세요 · 오류 코드 SYNC-001';
   }
   function openSheet(){
     if(!ui.sheet) return;
@@ -463,14 +516,30 @@
     }
     try{
       setMessage('');
+      const schemaReady=await checkSchemaContract(Boolean(fromButton));
+      if(!schemaReady){
+        showSchemaUpgrade(fromButton);
+        return;
+      }
+      try{ await migrateAnonymousHistory(); }
+      catch(error){
+        console.warn('[O\'live migration]',error);
+        setMessage('이 기기의 이전 기록은 다음 동기화 때 다시 옮깁니다',true);
+      }
       await syncQueue();
       await fetchHistory();
       await syncPreferences();
       setState('synced',preferenceReady ? '' : '청음 기록 저장됨 · 설정 동기화 준비 필요');
       if(fromButton) setMessage('최신 기록으로 동기화했습니다');
     }catch(error){
+      if(isSchemaMismatchError(error)){
+        schemaContract={ready:false,version:0,checkedAt:Date.now()};
+        showSchemaUpgrade(fromButton);
+        console.warn('[O\'live schema]',error&&error.code||'',error&&error.message||error);
+        return;
+      }
       setState('error');
-      setMessage('동기화하지 못했습니다. 잠시 후 다시 시도해 주세요',true);
+      setMessage(friendlySyncFailure(error),true);
       console.warn('[O\'live cloud]',error && error.code || '',error && error.message || error);
     }
   }
@@ -486,19 +555,11 @@
       return;
     }
     currentUser=user;
-    const isNewUser=activeUserId!==user.id;
     activeUserId=user.id;
     const cached=sanitizeHistory(readJSON(USER_HISTORY_PREFIX+user.id,{}));
     handlers.useUserHistory(user.id,cached);
     setState(navigator.onLine?'syncing':'offline');
     renderSheet();
-    if(isNewUser && navigator.onLine){
-      try{ await migrateAnonymousHistory(); }
-      catch(error){
-        console.warn('[O\'live migration]',error);
-        setMessage('이 기기의 이전 기록은 다음 동기화 때 다시 옮깁니다',true);
-      }
-    }
     await syncAndRefresh(false);
   }
   function recordAnswer(date,correct,mode){
@@ -509,10 +570,21 @@
       mode:HISTORY_MODES.includes(mode)?mode:'unclassified',createdAt:Date.now(),
     });
     writeQueue(queue);
-    if(navigator.onLine) syncQueue().then(ok=>{ if(ok) setState('synced'); }).catch(error=>{
-      setState('error');
-      console.warn('[O\'live answer sync]',error);
-    });
+    if(navigator.onLine){
+      if(!schemaContract.ready){
+        syncAndRefresh(false);
+      }else{
+        syncQueue().then(ok=>{ if(ok) setState('synced'); }).catch(error=>{
+          if(isSchemaMismatchError(error)){
+            schemaContract={ready:false,version:0,checkedAt:Date.now()};
+            showSchemaUpgrade(false);
+          }else{
+            setState('error',friendlySyncFailure(error));
+          }
+          console.warn('[O\'live answer sync]',error);
+        });
+      }
+    }
     else setState('offline');
   }
 
