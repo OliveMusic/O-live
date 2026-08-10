@@ -40,6 +40,9 @@
   let sensitivity=tunerEngine.sensitivityProfile(SENS_DEFAULT);
   let clarityGate=sensitivity.clarityGate;
   const signalGate=tunerEngine.createSignalGate();
+  const bandNoiseProfile=tunerEngine.createBandNoiseProfile();
+  const pitchTracker=tunerEngine.createPitchTracker();
+  let spectralFrame=0;
 
   /* ---------- 감도 설정용 실시간 입력 모니터 ---------- */
   const scopeCtx=scopeCanvas ? scopeCanvas.getContext('2d') : null;
@@ -195,6 +198,8 @@
       el.setAttribute('aria-valuetext',v+' '+sensitivity.label);
     }
     signalGate.reset();
+    bandNoiseProfile.reset();
+    pitchTracker.reset();
     applyInputGain();
     window.OlivePreferences.changed();
   }
@@ -240,6 +245,9 @@
     monitorSink.connect(ctx.destination);
     micChain=[srcNode,hp,lp,micBoost,analyser,monitorSink];
     signalGate.reset();
+    bandNoiseProfile.reset();
+    pitchTracker.reset();
+    spectralFrame=0;
   }
 
   async function recoverMicGraph(token){
@@ -344,6 +352,7 @@
 
   function idle(){
     haveLock=false; hist.length=0; lastNote=null; wasInTune=false;
+    pitchTracker.reset();
     tunerNote.textContent='--';
     tunerFreq.textContent='연주해보세요';
     strobeCents=0;
@@ -378,21 +387,52 @@
 
         // 적응형 문턱보다 훨씬 작은 무음에서는 FFT를 생략해 배터리를 아낀다.
         const minimumDetectLevel=sensitivity.absoluteFloor*(haveLock ? 0.55 : 0.85);
-        const r=rms>=minimumDetectLevel
-          ? tunerEngine.detectPitch(buf,audioCtx.sampleRate,{
+        spectralFrame=(spectralFrame+1)%4;
+        const shouldDetectPitch=rms>=minimumDetectLevel;
+        const frameAnalysis=(shouldDetectPitch || spectralFrame===0)
+          ? tunerEngine.analyzePitch(buf,audioCtx.sampleRate,{
               minFrequency:freqLo,
               maxFrequency:freqHi,
+              skipPitch:!shouldDetectPitch,
             })
           : null;
+        const r=frameAnalysis ? frameAnalysis.pitch : null;
         const inRange=Boolean(r && r.freq>freqLo && r.freq<freqHi);
-        const likelyPitch=Boolean(inRange && r.clarity>Math.max(0.50,clarityGate-0.10));
+        const likelyPitch=Boolean(
+          inRange &&
+          r.clarity>Math.max(0.50,clarityGate-0.10) &&
+          r.harmonicity>sensitivity.harmonicityGate*0.65
+        );
+        const bandState=bandNoiseProfile.evaluate(
+          frameAnalysis ? frameAnalysis.bands : null,
+          sensitivity,
+          {pitched:likelyPitch,locked:haveLock},
+        );
         const gate=signalGate.evaluate(rms,sensitivity,{pitched:likelyPitch,locked:haveLock});
+        const harmonicPass=Boolean(r && r.harmonicity>=sensitivity.harmonicityGate);
         const cleanWeakSignal=Boolean(
           sensitivity.value>=67 && inRange &&
           r.clarity>Math.min(0.96,clarityGate+0.13) &&
+          harmonicPass &&
           rms>=sensitivity.absoluteFloor
         );
-        const accepted=Boolean(inRange && r.clarity>clarityGate && (gate.open || cleanWeakSignal));
+        const rawAccepted=Boolean(
+          inRange && harmonicPass && r.clarity>clarityGate &&
+          (gate.open || cleanWeakSignal)
+        );
+        const pitchConfidence=r ? Math.max(0,Math.min(1,
+          r.clarity*0.62+r.harmonicity*0.24+bandState.confidence*0.14-
+          r.humLikelihood*0.18
+        )) : 0;
+        const tracked=pitchTracker.update(rawAccepted ? {
+          freq:r.freq,
+          clarity:r.clarity,
+          harmonicity:r.harmonicity,
+          confidence:pitchConfidence,
+        } : null,{
+          minConfidence:sensitivity.value>=67 ? 0.43 : 0.48,
+        });
+        const accepted=Boolean(tracked);
         updateScope(buf,rms,gate,accepted,ts);
 
         // 로그에 가까운 반응으로 작은 입력도 막대에서 확인할 수 있게 한다.
@@ -406,9 +446,9 @@
 
         // 주기성·악기 음역·적응형 소음 문턱을 모두 통과한 경우만 표시한다.
         if(accepted){
-          const nRaw=Math.round(69+12*Math.log2(r.freq/440));
+          const nRaw=Math.round(69+12*Math.log2(tracked.freq/440));
           if(nRaw!==lastNote) hist.length=0;
-          update(stabilize(r.freq));
+          update(stabilize(tracked.freq));
           quietFrames=0;
         } else if(++quietFrames > 45) {
           quietFrames=0;
@@ -519,6 +559,7 @@
     if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
     disconnectMicGraph();
     micRecovering=false; inputRecoveryUsed=false; zeroInputSince=0;
+    bandNoiseProfile.reset(); pitchTracker.reset(); spectralFrame=0;
     signalGate.reset();
     setAudioSession('ambient');
     // play-and-record에서 돌아온 컨텍스트는 state가 running이어도 무음일 수 있다.

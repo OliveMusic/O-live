@@ -27,6 +27,30 @@ function guitarSignal(frequency,amplitude,noiseAmplitude=0){
   return samples;
 }
 
+function roomFrame(seed,{noteFrequency=0,noteAmplitude=0}={}){
+  const random=generator(seed);
+  const samples=new Float32Array(engine.FRAME_SIZE);
+  for(let i=0;i<samples.length;i++){
+    let value=random()*0.0005+Math.sin(2*Math.PI*60*i/sampleRate)*0.00035;
+    if(noteFrequency){
+      const phase=2*Math.PI*noteFrequency*i/sampleRate;
+      value+=noteAmplitude*(Math.sin(phase)+Math.sin(phase*2)*0.4+Math.sin(phase*3)*0.2);
+    }
+    samples[i]=value;
+  }
+  return samples;
+}
+
+function mainsHum(frequency,amplitude){
+  const samples=new Float32Array(engine.FRAME_SIZE);
+  for(let i=0;i<samples.length;i++){
+    for(let harmonic=1;harmonic<=6;harmonic++){
+      samples[i]+=Math.sin(2*Math.PI*frequency*harmonic*i/sampleRate)*amplitude/harmonic;
+    }
+  }
+  return samples;
+}
+
 function centsBetween(actual,expected){
   return 1200*Math.log2(actual/expected);
 }
@@ -38,6 +62,7 @@ assert.ok(weakInput.absoluteFloor<balanced.absoluteFloor);
 assert.ok(balanced.absoluteFloor<low.absoluteFloor);
 assert.ok(weakInput.inputGain>balanced.inputGain);
 assert.ok(weakInput.clarityGate<balanced.clarityGate);
+assert.ok(weakInput.harmonicityGate<balanced.harmonicityGate);
 assert.equal(weakInput.label,'약한 입력');
 
 const quietElectric=guitarSignal(82.4069,0.00022,0.00004);
@@ -46,6 +71,7 @@ const electricPitch=engine.detectPitch(quietElectric,sampleRate,{minFrequency:70
 assert.ok(electricPitch,'quiet harmonic-rich electric guitar is detected');
 assert.ok(Math.abs(centsBetween(electricPitch.freq,82.4069))<8,'quiet E2 stays within tuner accuracy');
 assert.ok(electricPitch.clarity>weakInput.clarityGate);
+assert.ok(electricPitch.harmonicity>weakInput.harmonicityGate,'quiet guitar retains a clear harmonic structure');
 
 const acoustic=guitarSignal(329.6276,0.02,0.0002);
 const acousticPitch=engine.detectPitch(acoustic,sampleRate,{minFrequency:70,maxFrequency:1400});
@@ -56,6 +82,19 @@ const random=generator(7);
 const noise=new Float32Array(engine.FRAME_SIZE);
 for(let i=0;i<noise.length;i++) noise[i]=random()*0.001;
 assert.equal(engine.detectPitch(noise,sampleRate,{minFrequency:70,maxFrequency:1400}),null,'broadband noise is rejected');
+
+const spectrum=engine.analyzePitch(quietElectric,sampleRate,{minFrequency:70,maxFrequency:1400});
+assert.equal(spectrum.bands.length,engine.BAND_EDGES.length-1);
+assert.ok(spectrum.bands.some(level=>level>0),'frequency bands contain measured energy');
+assert.ok(spectrum.pitch.harmonicity>0.75,'guitar harmonics receive high confidence');
+
+for(const frequency of [50,60]){
+  assert.equal(
+    engine.detectPitch(mainsHum(frequency,0.002),sampleRate,{minFrequency:70,maxFrequency:1400}),
+    null,
+    frequency+' Hz mains hum is not mistaken for a guitar note',
+  );
+}
 
 const quietGate=engine.createSignalGate();
 for(let i=0;i<80;i++) quietGate.evaluate(0.00004,weakInput,{pitched:false,locked:false});
@@ -70,5 +109,33 @@ let noisyRoom;
 for(let i=0;i<180;i++) noisyRoom=noisyRoomGate.evaluate(0.001,balanced,{pitched:false,locked:false});
 assert.equal(noisyRoom.open,false,'adaptive floor learns steady room noise');
 assert.equal(noisyRoomGate.evaluate(0.004,balanced,{pitched:true,locked:false}).open,true,'a note clearly above room noise still opens');
+
+const bandProfile=engine.createBandNoiseProfile();
+let learnedNoise;
+for(let i=0;i<120;i++){
+  const analysis=engine.analyzePitch(roomFrame(100+i),sampleRate,{
+    minFrequency:70,maxFrequency:1400,skipPitch:true,
+  });
+  learnedNoise=bandProfile.evaluate(analysis.bands,balanced,{pitched:false,locked:false});
+}
+assert.ok(learnedNoise.confidence<0.2,'steady room noise becomes the per-band baseline');
+
+const noisyNote=engine.analyzePitch(roomFrame(999,{noteFrequency:110,noteAmplitude:0.002}),sampleRate,{
+  minFrequency:70,maxFrequency:1400,
+});
+const noisyNoteState=bandProfile.evaluate(noisyNote.bands,balanced,{pitched:true,locked:false});
+assert.ok(noisyNote.pitch,'a guitar note over the learned room noise is detected');
+assert.ok(Math.abs(centsBetween(noisyNote.pitch.freq,110))<18);
+assert.ok(noisyNoteState.confidence>0.7,'the note stands out from its learned frequency bands');
+
+const tracker=engine.createPitchTracker();
+const a2={freq:110,clarity:0.95,harmonicity:0.82,confidence:0.82};
+assert.equal(tracker.update(a2),null,'a new moderate-confidence pitch waits for confirmation');
+assert.equal(tracker.update(a2),a2,'two matching frames acquire the pitch');
+assert.equal(tracker.update({...a2,freq:220}),null,'one octave-jump frame is ignored');
+const confirmedOctave={...a2,freq:220};
+assert.deepEqual(tracker.update(confirmedOctave),confirmedOctave,'a real new note is accepted on the second frame');
+tracker.reset();
+assert.equal(tracker.isLocked(),false);
 
 console.log('tuner engine tests passed');
