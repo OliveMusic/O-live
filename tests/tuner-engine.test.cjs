@@ -79,12 +79,47 @@ function centsBetween(actual,expected){
 const low=engine.sensitivityProfile(15);
 const balanced=engine.sensitivityProfile(50);
 const weakInput=engine.sensitivityProfile(80);
+const expandedMinimum=engine.sensitivityProfile(0);
+const formerMinimum=engine.sensitivityProfile(8);
+const formerMaximum=engine.sensitivityProfile(92);
+const expandedMaximum=engine.sensitivityProfile(100);
 assert.ok(weakInput.absoluteFloor<balanced.absoluteFloor);
 assert.ok(balanced.absoluteFloor<low.absoluteFloor);
 assert.ok(weakInput.inputGain>balanced.inputGain);
 assert.ok(weakInput.clarityGate<balanced.clarityGate);
 assert.ok(weakInput.harmonicityGate<balanced.harmonicityGate);
 assert.equal(weakInput.label,'약한 입력');
+assert.equal(balanced.inputGain,5.25,'the middle sensitivity remains unchanged');
+assert.ok(Math.abs(formerMinimum.absoluteFloor-0.0012)<0.00002,'the former minimum now sits near 8');
+assert.ok(Math.abs(formerMaximum.absoluteFloor-0.00012)<0.000002,'the former maximum now sits near 92');
+assert.ok(expandedMinimum.absoluteFloor>0.0015,'the insensitive end expands by the same amount');
+assert.ok(expandedMinimum.noiseMultiplier>3.2);
+assert.ok(expandedMinimum.clarityGate>0.9);
+assert.ok(expandedMinimum.harmonicityGate>0.36);
+assert.ok(expandedMinimum.inputGain<4);
+assert.ok(expandedMaximum.absoluteFloor<0.0001,'the extended range opens for a quieter input');
+assert.ok(expandedMaximum.noiseMultiplier<formerMaximum.noiseMultiplier);
+assert.ok(expandedMaximum.clarityGate<formerMaximum.clarityGate);
+assert.ok(expandedMaximum.harmonicityGate<formerMaximum.harmonicityGate);
+assert.ok(expandedMaximum.inputGain>6.5);
+const quarterProfiles=[0,25,50,75,100].map(value=>engine.sensitivityProfile(value));
+const clarityStep=quarterProfiles[0].clarityGate-quarterProfiles[1].clarityGate;
+const gainStep=quarterProfiles[1].inputGain-quarterProfiles[0].inputGain;
+const floorRatio=quarterProfiles[1].absoluteFloor/quarterProfiles[0].absoluteFloor;
+for(let i=1;i<quarterProfiles.length-1;i++){
+  assert.ok(
+    Math.abs((quarterProfiles[i].clarityGate-quarterProfiles[i+1].clarityGate)-clarityStep)<1e-12,
+    'clarity changes at one constant rate across the entire slider',
+  );
+  assert.ok(
+    Math.abs((quarterProfiles[i+1].inputGain-quarterProfiles[i].inputGain)-gainStep)<1e-12,
+    'input gain changes at one constant rate across the entire slider',
+  );
+  assert.ok(
+    Math.abs((quarterProfiles[i+1].absoluteFloor/quarterProfiles[i].absoluteFloor)-floorRatio)<1e-12,
+    'the level threshold changes linearly in decibels across the entire slider',
+  );
+}
 
 const quietElectric=guitarSignal(82.4069,0.00022,0.00004);
 assert.ok(engine.frameRms(quietElectric)<0.0015,'signal is below the former fixed cutoff');
@@ -98,6 +133,11 @@ const acoustic=guitarSignal(329.6276,0.02,0.0002);
 const acousticPitch=engine.detectPitch(acoustic,sampleRate,{minFrequency:70,maxFrequency:1400});
 assert.ok(acousticPitch);
 assert.ok(Math.abs(centsBetween(acousticPitch.freq,329.6276))<3,'loud input accuracy is retained');
+
+const ultraQuietElectric=guitarSignal(82.4069,0.00013,0.000025);
+const ultraQuietPitch=engine.detectPitch(ultraQuietElectric,sampleRate,{minFrequency:70,maxFrequency:1400});
+assert.ok(ultraQuietPitch,'the extended range still extracts pitch from a very quiet pickup');
+assert.ok(Math.abs(centsBetween(ultraQuietPitch.freq,82.4069))<8);
 
 const random=generator(7);
 const noise=new Float32Array(engine.FRAME_SIZE);
@@ -124,6 +164,24 @@ assert.equal(quietGate.evaluate(0.00024,weakInput,{pitched:true,locked:false}).o
 const lowGate=engine.createSignalGate();
 for(let i=0;i<80;i++) lowGate.evaluate(0.00004,low,{pitched:false,locked:false});
 assert.equal(lowGate.evaluate(0.00024,low,{pitched:true,locked:false}).open,false,'noise-suppression mode keeps the same weak level closed');
+
+const formerMaximumGate=engine.createSignalGate();
+const expandedMaximumGate=engine.createSignalGate();
+for(let i=0;i<80;i++){
+  formerMaximumGate.evaluate(0.00004,formerMaximum,{pitched:false,locked:false});
+  expandedMaximumGate.evaluate(0.00004,expandedMaximum,{pitched:false,locked:false});
+}
+const ultraQuietLevel=engine.frameRms(ultraQuietElectric,4);
+assert.equal(
+  formerMaximumGate.evaluate(ultraQuietLevel,formerMaximum,{pitched:true,locked:false}).open,
+  false,
+  'a very quiet pickup stays below the former maximum threshold',
+);
+assert.equal(
+  expandedMaximumGate.evaluate(ultraQuietLevel,expandedMaximum,{pitched:true,locked:false}).open,
+  true,
+  'the extended maximum opens for the same very quiet pickup',
+);
 
 const noisyRoomGate=engine.createSignalGate();
 let noisyRoom;

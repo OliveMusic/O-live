@@ -1,4 +1,4 @@
-importScripts('./app-version.js?v=126');
+importScripts('./app-version.js?v=127');
 
 /* 파일을 갱신했는데 화면이 그대로라면 대개 이 파일 때문이다.
    예전 방식(캐시 우선)은 캐시에 있으면 네트워크를 아예 보지 않아
@@ -20,19 +20,19 @@ const ASSETS = [
   './terms.html',
   './info.css',
   './manifest.json',
-  './app-version.js?v=126',
+  './app-version.js?v=127',
   './cloud-config.js?v=92',
-  './cloud-sync.js?v=126',
-  './js/audio-runtime.js?v=126',
-  './js/core.js?v=126',
-  './js/metronome.js?v=126',
-  './js/tuner-engine.js?v=126',
-  './js/tuner.js?v=126',
-  './js/scales.js?v=126',
-  './js/ear-trainer.js?v=126',
-  './js/rhythm-trainer.js?v=126',
-  './js/jam-session.js?v=126',
-  './js/app-shell.js?v=126',
+  './cloud-sync.js?v=127',
+  './js/audio-runtime.js?v=127',
+  './js/core.js?v=127',
+  './js/metronome.js?v=127',
+  './js/tuner-engine.js?v=127',
+  './js/tuner.js?v=127',
+  './js/scales.js?v=127',
+  './js/ear-trainer.js?v=127',
+  './js/rhythm-trainer.js?v=127',
+  './js/jam-session.js?v=127',
+  './js/app-shell.js?v=127',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',

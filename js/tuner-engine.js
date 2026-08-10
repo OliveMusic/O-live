@@ -14,16 +14,19 @@
   function sensitivityProfile(value){
     const normalized=clamp(Math.round(Number(value)||0),0,100);
     const t=normalized/100;
+    // 중앙값은 그대로 두고 전체 범위를 대칭적으로 20% 확장한다.
+    // 예전 최소/최대는 약 8/92에 놓이며 슬라이더 전 구간의 변화율이 같다.
+    const reach=t*1.20-0.10;
     return Object.freeze({
       value:normalized,
       label:normalized<34 ? '노이즈 억제' : normalized<67 ? '균형' : '약한 입력',
-      clarityGate:0.90-t*0.30,
-      harmonicityGate:0.36-t*0.18,
-      absoluteFloor:0.0012*Math.pow(0.1,t),
-      noiseMultiplier:3.2-t*1.8,
-      holdRatio:0.82-t*0.27,
-      // 과도한 디지털 증폭은 큰 통기타 입력을 찌그러뜨릴 수 있어 6.5배로 제한한다.
-      inputGain:4+t*2.5,
+      clarityGate:0.90-reach*0.30,
+      harmonicityGate:0.36-reach*0.18,
+      absoluteFloor:0.0012*Math.pow(0.1,reach),
+      noiseMultiplier:3.2-reach*1.8,
+      holdRatio:0.82-reach*0.27,
+      // 최대 증폭은 6.75배로만 소폭 늘려 큰 입력의 과증폭을 피한다.
+      inputGain:4+reach*2.5,
     });
   }
 
