@@ -5,6 +5,7 @@
   const USER_HISTORY_PREFIX='olive-ear-history-user-v1:';
   const QUEUE_PREFIX='olive-ear-sync-queue-v1:';
   const INSTALL_ID_KEY='olive-install-id-v1';
+  const HISTORY_MODES=['interval','chord','scale'];
 
   const config=window.OLIVE_CLOUD_CONFIG||{};
   const configured=Boolean(
@@ -54,7 +55,15 @@
       if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || !rec || typeof rec!=='object') return;
       const total=Math.max(0,Math.floor(Number(rec.total)||0));
       const correct=Math.max(0,Math.min(total,Math.floor(Number(rec.correct)||0)));
-      if(total) clean[date]={correct,total};
+      const source=rec.byMode && typeof rec.byMode==='object' ? rec.byMode : {};
+      const byMode={};
+      HISTORY_MODES.forEach(mode=>{
+        const part=source[mode] && typeof source[mode]==='object' ? source[mode] : {};
+        const modeTotal=Math.max(0,Math.floor(Number(part.total)||0));
+        const modeCorrect=Math.max(0,Math.min(modeTotal,Math.floor(Number(part.correct)||0)));
+        byMode[mode]={correct:modeCorrect,total:modeTotal};
+      });
+      if(total) clean[date]={correct,total,byMode};
     });
     return clean;
   }
@@ -63,6 +72,12 @@
       score_date,
       correct_count:rec.correct,
       total_count:rec.total,
+      interval_correct_count:rec.byMode.interval.correct,
+      interval_total_count:rec.byMode.interval.total,
+      chord_correct_count:rec.byMode.chord.correct,
+      chord_total_count:rec.byMode.chord.total,
+      scale_correct_count:rec.byMode.scale.correct,
+      scale_total_count:rec.byMode.scale.total,
     }));
   }
   function queueKey(){ return activeUserId ? QUEUE_PREFIX+activeUserId : ''; }
@@ -283,6 +298,7 @@
           p_event_id:item.id,
           p_score_date:item.date,
           p_is_correct:item.correct,
+          p_training_mode:HISTORY_MODES.includes(item.mode)?item.mode:'unclassified',
         });
         if(error){
           throw error;
@@ -307,7 +323,7 @@
     if(!client || !currentUser) return;
     const {data,error}=await client
       .from('ear_daily_scores')
-      .select('score_date,correct_count,total_count')
+      .select('score_date,correct_count,total_count,interval_correct_count,interval_total_count,chord_correct_count,chord_total_count,scale_correct_count,scale_total_count')
       .order('score_date',{ascending:true});
     if(error) throw error;
     const history={};
@@ -315,6 +331,20 @@
       history[row.score_date]={
         correct:Number(row.correct_count)||0,
         total:Number(row.total_count)||0,
+        byMode:{
+          interval:{
+            correct:Number(row.interval_correct_count)||0,
+            total:Number(row.interval_total_count)||0,
+          },
+          chord:{
+            correct:Number(row.chord_correct_count)||0,
+            total:Number(row.chord_total_count)||0,
+          },
+          scale:{
+            correct:Number(row.scale_correct_count)||0,
+            total:Number(row.scale_total_count)||0,
+          },
+        },
       };
     });
     writeJSON(USER_HISTORY_PREFIX+activeUserId,history);
@@ -471,10 +501,13 @@
     }
     await syncAndRefresh(false);
   }
-  function recordAnswer(date,correct){
+  function recordAnswer(date,correct,mode){
     if(!currentUser || !activeUserId) return;
     const queue=readQueue();
-    queue.push({id:makeId(),date,correct:Boolean(correct),createdAt:Date.now()});
+    queue.push({
+      id:makeId(),date,correct:Boolean(correct),
+      mode:HISTORY_MODES.includes(mode)?mode:'unclassified',createdAt:Date.now(),
+    });
     writeQueue(queue);
     if(navigator.onLine) syncQueue().then(ok=>{ if(ok) setState('synced'); }).catch(error=>{
       setState('error');

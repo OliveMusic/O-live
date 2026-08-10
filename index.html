@@ -670,9 +670,23 @@
   .ear-day.today{border-color:var(--line);}
   .ear-day.selected{border-color:var(--signal);}
   .ear-day-detail{
-    min-height:18px; margin:11px 0 0; text-align:center;
+    min-height:44px; margin:11px 0 0; text-align:center;
     color:var(--ink-3); font-size:0.625rem; font-weight:500;
     font-variant-numeric:tabular-nums;
+    display:flex; flex-direction:column; justify-content:center;
+  }
+  .ear-day-total{display:block;}
+  .ear-day-breakdown{
+    display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:5px; margin-top:7px; color:var(--ink-2);
+  }
+  .ear-day-breakdown span{white-space:nowrap;}
+  .ear-day-breakdown b{
+    margin-right:3px; color:var(--ink-3); font-weight:500;
+  }
+  .ear-day-legacy{
+    display:block; margin-top:5px; color:var(--ink-3);
+    font-size:0.5625rem; font-weight:400;
   }
   .ear-cloud{
     min-height:62px; margin:13px -14px -15px; padding:9px 14px;
@@ -1164,14 +1178,23 @@
     transition:background .12s var(--ease-out), transform .1s var(--ease-out);
   }
   .choice-row:active{ background:var(--key-press); border-bottom-width:1px; transform:translateY(1px); }
+  .choice-row .choice-primary{
+    width:100%; min-width:0; display:flex; align-items:baseline; gap:8px;
+  }
   .choice-row .ko{ font-size:0.8125rem; font-weight:500; color:var(--ink); letter-spacing:-0.0182em; }
   .choice-row .en{ font-size:0.5938rem; color:var(--ink-3); font-weight:400; letter-spacing:.02em; }
+  .choice-row .degrees{
+    margin-left:auto; flex:0 0 auto; font-size:0.625rem; color:var(--ink-2);
+    font-weight:550; letter-spacing:.025em; font-variant-numeric:tabular-nums;
+  }
   .choice-row.correct{ background:var(--signal); border-color:var(--signal); }
   .choice-row.correct .ko{ color:var(--on-signal); }
   .choice-row.correct .en{ color:rgba(255,255,255,.55); }
+  .choice-row.correct .degrees{color:var(--on-signal);}
   .choice-row.wrong{ background:var(--signal); border-color:var(--signal); }
   .choice-row.wrong .ko{ color:var(--on-signal); }
   .choice-row.wrong .en{ color:rgba(255,255,255,.6); }
+  .choice-row.wrong .degrees{color:var(--on-signal);}
   .choice-row[disabled]{ opacity:1; }
   .choice-row:disabled:not(.correct):not(.wrong){ opacity:.45; }
 
@@ -1734,7 +1757,7 @@
             <span>목</span><span>금</span><span>토</span>
           </div>
           <div class="ear-calendar-grid" id="earCalendarGrid"></div>
-          <p class="ear-day-detail" id="earDayDetail">날짜를 누르면 기록을 볼 수 있습니다</p>
+          <div class="ear-day-detail" id="earDayDetail" role="status">날짜를 누르면 기록을 볼 수 있습니다</div>
           <div class="ear-cloud" id="earCloud">
             <div class="ear-cloud-copy">
               <span class="ear-cloud-dot" id="earCloudDot" data-state="unconfigured" aria-hidden="true"></span>
@@ -1871,7 +1894,7 @@
       <a href="privacy.html">개인정보처리방침</a>
       <span aria-hidden="true">·</span>
       <a href="terms.html">이용약관</a>
-      <span class="app-version" aria-label="현재 앱 버전 1.0.7, 빌드 107">버전 1.0.7 · 빌드 107</span>
+      <span class="app-version" aria-label="현재 앱 버전 1.0.9, 빌드 109">버전 1.0.9 · 빌드 109</span>
     </footer>
   </main>
 
@@ -1943,7 +1966,7 @@
 
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=97"></script>
+<script src="cloud-sync.js?v=108"></script>
 <script>
 /* ===================== 공통 유틸 ===================== */
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
@@ -3693,15 +3716,15 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     {ko:'옥타브',  en:'Octave',      semis:12, lv:1},
   ];
   const CHORDS = [
-    {ko:'메이저',       en:'Major',       iv:[0,4,7],     lv:1},
-    {ko:'마이너',       en:'Minor',       iv:[0,3,7],     lv:1},
-    {ko:'디미니시',     en:'Diminished',  iv:[0,3,6],     lv:2},
-    {ko:'어그멘티드',   en:'Augmented',   iv:[0,4,8],     lv:2},
-    {ko:'메이저 7',     en:'Major 7th',   iv:[0,4,7,11],  lv:2},
-    {ko:'마이너 7',     en:'Minor 7th',   iv:[0,3,7,10],  lv:2},
-    {ko:'도미넌트 7',   en:'Dominant 7th',iv:[0,4,7,10],  lv:3},
-    {ko:'하프 디미니시',en:'Half-dim 7th',iv:[0,3,6,10],  lv:3},
-    {ko:'sus4',         en:'Suspended 4th',iv:[0,5,7],    lv:3},
+    {ko:'메이저',       en:'Major',       degrees:'1–3–5',       iv:[0,4,7],     lv:1},
+    {ko:'마이너',       en:'Minor',       degrees:'1–♭3–5',      iv:[0,3,7],     lv:1},
+    {ko:'디미니시',     en:'Diminished',  degrees:'1–♭3–♭5',     iv:[0,3,6],     lv:2},
+    {ko:'어그멘티드',   en:'Augmented',   degrees:'1–3–♯5',      iv:[0,4,8],     lv:2},
+    {ko:'메이저 7',     en:'Major 7th',   degrees:'1–3–5–7',     iv:[0,4,7,11],  lv:2},
+    {ko:'마이너 7',     en:'Minor 7th',   degrees:'1–♭3–5–♭7',   iv:[0,3,7,10],  lv:2},
+    {ko:'도미넌트 7',   en:'Dominant 7th',degrees:'1–3–5–♭7',    iv:[0,4,7,10],  lv:3},
+    {ko:'하프 디미니시',en:'Half-dim 7th',degrees:'1–♭3–♭5–♭7', iv:[0,3,6,10],  lv:3},
+    {ko:'sus4',         en:'Suspended 4th',degrees:'1–4–5',      iv:[0,5,7],    lv:3},
   ];
   const SCALES = [
     {ko:'메이저',           en:'Major',            iv:[0,2,4,5,7,9,11,12], lv:1},
@@ -3748,15 +3771,40 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   const earDayDetail = document.getElementById('earDayDetail');
 
   /* ---------- 날짜별 청음 기록 ----------
-     모드와 난이도를 바꿔도 하루 기록은 합산한다.
+     달력은 하루 기록을 합산하고 상세에는 음정·화음·음계를 나눠 보여준다.
      로그인 전에는 익명 키, 로그인 후에는 계정별 로컬 캐시를 사용한다. */
   const EAR_HISTORY_KEY = 'olive-ear-history-v1';
   const EAR_USER_HISTORY_PREFIX = 'olive-ear-history-user-v1:';
+  const EAR_HISTORY_MODES = [
+    {key:'interval',label:'음정'},
+    {key:'chord',label:'화음'},
+    {key:'scale',label:'음계'},
+  ];
   let activeEarHistoryKey=EAR_HISTORY_KEY;
+  function normalizeEarCount(value){
+    const total=Math.max(0,Math.floor(Number(value&&value.total)||0));
+    const correct=Math.max(0,Math.min(total,Math.floor(Number(value&&value.correct)||0)));
+    return {correct,total};
+  }
+  function normalizeEarRecord(value){
+    const total=normalizeEarCount(value);
+    const source=value && typeof value.byMode==='object' ? value.byMode : {};
+    const byMode={};
+    EAR_HISTORY_MODES.forEach(item=>{ byMode[item.key]=normalizeEarCount(source[item.key]); });
+    return {correct:total.correct,total:total.total,byMode};
+  }
   function loadEarHistory(storageKey=activeEarHistoryKey){
     try{
       const parsed=JSON.parse(localStorage.getItem(storageKey)||'{}');
-      return parsed && typeof parsed==='object' ? parsed : {};
+      if(!parsed || typeof parsed!=='object' || Array.isArray(parsed)) return {};
+      const clean={};
+      Object.entries(parsed).forEach(([key,value])=>{
+        if(/^\d{4}-\d{2}-\d{2}$/.test(key)){
+          const rec=normalizeEarRecord(value);
+          if(rec.total) clean[key]=rec;
+        }
+      });
+      return clean;
     }catch(e){ return {}; }
   }
   let earHistoryData = loadEarHistory();
@@ -3781,9 +3829,32 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const rec=earHistoryData[key];
     if(rec && rec.total){
       const acc=Math.round(rec.correct/rec.total*100);
-      earDayDetail.textContent=`${m+1}월 ${d}일 · ${rec.correct}/${rec.total} 정답 · ${acc}%`;
+      const classified=EAR_HISTORY_MODES.reduce((sum,item)=>{
+        const part=rec.byMode&&rec.byMode[item.key];
+        return {correct:sum.correct+(part&&part.correct||0),total:sum.total+(part&&part.total||0)};
+      },{correct:0,total:0});
+      const legacy={
+        correct:Math.max(0,rec.correct-classified.correct),
+        total:Math.max(0,rec.total-classified.total),
+      };
+      const breakdown=EAR_HISTORY_MODES.map(item=>{
+        const part=rec.byMode&&rec.byMode[item.key] || {correct:0,total:0};
+        return `<span><b>${item.label}</b>${part.total?`${part.correct}/${part.total}`:'—'}</span>`;
+      }).join('');
+      earDayDetail.innerHTML=
+        `<span class="ear-day-total">${m+1}월 ${d}일 · 전체 ${rec.correct}/${rec.total} 정답 · ${acc}%</span>`+
+        `<span class="ear-day-breakdown">${breakdown}</span>`+
+        (legacy.total?`<small class="ear-day-legacy">구분 전 기록 ${legacy.correct}/${legacy.total}</small>`:'');
+      const detail=EAR_HISTORY_MODES.map(item=>{
+        const part=rec.byMode&&rec.byMode[item.key] || {correct:0,total:0};
+        return `${item.label} ${part.total?`${part.total}문제 중 ${part.correct}개 정답`:'기록 없음'}`;
+      });
+      if(legacy.total) detail.push(`구분 전 기록 ${legacy.total}문제 중 ${legacy.correct}개 정답`);
+      earDayDetail.setAttribute('aria-label',
+        `${m+1}월 ${d}일, 전체 ${rec.total}문제 중 ${rec.correct}개 정답, ${detail.join(', ')}`);
     }else{
       earDayDetail.textContent=`${m+1}월 ${d}일 · 기록 없음`;
+      earDayDetail.removeAttribute('aria-label');
     }
     earCalendarGrid.querySelectorAll('.ear-day').forEach(b=>
       b.classList.toggle('selected', b.dataset.date===key));
@@ -3836,19 +3907,22 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       }else{
         selectedHistoryKey='';
         earDayDetail.textContent='날짜를 누르면 기록을 볼 수 있습니다';
+        earDayDetail.removeAttribute('aria-label');
       }
     }
   }
   function recordEarResult(correct){
     const key=dateKey(new Date());
-    const rec=earHistoryData[key] && typeof earHistoryData[key]==='object'
-      ? earHistoryData[key] : {correct:0,total:0};
+    const rec=normalizeEarRecord(earHistoryData[key]);
     rec.total=(Number(rec.total)||0)+1;
     rec.correct=(Number(rec.correct)||0)+(correct?1:0);
+    const part=rec.byMode[mode] || (rec.byMode[mode]={correct:0,total:0});
+    part.total++;
+    if(correct) part.correct++;
     earHistoryData[key]=rec;
     saveEarHistory();
     renderEarCalendar();
-    if(window.OliveCloud) window.OliveCloud.recordAnswer(key,correct);
+    if(window.OliveCloud) window.OliveCloud.recordAnswer(key,correct,mode);
   }
   earMonthPrev.addEventListener('click', ()=>{
     historyMonth=new Date(historyMonth.getFullYear(),historyMonth.getMonth()-1,1);
@@ -3971,7 +4045,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     list.forEach(item=>{
       const b=document.createElement('button');
       b.className='choice-row';
-      b.innerHTML = `<span class="ko">${item.ko}</span><span class="en">${item.en}</span>`;
+      const degrees=mode==='chord' && item.degrees
+        ? `<span class="degrees">${item.degrees}</span>` : '';
+      b.innerHTML = `<span class="choice-primary"><span class="ko">${item.ko}</span>${degrees}</span>`+
+        `<span class="en">${item.en}</span>`;
+      b.setAttribute('aria-label',item.ko+', '+item.en+(degrees?`, 구성 도수 ${item.degrees}`:''));
       b.addEventListener('click', ()=>check(item, answer, b));
       earChoices.appendChild(b);
     });
@@ -5167,7 +5245,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=107').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=109').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{

@@ -182,6 +182,12 @@ async function testConfiguredQueueAndMigration(){
                 score_date:'2026-07-24',
                 correct_count:1,
                 total_count:2,
+                interval_correct_count:1,
+                interval_total_count:1,
+                chord_correct_count:0,
+                chord_total_count:1,
+                scale_correct_count:0,
+                scale_total_count:0,
               }],error:null};
             },
           };
@@ -222,7 +228,14 @@ async function testConfiguredQueueAndMigration(){
   assert.equal(anonymousCleared,true);
   assert.equal(
     JSON.stringify(renderedHistory),
-    JSON.stringify({'2026-07-24':{correct:1,total:2}})
+    JSON.stringify({'2026-07-24':{
+      correct:1,total:2,
+      byMode:{
+        interval:{correct:1,total:1},
+        chord:{correct:0,total:1},
+        scale:{correct:0,total:0},
+      },
+    }})
   );
   assert.equal(elements.earCloudTitle.textContent,'클라우드에 저장됨');
   assert.equal(elements.earCloudAction.classList.contains('has-account'),true);
@@ -231,6 +244,10 @@ async function testConfiguredQueueAndMigration(){
   assert.equal(elements.earCloudAvatar.src,'https://example.com/olive-avatar.png');
   assert.equal(elements.earCloudAvatarFallback.textContent,'O');
   assert.equal(rpcCalls.filter(call=>call.name==='import_ear_history').length,1);
+  const imported=rpcCalls.find(call=>call.name==='import_ear_history').args.p_days[0];
+  assert.equal(imported.interval_total_count,0);
+  assert.equal(imported.chord_total_count,0);
+  assert.equal(imported.scale_total_count,0);
   assert.equal(appliedPreferences.data.metronome.bpm,112);
   assert.equal(appliedPreferences.updatedAt,'2026-07-25T00:00:00.000Z');
   assert.equal(preferenceUpserts.length,0);
@@ -238,13 +255,15 @@ async function testConfiguredQueueAndMigration(){
   await elements.cloudGoogleLogin.listeners.click();
   assert.equal(oauthCalls[0].options.redirectTo,'http://127.0.0.1:8765/');
 
-  context.OliveCloud.recordAnswer('2026-07-24',true);
-  context.OliveCloud.recordAnswer('2026-07-24',false);
+  context.OliveCloud.recordAnswer('2026-07-24',true,'chord');
+  context.OliveCloud.recordAnswer('2026-07-24',false,'scale');
   await new Promise(resolve=>setTimeout(resolve,100));
 
   const answerCalls=rpcCalls.filter(call=>call.name==='record_ear_answer');
   assert.equal(answerCalls.length,2);
   assert.notEqual(answerCalls[0].args.p_event_id,answerCalls[1].args.p_event_id);
+  assert.equal(answerCalls[0].args.p_training_mode,'chord');
+  assert.equal(answerCalls[1].args.p_training_mode,'scale');
   assert.deepEqual(
     JSON.parse(storage.getItem('olive-ear-sync-queue-v1:user-1')||'[]'),
     []

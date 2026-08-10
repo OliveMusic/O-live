@@ -5,6 +5,7 @@ const index=fs.readFileSync('index.html','utf8');
 const sync=fs.readFileSync('cloud-sync.js','utf8');
 const migration=fs.readFileSync('supabase/002_preferences_and_deletion.sql','utf8');
 const retention=fs.readFileSync('supabase/003_sync_event_retention.sql','utf8');
+const breakdown=fs.readFileSync('supabase/004_ear_score_breakdown.sql','utf8');
 const edge=fs.readFileSync('supabase/functions/delete-account/index.ts','utf8');
 
 for(const section of ['metronome','tuner','scales','earTrainer','rhythmTrainer','jam']){
@@ -30,6 +31,8 @@ assert.match(sync,/new URL\('\.\/',location\.href\)\.href/);
 assert.match(sync,/ui\.app\.setAttribute\('inert',''\)/);
 assert.match(sync,/ui\.app\.removeAttribute\('inert'\)/);
 assert.match(sync,/querySelectorAll\(/);
+assert.match(sync,/p_training_mode:HISTORY_MODES\.includes\(item\.mode\)/);
+assert.match(sync,/interval_correct_count,interval_total_count/);
 
 assert.match(migration,/create table if not exists public\.user_preferences/);
 assert.match(migration,/enable row level security/);
@@ -39,6 +42,13 @@ assert.match(migration,/grant execute on function public\.delete_my_cloud_data\(
 assert.match(retention,/cleanup_ear_sync_events/);
 assert.match(retention,/interval '90 days'/);
 assert.match(retention,/cron\.schedule/);
+
+assert.match(breakdown,/add column if not exists interval_correct_count/);
+assert.match(breakdown,/add column if not exists chord_correct_count/);
+assert.match(breakdown,/add column if not exists scale_correct_count/);
+assert.match(breakdown,/create or replace function public\.record_ear_answer\(/);
+assert.match(breakdown,/p_training_mode text/);
+assert.match(breakdown,/create or replace function public\.import_ear_history\(/);
 
 assert.match(edge,/supabase-js@2\.110\.8/);
 assert.doesNotMatch(edge,/Access-Control-Allow-Origin": "\*"/);

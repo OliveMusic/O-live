@@ -34,12 +34,13 @@ assert.match(privacy,/싱가포르/);
 assert.match(privacy,/90일이 지나면 자동 삭제/);
 assert.match(privacy,/O’live \(OliveMusic\)/);
 assert.match(terms,/개인정보처리방침/);
-assert.match(index,/service-worker\.js\?v=107/);
-assert.match(index,/cloud-sync\.js\?v=97/);
-assert.match(worker,/const VERSION = 'v107'/);
+assert.match(index,/service-worker\.js\?v=109/);
+assert.match(index,/cloud-sync\.js\?v=108/);
+assert.match(worker,/const VERSION = 'v109'/);
+assert.match(worker,/'\.\/cloud-sync\.js\?v=108'/);
 assert.match(index,/class="app-version"/);
-assert.match(index,/버전 1\.0\.7 · 빌드 107/);
-assert.match(index,/aria-label="현재 앱 버전 1\.0\.7, 빌드 107"/);
+assert.match(index,/버전 1\.0\.9 · 빌드 109/);
+assert.match(index,/aria-label="현재 앱 버전 1\.0\.9, 빌드 109"/);
 assert.match(worker,/url\.origin !== self\.location\.origin/);
 assert.match(worker,/documentUrl\.search = ''/);
 assert.doesNotMatch(worker,/addAll\(ASSETS\)\)\.catch/);
@@ -78,5 +79,17 @@ assert.match(index,/tunerFreq\.textContent='마이크 연결 중…'/);
 assert.match(index,/if\(listening \|\| micStarting\)\{ stopMic\(\); return; \}/);
 assert.match(index,/await ensureCtx\('play-and-record',true\)/);
 assert.match(index,/stopMic\('마이크 연결 끊김'\)/);
+
+for(const degrees of ['1–3–5','1–♭3–5','1–♭3–♭5','1–3–♯5','1–3–5–7','1–♭3–5–♭7']){
+  assert.match(index,new RegExp(degrees));
+}
+assert.match(index,/class="degrees"/);
+assert.match(index,/class="choice-primary"/);
+assert.match(index,/\.choice-row \.degrees\{[\s\S]*?margin-left:auto; flex:0 0 auto;/);
+assert.match(index,/구성 도수 \$\{item\.degrees\}/);
+assert.match(index,/const EAR_HISTORY_MODES = \[/);
+assert.match(index,/class="ear-day-breakdown"/);
+assert.match(index,/구분 전 기록/);
+assert.match(index,/recordAnswer\(key,correct,mode\)/);
 
 console.log('public pages tests passed');

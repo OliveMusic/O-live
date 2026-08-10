@@ -6,7 +6,7 @@
    - HTML: 항상 네트워크 먼저. 실패했을 때만 캐시(오프라인 대비).
    - 그 외(아이콘 등): 캐시 먼저 쓰되 뒤에서 조용히 갱신.
    앱을 수정하면 아래 버전만 올리면 이전 캐시가 정리된다. */
-const VERSION = 'v107';
+const VERSION = 'v109';
 const CACHE = 'olive-practice-' + VERSION;
 
 const ASSETS = [
@@ -19,7 +19,7 @@ const ASSETS = [
   './og.png',
   './manifest.json',
   './cloud-config.js?v=92',
-  './cloud-sync.js?v=97',
+  './cloud-sync.js?v=108',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
