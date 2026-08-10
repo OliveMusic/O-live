@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 
-const html=fs.readFileSync('js/core.js','utf8');
+const html=fs.readFileSync('js/audio-runtime.js','utf8');
 const start=html.indexOf('let audioCtx = null;');
 const end=html.indexOf('/* ===== 소리 나는 동안 화면 켜 두기 =====');
 assert.ok(start>=0 && end>start,'audio lifecycle source is present');
@@ -36,6 +36,8 @@ class FakeAudioContext{
   }
 }
 
+let sounding=false;
+let stopCalls=0;
 const sandbox={
   window:{AudioContext:FakeAudioContext},
   navigator:{audioSession:{type:'auto'}},
@@ -47,8 +49,8 @@ const sandbox={
   __master:null,
   __send:null,
   __gtrCache:new Map(),
-  anySounding:()=>false,
-  stopAllTransports:()=>{},
+  anySounding:()=>sounding,
+  stopAllTransports:()=>{ stopCalls++; },
 };
 sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
@@ -86,8 +88,12 @@ vm.runInContext(
   assert.equal(recovered.state,'running');
   assert.equal(runtime.getContext(),recovered);
 
-  await runtime.releaseCtx();
+  sounding=true;
+  recovered.state='interrupted';
+  recovered.emit('statechange');
+  await Promise.resolve();
   assert.equal(runtime.getContext(),null);
+  assert.equal(stopCalls,1,'interrupted playback stops registered transports');
   assert.equal(recovered.closeCalls,1);
 
   console.log('audio lifecycle tests passed');

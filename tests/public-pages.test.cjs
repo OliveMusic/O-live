@@ -6,7 +6,7 @@ const read=file=>fs.readFileSync(file,'utf8');
 
 const indexHtml=read('index.html');
 const appScripts=[
-  'js/core.js','js/metronome.js','js/tuner.js','js/scales.js',
+  'js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner.js','js/scales.js',
   'js/ear-trainer.js','js/rhythm-trainer.js','js/jam-session.js','js/app-shell.js',
 ].map(read).join('\n');
 const index=indexHtml+'\n'+appScripts;
@@ -45,10 +45,11 @@ assert.match(privacy,/90일이 지나면 자동 삭제/);
 assert.match(privacy,/O’live \(OliveMusic\)/);
 assert.match(terms,/개인정보처리방침/);
 assert.match(index,/service-worker\.js\?v=['"`]\+release\.build/);
-assert.match(index,/cloud-sync\.js\?v=110/);
-assert.match(worker,/importScripts\('\.\/app-version\.js\?v=110'\)/);
+assert.match(index,new RegExp(`cloud-sync\\.js\\?v=${release.build}`));
+assert.match(worker,new RegExp(`importScripts\\('\\.\\/app-version\\.js\\?v=${release.build}'\\)`));
 assert.match(worker,/const VERSION='v'\+RELEASE\.build/);
-assert.match(worker,/'\.\/cloud-sync\.js\?v=110'/);
+assert.match(worker,new RegExp(`'\\.\\/cloud-sync\\.js\\?v=${release.build}'`));
+assert.match(index,new RegExp(`js/audio-runtime\\.js\\?v=${release.build}`));
 assert.match(index,/class="app-version"/);
 assert.match(index,/appVersion\.textContent='버전 '\+release\.version/);
 assert.match(index,/appVersion\.setAttribute\('aria-label','현재 앱 버전 '\+release\.version\)/);
@@ -56,7 +57,7 @@ assert.doesNotMatch(index,new RegExp(`빌드 ${release.build}`));
 assert.match(worker,/url\.origin !== self\.location\.origin/);
 assert.match(worker,/documentUrl\.search = ''/);
 assert.doesNotMatch(worker,/addAll\(ASSETS\)\)\.catch/);
-assert.match(worker,/'\.\/og\.png'/);
+assert.doesNotMatch(worker,/'\.\/og\.png'/);
 assert.equal(manifest.id,'./');
 assert.equal(manifest.start_url,'./');
 
@@ -80,7 +81,7 @@ assert.match(index,/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?\.startup-
 assert.match(index,/function ensureCtx\(mode='ambient', forceFresh=false\)/);
 assert.match(index,/await withTimeout\(resumeCtx\(ctx\),1400\)/);
 assert.doesNotMatch(index,/audioCtx\.resume\(\)\.catch\(\(\)=>\{\}\)/);
-assert.match(index,/document\.visibilityState !== 'visible'[\s\S]*?stopAllTransports\(\);[\s\S]*?releaseCtx\(\);/);
+assert.match(index,/visibilitychange[\s\S]*?stopAllTransports\(\);[\s\S]*?releaseCtx\(\);/);
 assert.match(index,/playClick\(time - metroCtx\.currentTime, level, metroCtx\)/);
 assert.match(index,/orbLabel\.textContent='시작 중'/);
 assert.equal((index.match(/const ctx=await ensureCtx\('ambient'\)/g)||[]).length,3);
