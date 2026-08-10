@@ -72,13 +72,16 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           node.fftSize=4096;
           node.smoothingTimeConstant=0;
           node.getFloatTimeDomainData=array=>{
-            if(micMode!=='weak-signal' && micMode!=='scope-error'){
+            if(micMode!=='weak-signal' && micMode!=='scope-error' && micMode!=='fan-tone'){
               array.fill(0);
               return;
             }
             for(let i=0;i<array.length;i++){
-              const phase=2*Math.PI*82.4069*(analyserSampleCursor+i)/48000;
-              array[i]=Math.sin(phase)*0.0003;
+              const frequency=micMode==='fan-tone' ? 93 : 82.4069;
+              const phase=2*Math.PI*frequency*(analyserSampleCursor+i)/48000;
+              array[i]=micMode==='fan-tone'
+                ? Math.sin(phase)*0.001+Math.sin(phase*2)*0.00035
+                : Math.sin(phase)*0.0003;
             }
             analyserSampleCursor+=array.length;
           };
@@ -138,7 +141,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.4');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.5');
 }
 
 test.afterEach(async({page})=>{
@@ -164,7 +167,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=124');
+  expect(workerUrl).toContain('service-worker.js?v=125');
 });
 
 test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{
@@ -242,6 +245,19 @@ test('파형 Canvas 오류가 나도 튜너 음정 분석은 계속된다',async
   await expect(page.locator('#tunerNote')).toHaveText('E',{timeout:5000});
   await expect(page.locator('#tunerLevel')).toHaveClass(/ready/);
   await page.locator('#tunerStart').click();
+});
+
+test('지속적인 팬 음높이는 배경으로 놓고 새 플럭을 기다린다',async({page})=>{
+  await preparePage(page,{microphone:'fan-tone'});
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  const mic=page.locator('#tunerStart');
+  const note=page.locator('#tunerNote');
+  await mic.click();
+  await expect(note).not.toHaveText('--',{timeout:2000});
+  await expect(note).toHaveText('--',{timeout:4000});
+  await expect(page.locator('#tunerFreq')).toHaveText('연주해보세요');
+  await expect(mic).toHaveClass(/on/);
+  await mic.click();
 });
 
 test('튜너 약한 입력 모드가 기존 음량 문턱 아래의 일렉기타 신호를 잡는다',async({page})=>{

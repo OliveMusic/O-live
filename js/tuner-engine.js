@@ -152,6 +152,131 @@
     };
   }
 
+  /* 팬·모터처럼 오래 유지되는 음높이와 새로 튕긴 현을 시간 변화로 구분한다.
+     기존 음정 판정을 대체하지 않고, 지속음에만 보수적인 감점값을 제공한다. */
+  function createToneActivityDetector(){
+    const previousBands=new Float32Array(BAND_COUNT);
+    let hasPreviousBands=false,startTime=null,lastTime=0,lastLevel=0,slowLevel=0;
+    let stableFrequency=0,stableSince=0,lastPitchAt=0,peakLevel=0;
+    let attackUntil=0,backgroundStrength=0;
+    let last=Object.freeze({
+      onset:false,attackActive:false,background:false,
+      penalty:0,backgroundStrength:0,spectralFlux:0,levelRiseDb:0,
+    });
+
+    function reset(){
+      previousBands.fill(0);
+      hasPreviousBands=false; startTime=null; lastTime=0; lastLevel=0; slowLevel=0;
+      stableFrequency=0; stableSince=0; lastPitchAt=0; peakLevel=0;
+      attackUntil=0; backgroundStrength=0;
+      last=Object.freeze({
+        onset:false,attackActive:false,background:false,
+        penalty:0,backgroundStrength:0,spectralFlux:0,levelRiseDb:0,
+      });
+    }
+
+    return {
+      reset,
+      update(candidate,bands,level,nowMs){
+        const now=Number.isFinite(nowMs) ? nowMs : (lastTime ? lastTime+22 : 0);
+        if(startTime===null) startTime=now;
+        const rms=Math.max(0,Number(level)||0);
+        const hasBands=Boolean(bands && bands.length===BAND_COUNT);
+        let spectralFlux=0;
+        if(hasBands && hasPreviousBands){
+          let positive=0,reference=0;
+          for(let i=0;i<BAND_COUNT;i++){
+            const current=Math.max(0,Number(bands[i])||0);
+            const before=Math.max(0,previousBands[i]);
+            positive+=Math.max(0,current-before);
+            reference+=before;
+          }
+          spectralFlux=positive/Math.max(1e-8,reference);
+        }
+        const levelRiseDb=lastLevel>1e-8 && rms>0
+          ? 20*Math.log10(rms/lastLevel)
+          : 0;
+
+        const hasPitch=Boolean(candidate && candidate.freq>0);
+        let noteChanged=false,stableDuration=0;
+        if(hasPitch){
+          lastPitchAt=now;
+          if(stableFrequency>0){
+            const cents=Math.abs(1200*Math.log2(candidate.freq/stableFrequency));
+            if(cents<=45){
+              stableFrequency*=Math.pow(candidate.freq/stableFrequency,0.035);
+            }else{
+              noteChanged=true;
+              stableFrequency=candidate.freq;
+              stableSince=now;
+              peakLevel=rms;
+              backgroundStrength=0;
+            }
+          }else{
+            stableFrequency=candidate.freq;
+            stableSince=now;
+            peakLevel=rms;
+          }
+          peakLevel=Math.max(peakLevel,rms);
+          stableDuration=Math.max(0,now-stableSince);
+        }else if(stableFrequency>0 && now-lastPitchAt>260){
+          stableFrequency=0; stableSince=now; peakLevel=0;
+          backgroundStrength*=0.72;
+        }
+
+        const afterStartup=now-startTime>100;
+        const levelOnset=afterStartup && lastLevel>1e-8 && levelRiseDb>=4.5;
+        const spectralOnset=afterStartup && hasPreviousBands && spectralFlux>=0.55 &&
+          rms>Math.max(1e-8,lastLevel)*1.2;
+        const changedOnset=afterStartup && noteChanged && rms>Math.max(1e-8,slowLevel)*1.3;
+        /* 마이크를 켜자마자 현을 튕긴 경우에는 상승 이전의 무음을 못 본다.
+           초기 0.7초 안에 뚜렷한 감쇠가 보이면 그 자체를 플럭의 증거로 쓴다. */
+        const startupDecay=hasPitch && attackUntil<=now && now-startTime<750 && stableDuration>160 &&
+          peakLevel>Math.max(1e-8,rms)*1.22;
+        const onset=Boolean(hasPitch && (levelOnset || spectralOnset || changedOnset || startupDecay));
+        if(onset){
+          attackUntil=Math.max(attackUntil,now+2200);
+          backgroundStrength=0;
+        }
+        const attackActive=now<attackUntil;
+
+        const levelDistanceDb=slowLevel>1e-8 && rms>0
+          ? Math.abs(20*Math.log10(rms/slowLevel))
+          : 0;
+        let backgroundTarget=0;
+        if(hasPitch && !attackActive && stableDuration>700){
+          const persistence=clamp((stableDuration-700)/450,0,1);
+          const steadiness=clamp(1-levelDistanceDb/5,0.35,1);
+          backgroundTarget=persistence*steadiness;
+        }
+        const backgroundRate=backgroundTarget>backgroundStrength ? 0.18 : 0.28;
+        backgroundStrength+=(backgroundTarget-backgroundStrength)*backgroundRate;
+        backgroundStrength=clamp(backgroundStrength,0,1);
+
+        if(slowLevel<=0) slowLevel=rms;
+        else slowLevel+=(rms-slowLevel)*(rms<slowLevel ? 0.055 : 0.025);
+        lastLevel=rms;
+        lastTime=now;
+        if(hasBands){
+          for(let i=0;i<BAND_COUNT;i++) previousBands[i]=Math.max(0,Number(bands[i])||0);
+          hasPreviousBands=true;
+        }
+
+        const background=backgroundStrength>=0.72 && !attackActive;
+        last=Object.freeze({
+          onset,
+          attackActive,
+          background,
+          penalty:attackActive ? 0 : backgroundStrength*0.62,
+          backgroundStrength,
+          spectralFlux,
+          levelRiseDb,
+        });
+        return last;
+      },
+    };
+  }
+
   // radix-2 FFT tables and work buffers are allocated once, not per frame.
   const LEVELS=Math.round(Math.log2(FFT_SIZE));
   const cosTable=new Float32Array(FFT_SIZE/2);
@@ -370,6 +495,7 @@
     analyzePitch,
     createBandNoiseProfile,
     createPitchTracker,
+    createToneActivityDetector,
     createSignalGate,
     detectPitch,
     frameRms,

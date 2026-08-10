@@ -51,6 +51,27 @@ function mainsHum(frequency,amplitude){
   return samples;
 }
 
+function tonalFrame(frequency,frameIndex,components,noiseAmplitude=0){
+  const random=generator(5000+frameIndex);
+  const samples=new Float32Array(engine.FRAME_SIZE);
+  const offset=frameIndex*engine.FRAME_SIZE;
+  for(let i=0;i<samples.length;i++){
+    const phase=2*Math.PI*frequency*(offset+i)/sampleRate;
+    let value=0;
+    for(let harmonic=0;harmonic<components.length;harmonic++){
+      value+=Math.sin(phase*(harmonic+1))*components[harmonic];
+    }
+    samples[i]=value+random()*noiseAmplitude;
+  }
+  return samples;
+}
+
+function addFrames(first,second){
+  const result=new Float32Array(first.length);
+  for(let i=0;i<result.length;i++) result[i]=first[i]+second[i];
+  return result;
+}
+
 function centsBetween(actual,expected){
   return 1200*Math.log2(actual/expected);
 }
@@ -137,5 +158,49 @@ const confirmedOctave={...a2,freq:220};
 assert.deepEqual(tracker.update(confirmedOctave),confirmedOctave,'a real new note is accepted on the second frame');
 tracker.reset();
 assert.equal(tracker.isLocked(),false);
+
+const activity=engine.createToneActivityDetector();
+let firstBackground=-1,fanAnalysis,fanState;
+for(let frame=0;frame<90;frame++){
+  const fan=tonalFrame(93,frame,[0.001,0.00035],0.00002);
+  fanAnalysis=engine.analyzePitch(fan,sampleRate,{minFrequency:70,maxFrequency:1400});
+  fanState=activity.update(
+    fanAnalysis.pitch,fanAnalysis.bands,engine.frameRms(fan,4),frame*22.2,
+  );
+  if(firstBackground<0 && fanState.background) firstBackground=frame;
+}
+assert.ok(firstBackground>=45 && firstBackground<=65,'steady fan tone becomes background in about one second');
+assert.ok(fanState.penalty>0.58,'persistent fan receives enough confidence penalty');
+const maximumFanConfidence=fanAnalysis.pitch.clarity*0.62+
+  fanAnalysis.pitch.harmonicity*0.24+0.14-
+  fanAnalysis.pitch.humLikelihood*0.18-fanState.penalty;
+assert.ok(maximumFanConfidence<0.48,'even maximum band confidence cannot reopen the learned fan');
+
+const fanAtAttack=tonalFrame(93,90,[0.001,0.00035],0.00002);
+const guitarAttack=tonalFrame(93,90,[0.004,0.00168,0.00096,0.00048],0);
+const mixedAttack=addFrames(fanAtAttack,guitarAttack);
+const attackAnalysis=engine.analyzePitch(mixedAttack,sampleRate,{minFrequency:70,maxFrequency:1400});
+const attackState=activity.update(
+  attackAnalysis.pitch,attackAnalysis.bands,engine.frameRms(mixedAttack,4),90*22.2,
+);
+assert.equal(attackState.onset,true,'a pluck over the same fan frequency is recognized as a new attack');
+assert.equal(attackState.attackActive,true);
+assert.equal(attackState.background,false);
+assert.equal(attackState.penalty,0);
+
+const immediateActivity=engine.createToneActivityDetector();
+let startupAttackSeen=false,startupState;
+for(let frame=0;frame<50;frame++){
+  const decay=Math.exp(-frame/25);
+  const pluck=tonalFrame(110,frame,[0.003*decay,0.00126*decay,0.00072*decay],0.00001);
+  const analysis=engine.analyzePitch(pluck,sampleRate,{minFrequency:70,maxFrequency:1400});
+  startupState=immediateActivity.update(
+    analysis.pitch,analysis.bands,engine.frameRms(pluck,4),frame*22.2,
+  );
+  startupAttackSeen ||= startupState.onset;
+}
+assert.equal(startupAttackSeen,true,'a pluck made immediately after microphone start is recovered from its decay');
+assert.equal(startupState.attackActive,true);
+assert.equal(startupState.background,false);
 
 console.log('tuner engine tests passed');

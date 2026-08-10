@@ -42,6 +42,7 @@
   const signalGate=tunerEngine.createSignalGate();
   const bandNoiseProfile=tunerEngine.createBandNoiseProfile();
   const pitchTracker=tunerEngine.createPitchTracker();
+  const toneActivityDetector=tunerEngine.createToneActivityDetector();
   let spectralFrame=0;
 
   /* ---------- 감도 설정용 실시간 입력 모니터 ---------- */
@@ -200,6 +201,7 @@
     signalGate.reset();
     bandNoiseProfile.reset();
     pitchTracker.reset();
+    toneActivityDetector.reset();
     applyInputGain();
     window.OlivePreferences.changed();
   }
@@ -247,6 +249,7 @@
     signalGate.reset();
     bandNoiseProfile.reset();
     pitchTracker.reset();
+    toneActivityDetector.reset();
     spectralFrame=0;
   }
 
@@ -397,6 +400,12 @@
             })
           : null;
         const r=frameAnalysis ? frameAnalysis.pitch : null;
+        const toneState=toneActivityDetector.update(
+          r,
+          frameAnalysis ? frameAnalysis.bands : null,
+          rms,
+          ts,
+        );
         const inRange=Boolean(r && r.freq>freqLo && r.freq<freqHi);
         const likelyPitch=Boolean(
           inRange &&
@@ -422,7 +431,7 @@
         );
         const pitchConfidence=r ? Math.max(0,Math.min(1,
           r.clarity*0.62+r.harmonicity*0.24+bandState.confidence*0.14-
-          r.humLikelihood*0.18
+          r.humLikelihood*0.18-toneState.penalty
         )) : 0;
         const tracked=pitchTracker.update(rawAccepted ? {
           freq:r.freq,
@@ -432,7 +441,15 @@
         } : null,{
           minConfidence:sensitivity.value>=67 ? 0.43 : 0.48,
         });
-        const accepted=Boolean(tracked);
+        let accepted=Boolean(tracked);
+        // 어택 없이 오래 유지된 음높이는 팬·모터 배경음으로 보고 즉시 표시를 놓는다.
+        if(toneState.background && !toneState.attackActive){
+          accepted=false;
+          if(haveLock){
+            idle();
+            quietFrames=0;
+          }
+        }
         updateScope(buf,rms,gate,accepted,ts);
 
         // 로그에 가까운 반응으로 작은 입력도 막대에서 확인할 수 있게 한다.
@@ -560,6 +577,7 @@
     disconnectMicGraph();
     micRecovering=false; inputRecoveryUsed=false; zeroInputSince=0;
     bandNoiseProfile.reset(); pitchTracker.reset(); spectralFrame=0;
+    toneActivityDetector.reset();
     signalGate.reset();
     setAudioSession('ambient');
     // play-and-record에서 돌아온 컨텍스트는 state가 running이어도 무음일 수 있다.
