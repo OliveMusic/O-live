@@ -1,0 +1,97 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+
+const html=fs.readFileSync('index.html','utf8');
+const start=html.indexOf('let audioCtx = null;');
+const end=html.indexOf('/* ===== 소리 나는 동안 화면 켜 두기 =====');
+assert.ok(start>=0 && end>start,'audio lifecycle source is present');
+
+class FakeAudioContext{
+  static instances=[];
+  static rejectNextResume=false;
+  constructor(options){
+    this.options=options;
+    this.state='suspended';
+    this.resumeCalls=0;
+    this.closeCalls=0;
+    this.listeners=new Map();
+    FakeAudioContext.instances.push(this);
+  }
+  addEventListener(type,listener){ this.listeners.set(type,listener); }
+  emit(type){ const listener=this.listeners.get(type); if(listener) listener(); }
+  async resume(){
+    this.resumeCalls++;
+    if(FakeAudioContext.rejectNextResume){
+      FakeAudioContext.rejectNextResume=false;
+      throw new Error('resume failed');
+    }
+    this.state='running';
+    this.emit('statechange');
+  }
+  async close(){
+    this.closeCalls++;
+    this.state='closed';
+    this.emit('statechange');
+  }
+}
+
+const sandbox={
+  window:{AudioContext:FakeAudioContext},
+  navigator:{audioSession:{type:'auto'}},
+  setTimeout,
+  clearTimeout,
+  Promise,
+  Error,
+  console,
+  __master:null,
+  __send:null,
+  __gtrCache:new Map(),
+  anySounding:()=>false,
+  stopAllTransports:()=>{},
+};
+sandbox.globalThis=sandbox;
+vm.createContext(sandbox);
+vm.runInContext(
+  html.slice(start,end)+
+  '\n;globalThis.audioRuntime={ensureCtx,resumeCtx,releaseCtx,getCtx,'+
+  'getContext:()=>audioCtx,getMode:()=>__ctxMode};',
+  sandbox
+);
+
+(async()=>{
+  const runtime=sandbox.audioRuntime;
+  const first=await runtime.ensureCtx('ambient');
+  assert.equal(first.state,'running');
+  assert.equal(first.options.latencyHint,'interactive');
+  assert.equal(runtime.getMode(),'ambient');
+  assert.equal(sandbox.navigator.audioSession.type,'ambient');
+  assert.equal(FakeAudioContext.instances.length,1);
+
+  first.state='suspended';
+  const beforeResumeCalls=first.resumeCalls;
+  await Promise.all([runtime.resumeCtx(first),runtime.resumeCtx(first)]);
+  assert.equal(first.resumeCalls,beforeResumeCalls+1,'parallel resume calls are deduplicated');
+
+  const fresh=await runtime.ensureCtx('play-and-record',true);
+  assert.notEqual(fresh,first);
+  assert.equal(first.closeCalls,1);
+  assert.equal(fresh.state,'running');
+  assert.equal(runtime.getMode(),'play-and-record');
+
+  FakeAudioContext.rejectNextResume=true;
+  const instanceCount=FakeAudioContext.instances.length;
+  const recovered=await runtime.ensureCtx('ambient',true);
+  assert.equal(FakeAudioContext.instances.length,instanceCount+2,'failed resume recreates once');
+  assert.equal(recovered.state,'running');
+  assert.equal(runtime.getContext(),recovered);
+
+  await runtime.releaseCtx();
+  assert.equal(runtime.getContext(),null);
+  assert.equal(recovered.closeCalls,1);
+
+  console.log('audio lifecycle tests passed');
+})().catch(error=>{
+  console.error(error);
+  process.exitCode=1;
+});

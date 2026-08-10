@@ -253,6 +253,9 @@
     transform:translate(-50%,-50%);
   }
   .mic-btn:active{ transform:rotate(-11deg) scale(.94); }
+  .mic-btn.starting{ background:var(--signal-soft); border-color:var(--signal); }
+  .mic-btn.starting svg{ stroke:var(--signal); }
+  .mic-btn.starting .mic-body{ fill:var(--signal); }
   .mic-btn.on{ background:var(--signal); border-color:var(--signal); }
   .mic-btn.on svg{ stroke:var(--on-signal); }
   .mic-btn.on .mic-body{ fill:var(--on-signal); }
@@ -865,6 +868,11 @@
   .app-footer a:focus-visible{
     outline:2px solid var(--signal); outline-offset:1px;
   }
+  .app-version{
+    flex:0 0 100%; text-align:center; margin-top:-5px;
+    color:var(--ink-3); font-size:0.5625rem;
+    font-variant-numeric:tabular-nums; letter-spacing:.02em;
+  }
 
   .choice-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:6px;}
   .choice-grid.cols3{grid-template-columns:repeat(3,1fr);}
@@ -1376,6 +1384,8 @@
   }
   .metro-orb.running{ border-color:var(--signal); }
   .metro-orb.running .orb-label{ color:var(--signal); }
+  .metro-orb.starting{ border-color:var(--signal); }
+  .metro-orb.starting .orb-label{ color:var(--signal); }
   /* 박자마다 오렌지로 발광 */
   @keyframes orbBody{
     0%   { background:rgb(var(--signal-rgb)); border-color:rgb(var(--signal-rgb)); }
@@ -1861,6 +1871,7 @@
       <a href="privacy.html">개인정보처리방침</a>
       <span aria-hidden="true">·</span>
       <a href="terms.html">이용약관</a>
+      <span class="app-version" aria-label="현재 앱 버전 1.0.7, 빌드 107">버전 1.0.7 · 빌드 107</span>
     </footer>
   </main>
 
@@ -1937,6 +1948,9 @@
 /* ===================== 공통 유틸 ===================== */
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 let audioCtx = null;
+let __ctxMode = null;
+let __ctxResumePromise = null;
+let __ctxReadyPromise = null;
 /* iOS는 오디오 세션에 '용도'를 붙인다.
    ambient : 다른 앱 소리와 섞인다. 음악을 틀어 놓고 메트로놈을 쓸 수 있다.
              잠금화면 위젯도 뜨지 않는다. 대신 무음 스위치를 따른다.
@@ -1948,22 +1962,94 @@ function setAudioSession(mode){
 /* 컨텍스트를 통째로 버린다. 여기에 매달려 있던 것들도 같이 놓아야
    다음에 만들 때 새 컨텍스트의 노드로 다시 세워진다. */
 function releaseCtx(){
-  if(!audioCtx) return;
+  if(!audioCtx) return Promise.resolve();
   const old = audioCtx;
-  audioCtx = null; __master = null; __send = null; __gtrCache.clear();
-  try{ old.close(); }catch(e){}
+  audioCtx = null; __ctxMode = null; __ctxResumePromise = null;
+  __master = null; __send = null; __gtrCache.clear();
+  try{
+    const closing=old.close();
+    return closing && typeof closing.catch==='function' ? closing.catch(()=>{}) : Promise.resolve();
+  }catch(e){ return Promise.resolve(); }
 }
 
+function createCtx(mode='ambient'){
+  setAudioSession(mode);
+  const Ctx=window.AudioContext||window.webkitAudioContext;
+  if(!Ctx) throw new Error('WebAudioUnavailable');
+  const ctx=new Ctx({latencyHint:'interactive'});
+  audioCtx=ctx; __ctxMode=mode; __ctxResumePromise=null;
+  ctx.addEventListener('statechange', ()=>{
+    if(ctx!==audioCtx || !anySounding()) return;
+    // 재생 중 컨텍스트가 끊겼다면 가짜 '재생 중' UI를 남기지 않는다.
+    // 다음 탭에서 사용자가 다시 누르면 ensureCtx()가 새 컨텍스트를 만든다.
+    if(ctx.state==='interrupted' || ctx.state==='closed' || ctx.state==='suspended'){
+      stopAllTransports();
+      releaseCtx();
+    }
+  });
+  return ctx;
+}
+
+function resumeCtx(ctx){
+  if(ctx.state==='running') return Promise.resolve(ctx);
+  if(__ctxResumePromise && audioCtx===ctx) return __ctxResumePromise;
+  const resume=Promise.resolve().then(()=>ctx.resume()).then(()=>{
+    if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
+    return ctx;
+  });
+  __ctxResumePromise=resume.finally(()=>{
+    if(audioCtx===ctx) __ctxResumePromise=null;
+  });
+  return __ctxResumePromise;
+}
+
+function withTimeout(promise, ms){
+  let timer=0;
+  const timeout=new Promise((_,reject)=>{
+    timer=setTimeout(()=>reject(new Error('AudioContextTimeout')),ms);
+  });
+  return Promise.race([promise,timeout]).finally(()=>clearTimeout(timer));
+}
+
+/* 재생 버튼에서만 쓰는 확정 경로. resume()이 실제로 끝날 때까지 기다리고,
+   iOS가 interrupted/suspended에 묶어두면 새 컨텍스트로 한 번 복구한다. */
+function ensureCtx(mode='ambient', forceFresh=false){
+  const previous=__ctxReadyPromise || Promise.resolve();
+  const task=previous.catch(()=>{}).then(async()=>{
+    const unusable=!audioCtx || audioCtx.state==='closed' || audioCtx.state==='interrupted';
+    if(forceFresh || unusable || __ctxMode!==mode){
+      await releaseCtx();
+      createCtx(mode);
+    }else{
+      setAudioSession(mode);
+    }
+    let ctx=audioCtx;
+    try{
+      await withTimeout(resumeCtx(ctx),1400);
+    }catch(firstError){
+      // Safari는 running이라고 남기면서 실제 장치 연결을 잃기도 한다.
+      // 재생 시작 단계라면 한 번만 통째로 다시 만들어 확인한다.
+      await releaseCtx();
+      ctx=createCtx(mode);
+      await withTimeout(resumeCtx(ctx),1400);
+    }
+    if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
+    return ctx;
+  });
+  __ctxReadyPromise=task;
+  return task.finally(()=>{
+    if(__ctxReadyPromise===task) __ctxReadyPromise=null;
+  });
+}
+
+/* 이미 준비된 재생 루프와 짧은 미리듣기를 위한 동기 접근자.
+   resume 요청은 하나만 유지해 스케줄러가 Promise를 초당 수십 개 쌓지 않게 한다. */
 function getCtx(){
-  // 'interrupted'는 마이크(play-and-record) 세션을 쓰고 나면 iOS가 컨텍스트를 떨어뜨리는 상태다.
-  // resume()으로 되살아나지 않는 경우가 많아, 소리가 스케줄돼도 아무 데도 안 나간다
-  // (튜너 쓴 뒤 메트로놈이 안 들리던 원인). 'closed'와 똑같이 통째로 새로 만든다.
-  if(!audioCtx || audioCtx.state === 'closed' || audioCtx.state === 'interrupted'){
-    if(audioCtx){ try{ audioCtx.close(); }catch(e){} __master = null; __send = null; __gtrCache.clear(); }
-    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    setAudioSession('ambient');    // 다른 앱 음악 위에 얹힌다 (위젯도 뜨지 않는다)
+  if(!audioCtx || audioCtx.state==='closed' || audioCtx.state==='interrupted'){
+    if(audioCtx) releaseCtx();
+    createCtx('ambient');
   }
-  if(audioCtx.state !== 'running') audioCtx.resume().catch(()=>{});
+  if(audioCtx.state!=='running' && !__ctxResumePromise) resumeCtx(audioCtx).catch(()=>{});
   return audioCtx;
 }
 
@@ -2116,9 +2202,9 @@ function playTone(freq, duration=0.6, when=0, type='sine', gainVal=0.43){
   return {osc, gain};
 }
 // level: 0 약 · 1 중(묶음 첫 박) · 2 강(마디 첫 박). true/false도 받는다.
-function playClick(when, accent){
+function playClick(when, accent, preparedCtx){
   const lv = accent === true ? 2 : accent === false ? 0 : (accent|0);
-  const ctx = getCtx();
+  const ctx = preparedCtx || getCtx();
   const t0 = ctx.currentTime + Math.max(when,0);
   const osc = ctx.createOscillator();
   osc.type = 'square';
@@ -2126,7 +2212,7 @@ function playClick(when, accent){
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(lv===2 ? 0.62 : lv===1 ? 0.50 : 0.40, t0);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0+0.045);
-  osc.connect(gain).connect(getMaster());
+  osc.connect(gain).connect(getMaster(ctx));
   osc.start(t0);
   osc.stop(t0+0.06);
 }
@@ -2156,8 +2242,8 @@ function makeIR(ctx, dur, decay){
   }
   return b;
 }
-function getMaster(){
-  const ctx=getCtx();
+function getMaster(preparedCtx){
+  const ctx=preparedCtx || getCtx();
   if(!__master){
     __master=ctx.createGain(); __master.gain.value=0.9;
     const comp=ctx.createDynamicsCompressor();
@@ -2428,18 +2514,21 @@ function setTabSounding(tab, on, source){
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState !== 'visible'){
     // 백그라운드에서는 스케줄러가 눌려 소리가 튀거나 첫박만 반복된다.
-    // 깔끔하게 멈추는 편이 낫다.
+    // 상태가 running이어도 실제 장치 연결만 사라지는 WebKit 사례가 있으므로
+    // 깔끔하게 멈추고 컨텍스트까지 버린다.
     stopAllTransports();
     keepAwake(false);
+    releaseCtx();
     return;
   }
-  /* iOS는 화면이 꺼지는 동안 컨텍스트를 'interrupted'로 떨어뜨리는데,
-     이 상태는 resume()으로 되살아나지 않는 경우가 있다. 그러면 소리를 넣어도
-     아무 데도 나가지 않는다 — 껐다 자고 깨운 뒤 안 들리던 게 이것이다.
-     어차피 숨을 때 전부 멈췄으니 미련 없이 버리고,
-     다음에 버튼을 누를 때 그 손짓 안에서 새로 만든다. iOS가 가장 확실하게 받아주는 길이다. */
-  if(audioCtx && audioCtx.state !== 'running') releaseCtx();
-  if(anySounding()) keepAwake(true);
+  // 다음 시작 버튼의 사용자 제스처 안에서 ensureCtx()가 새 컨텍스트를 만든다.
+});
+window.addEventListener('pagehide', ()=>{
+  stopAllTransports();
+  releaseCtx();
+});
+window.addEventListener('pageshow', event=>{
+  if(event.persisted) releaseCtx();
 });
 
 /* ===================== 탭 전환 ===================== */
@@ -2506,6 +2595,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   ];
   let sub = SUBS[0];
   let isPlaying = false;
+  let startPending = false, startToken = 0, metroCtx = null;
   let currentStep = 0, nextNoteTime = 0.0, timerID = null;
   let rollBeat = 0;
   const scheduleAheadTime = 0.12, lookahead = 25;
@@ -2694,7 +2784,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const level = !isBeatStart || !accentOn ? 0
                 : beatIndex === 0 ? 2
                 : midBeats.has(beatIndex) ? 1 : 0;
-    if(sub.hits.indexOf(pos) >= 0) playClick(time - getCtx().currentTime, level);
+    if(sub.hits.indexOf(pos) >= 0) playClick(time - metroCtx.currentTime, level, metroCtx);
     scheduledBeats.push({step, time, isBeatStart, beatIndex, level});
   }
   function advanceNote(){
@@ -2703,7 +2793,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     currentStep = (currentStep+1) % (meter.beats*sub.div);
   }
   function scheduler(){
-    const ctx = getCtx();
+    const ctx = metroCtx;
+    if(!isPlaying || !ctx || ctx!==audioCtx || ctx.state!=='running'){
+      stopMetro('재시도');
+      return;
+    }
     // 밀린 시간만 버리고 박 위치는 그대로 둔다.
     // currentStep을 0으로 되돌리면 보정이 반복될 때마다 첫박 강세만 울린다.
     if(nextNoteTime < ctx.currentTime - 0.25){
@@ -2719,7 +2813,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   let visualGen = 0;
   function visualLoop(gen){
     if(!isPlaying || gen !== visualGen) return;   // 예전 루프는 여기서 끝난다
-    const ctx = getCtx();
+    const ctx = metroCtx;
+    if(!ctx || ctx!==audioCtx || ctx.state!=='running'){
+      stopMetro('재시도');
+      return;
+    }
     const now = ctx.currentTime;
     while(scheduledBeats.length && scheduledBeats[0].time <= now){
       const b = scheduledBeats.shift();
@@ -2747,32 +2845,62 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     requestAnimationFrame(()=>visualLoop(gen));
   }
 
-  function startMetro(){
-    if(isPlaying) return;
-    getCtx();
-    isPlaying = true;
-    currentStep = 0;
-    rollBeat = 0;
-    scheduledBeats = [];
-    nextNoteTime = getCtx().currentTime + 0.05;
-    scheduler();
-    visualLoop(++visualGen);
-    orbLabel.textContent = '정지';
-    metroStart.classList.add('running');
-    setTabSounding('metronome', true);
+  async function startMetro(){
+    if(isPlaying || startPending) return;
+    const token=++startToken;
+    startPending=true;
+    orbLabel.textContent='시작 중';
+    metroStart.classList.add('starting');
+    metroStart.setAttribute('aria-busy','true');
+    try{
+      const ctx=await ensureCtx('ambient');
+      if(token!==startToken || !startPending){
+        if(audioCtx===ctx && !anySounding()) releaseCtx();
+        return;
+      }
+      if(document.visibilityState!=='visible') throw new Error('PageNotVisible');
+      metroCtx=ctx;
+      isPlaying=true;
+      currentStep=0;
+      rollBeat=0;
+      scheduledBeats=[];
+      nextNoteTime=ctx.currentTime+0.05;
+      orbLabel.textContent='정지';
+      metroStart.classList.remove('starting');
+      metroStart.classList.add('running');
+      metroStart.setAttribute('aria-busy','false');
+      setTabSounding('metronome',true);
+      scheduler();
+      visualLoop(++visualGen);
+    }catch(error){
+      if(token!==startToken) return;
+      startPending=false;
+      metroCtx=null;
+      orbLabel.textContent='재시도';
+      metroStart.classList.remove('starting','running','flash');
+      metroStart.setAttribute('aria-busy','false');
+      setTabSounding('metronome',false);
+      releaseCtx();
+    }finally{
+      if(token===startToken) startPending=false;
+    }
   }
-  function stopMetro(){
-    if(!isPlaying) return;
-    isPlaying = false;
+  function stopMetro(label='시작'){
+    if(!isPlaying && !startPending) return;
+    startToken++;
+    startPending=false;
+    isPlaying=false;
+    metroCtx=null;
     clearTimeout(timerID);
-    orbLabel.textContent = '시작';
-    metroStart.classList.remove('running','flash');
+    orbLabel.textContent=label;
+    metroStart.classList.remove('starting','running','flash');
+    metroStart.setAttribute('aria-busy','false');
     rollRight = false; parkOlive();    // 왼쪽 끝에 멈춰 쉰다
     setTabSounding('metronome', false);
     beatDotsEl.querySelectorAll('.beat-dot').forEach(d=>d.classList.remove('on','mid-on','accent-on'));
   }
-  metroStart.addEventListener('click', ()=> isPlaying ? stopMetro() : startMetro());
-  registerTransport({ isPlaying:()=>isPlaying, stop:stopMetro });
+  metroStart.addEventListener('click', ()=> (isPlaying || startPending) ? stopMetro() : startMetro());
+  registerTransport({ isPlaying:()=>isPlaying || startPending, stop:stopMetro });
 
   window.OlivePreferences.register('metronome',
     ()=>({bpm,meter:meter.label,subdivision:sub.key,accent:accentOn}),
@@ -2821,7 +2949,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   const levelEl     = document.getElementById('tunerLevel');
 
   let currentTuning='guitar';
-  let listening=false, stream=null, analyser=null, buf=null, srcNode=null;
+  let listening=false, micStarting=false, micStartToken=0;
+  let stream=null, analyser=null, buf=null, srcNode=null;
   let micChain=[];              // 껐을 때 확실히 끊기 위해 들고 있는다
   let strobeCents=0, strobeAngle=0, strobeLast=0;
   let spin=0, lock=0;            // 화면에 실제로 그려지는 값. 목표를 향해 천천히 따라간다.
@@ -3188,11 +3317,31 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   /* ---------- 마이크 ---------- */
-  function stopMic(){
-    if(!listening) return;
-    tunerStart.dispatchEvent(new Event('click'));
+  function stopMic(message='마이크 꺼짐'){
+    if(!listening && !micStarting && !stream) return;
+    micStartToken++;
+    listening=false;
+    micStarting=false;
+    // 트랙을 완전히 멈춰 마이크를 놓아준다 → iOS "사용중" 표시가 꺼진다.
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    micChain.forEach(n=>{ try{ n.disconnect(); }catch(e){} });
+    micChain=[]; srcNode=null; analyser=null;
+    setAudioSession('ambient');
+    // play-and-record에서 돌아온 컨텍스트는 state가 running이어도 무음일 수 있다.
+    // 메트로놈은 다음 탭에서 새 ambient 컨텍스트로 시작하게 한다.
+    releaseCtx();
+    startStrobe();
+    setTabSounding('tuner',false,'mic');
+    tunerStart.classList.remove('starting','on');
+    tunerStart.setAttribute('aria-label','마이크 켜기');
+    tunerStart.setAttribute('aria-pressed','false');
+    tunerStart.setAttribute('aria-busy','false');
+    idle();
+    tunerFreq.textContent=message;
+    inLevel=0;
+    if(levelEl) levelEl.style.transform='scaleX(0)';
   }
-  registerTransport({ isPlaying:()=>listening, stop:stopMic });
+  registerTransport({ isPlaying:()=>listening || micStarting, stop:stopMic });
 
   // 튜너가 아닌 다른 탭으로 넘어가면 마이크를 자동으로 끈다
   document.querySelectorAll('.tab-btn').forEach(b=>{
@@ -3232,69 +3381,81 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   );
 
   tunerStart.addEventListener('click', async ()=>{
-    if(listening){
-      listening=false;
-      // 트랙을 완전히 멈춰 마이크를 놓아준다 → iOS "사용중" 표시가 꺼진다.
-      // 권한은 세션 동안 기억되므로 다시 켜도 (앱을 새로 열지 않는 한) 재요청하지 않는다.
-      if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-      micChain.forEach(n=>{ try{ n.disconnect(); }catch(e){} });
-      micChain=[]; srcNode=null; analyser=null;
-      setAudioSession('ambient');    // 녹음용에서 되돌린다
-      startStrobe();                 // 곧바로 끊지 않고 잦아들게 둔다
-      setTabSounding('tuner', false, 'mic');
-      tunerStart.classList.remove('on');
-      tunerStart.setAttribute('aria-label','마이크 켜기');
-      tunerStart.setAttribute('aria-pressed','false');
-      idle();
-      tunerFreq.textContent='마이크 꺼짐';
-      inLevel=0;
-      if(levelEl) levelEl.style.transform='scaleX(0)';
-      return;
-    }
+    if(listening || micStarting){ stopMic(); return; }
+    const token=++micStartToken;
+    let requestedStream=null;
+    micStarting=true;
+    tunerStart.classList.add('starting');
+    tunerStart.setAttribute('aria-label','마이크 연결 취소');
+    tunerStart.setAttribute('aria-pressed','false');
+    tunerStart.setAttribute('aria-busy','true');
+    tunerFreq.textContent='마이크 연결 중…';
     try{
-      getCtx();
-      setAudioSession('play-and-record');   // 마이크를 쓰려면 용도를 바꿔야 한다
-      if(!stream){
-        // 최초 1회만 권한을 요청한다. 이후엔 같은 스트림을 재사용한다.
-        stream=await navigator.mediaDevices.getUserMedia({audio:{
-          echoCancellation:false, noiseSuppression:false, autoGainControl:false
-        }});
-      } else {
-        stream.getAudioTracks().forEach(t=>{ t.enabled=true; });
+      setAudioSession('play-and-record');
+      // 사용자 탭 안에서 먼저 컨텍스트를 활성화해 iOS 자동재생 제한을 통과한다.
+      await ensureCtx('play-and-record',true);
+      if(token!==micStartToken || !micStarting){ releaseCtx(); return; }
+
+      requestedStream=await navigator.mediaDevices.getUserMedia({audio:{
+        echoCancellation:false, noiseSuppression:false, autoGainControl:false
+      }});
+      if(token!==micStartToken || !micStarting){
+        requestedStream.getTracks().forEach(t=>t.stop());
+        releaseCtx();
+        return;
       }
-      srcNode=audioCtx.createMediaStreamSource(stream);
+      stream=requestedStream;
+      requestedStream=null;
+
+      // 마이크가 실제로 열린 뒤 컨텍스트를 다시 만들어 오디오 경로 변경 중 생긴
+      // interrupted 및 running-but-silent 상태를 제거한다.
+      const ctx=await ensureCtx('play-and-record',true);
+      if(token!==micStartToken || !micStarting){ stopMic(); return; }
+      srcNode=ctx.createMediaStreamSource(stream);
 
       // 대역 제한: 럼블과 고차 배음을 걷어내 검출 안정성을 높인다
-      const hp=audioCtx.createBiquadFilter();
+      const hp=ctx.createBiquadFilter();
       hp.type='highpass'; hp.frequency.value=55; hp.Q.value=0.7;
-      const lp=audioCtx.createBiquadFilter();
+      const lp=ctx.createBiquadFilter();
       lp.type='lowpass';  lp.frequency.value=2200; lp.Q.value=0.7;
 
-      analyser=audioCtx.createAnalyser();
+      analyser=ctx.createAnalyser();
       analyser.fftSize=N;
       analyser.smoothingTimeConstant=0;
       buf=new Float32Array(N);
 
       // 기기 마이크가 조용한 경우가 많아 분석 전에 키워준다.
       // YIN은 신호 크기와 무관하지만 게이트 통과와 수치 정밀도에 도움이 된다.
-      const boost=audioCtx.createGain();
+      const boost=ctx.createGain();
       boost.gain.value=4;
 
       srcNode.connect(hp); hp.connect(lp); lp.connect(boost); boost.connect(analyser);
       micChain=[srcNode, hp, lp, boost, analyser];
 
       listening=true;
+      micStarting=false;
       setTabSounding('tuner', true, 'mic');
+      tunerStart.classList.remove('starting');
       tunerStart.classList.add('on');
       tunerStart.setAttribute('aria-label','마이크 끄기');
       tunerStart.setAttribute('aria-pressed','true');
+      tunerStart.setAttribute('aria-busy','false');
       tunerFreq.textContent='연주해보세요';
+      stream.getAudioTracks().forEach(track=>{
+        track.addEventListener('ended',()=>{
+          if(listening && token===micStartToken) stopMic('마이크 연결 끊김');
+        },{once:true});
+      });
       requestAnimationFrame(analyse);
       startStrobe();
     }catch(err){
-      setAudioSession('ambient');    // 녹음용으로 남지 않게 되돌린다
-      tunerFreq.textContent = (err && err.name==='NotAllowedError')
-        ? '마이크 권한 거부됨' : '마이크를 열 수 없음';
+      if(requestedStream) requestedStream.getTracks().forEach(t=>t.stop());
+      if(token!==micStartToken) return;
+      const message = err && err.name==='NotAllowedError' ? '마이크 권한 거부됨'
+        : err && err.name==='NotReadableError' ? '마이크가 다른 앱에서 사용 중'
+        : err && err.name==='NotFoundError' ? '사용 가능한 마이크 없음'
+        : '오디오 연결 실패 · 다시 눌러주세요';
+      stopMic(message);
     }
   });
 })();
@@ -4055,33 +4216,38 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     o.frequency.exponentialRampToValueAtTime(48,t+0.10);
     g.gain.setValueAtTime(0.58,t);
     g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
-    o.connect(g).connect(getMaster()); o.start(t); o.stop(t+0.24);
+    o.connect(g).connect(getMaster(ctx)); o.start(t); o.stop(t+0.24);
   }
   function snare(ctx,t){
     const o=ctx.createOscillator(), g=ctx.createGain();
     o.type='triangle'; o.frequency.setValueAtTime(240,t);
     g.gain.setValueAtTime(0.46,t);
     g.gain.exponentialRampToValueAtTime(0.0001,t+0.10);
-    o.connect(g).connect(getMaster()); o.start(t); o.stop(t+0.12);
+    o.connect(g).connect(getMaster(ctx)); o.start(t); o.stop(t+0.12);
     const o2=ctx.createOscillator(), g2=ctx.createGain();
     o2.type='square'; o2.frequency.setValueAtTime(1750,t);
     g2.gain.setValueAtTime(0.14,t);
     g2.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
-    o2.connect(g2).connect(getMaster()); o2.start(t); o2.stop(t+0.07);
+    o2.connect(g2).connect(getMaster(ctx)); o2.start(t); o2.stop(t+0.07);
   }
 
   /* ---------- 루프 스케줄러 ----------
      setTimeout이 아니라 오디오 클럭에 예약한다.
      탭을 전환하거나 화면이 잠깐 멈춰도 박자가 밀리지 않는다.
   ----------------------------------- */
-  let playing=false, timerID=null, nextTime=0, cursor=0, marks=[];
+  let playing=false, startPending=false, startToken=0, rhythmCtx=null;
+  let timerID=null, nextTime=0, cursor=0, marks=[];
   const AHEAD=0.16, TICK=25;
 
   function stepDur(){ return (60/parseInt(rhyBpm.value))/4; }
   function swingOff(i){ return (opts.swing && i%4===2) ? stepDur()*0.55 : 0; }
 
   function schedule(){
-    const ctx=getCtx();
+    const ctx=rhythmCtx;
+    if(!playing || !ctx || ctx!==audioCtx || ctx.state!=='running'){
+      stop();
+      return;
+    }
     const steps=pattern.length || 1;
     if(nextTime < ctx.currentTime - 0.25){      // 밀린 시간만 버리고 자리는 유지
       nextTime = ctx.currentTime + 0.05;
@@ -4093,11 +4259,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       const isBeat=i%4===0;
       const isFirst=i===0;
 
-      if(opts.metro && isBeat) playClick(when-ctx.currentTime, opts.accent && isFirst);
+      if(opts.metro && isBeat) playClick(when-ctx.currentTime, opts.accent && isFirst, ctx);
       if(pattern[i] && opts.drum){
         isBeat ? kick(ctx,when) : snare(ctx,when);
       } else if(pattern[i] && !opts.drum){
-        playClick(when-ctx.currentTime, opts.accent && isFirst);
+        playClick(when-ctx.currentTime, opts.accent && isFirst, ctx);
       }
       marks.push({time:when, i});
       nextTime += stepDur();
@@ -4109,7 +4275,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   let visualGen=0, lastCursorEl=null;
   function visual(gen){
     if(!playing || gen!==visualGen) return;
-    const ctx=getCtx();
+    const ctx=rhythmCtx;
+    if(!ctx || ctx!==audioCtx || ctx.state!=='running'){
+      stop();
+      return;
+    }
     while(marks.length && marks[0].time <= ctx.currentTime){
       const m=marks.shift();
       // 매번 전체를 훑지 않고 직전 칸만 되돌린다
@@ -4122,27 +4292,54 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     requestAnimationFrame(()=>visual(gen));
   }
 
-  function start(){
+  async function start(){
+    if(playing || startPending) return;
     if(pattern.length===0) generate();
-    const ctx=getCtx();
-    playing=true;
-    cursor=0; marks=[];
-    nextTime=ctx.currentTime+0.06;
-    schedule(); visual(++visualGen);
-    rhyPlay.classList.add('on');
-    rhyPlay.querySelector('svg').innerHTML='<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
-    setTabSounding('trainer', true, 'rhythm');
+    const token=++startToken;
+    startPending=true;
+    rhyPlay.setAttribute('aria-label','시작 중');
+    rhyPlay.setAttribute('aria-busy','true');
+    try{
+      const ctx=await ensureCtx('ambient');
+      if(token!==startToken || !startPending){
+        if(audioCtx===ctx && !anySounding()) releaseCtx();
+        return;
+      }
+      rhythmCtx=ctx;
+      playing=true;
+      cursor=0; marks=[];
+      nextTime=ctx.currentTime+0.06;
+      rhyPlay.classList.add('on');
+      rhyPlay.setAttribute('aria-label','정지');
+      rhyPlay.setAttribute('aria-busy','false');
+      rhyPlay.querySelector('svg').innerHTML='<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
+      setTabSounding('trainer',true,'rhythm');
+      schedule(); visual(++visualGen);
+    }catch(error){
+      if(token===startToken){
+        stop();
+        releaseCtx();
+      }
+    }finally{
+      if(token===startToken) startPending=false;
+    }
   }
   function stop(){
+    if(!playing && !startPending) return;
+    startToken++;
+    startPending=false;
     playing=false;
+    rhythmCtx=null;
     clearTimeout(timerID); marks=[]; lastCursorEl=null;
     rhyPlay.classList.remove('on');
+    rhyPlay.setAttribute('aria-label','재생');
+    rhyPlay.setAttribute('aria-busy','false');
     rhyPlay.querySelector('svg').innerHTML='<path d="M8 5.5v13l11-6.5z"/>';
     setTabSounding('trainer', false, 'rhythm');
     beatGrid.querySelectorAll('.gcell').forEach(c=>c.classList.remove('cursor'));
   }
-  rhyPlay.addEventListener('click', ()=> playing?stop():start());
-  registerTransport({ isPlaying:()=>playing, stop });
+  rhyPlay.addEventListener('click', ()=> (playing || startPending)?stop():start());
+  registerTransport({ isPlaying:()=>playing || startPending, stop });
 
   // 초기 패턴: 기본 락
   setPattern(PRESETS.rock.p.slice(), 4);
@@ -4314,7 +4511,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   let progression = [];        // [{deg:1..7, beats:4, sev:false}]
   let styleKey = 'rock';
   let tracks = {drum:true, bass:true, chord:true, click:false};
-  let playing = false;
+  let playing = false, startPending = false, startToken = 0, jamCtx = null;
 
   /* ---------- DOM ---------- */
   const jamKeyEl      = document.getElementById('jamKey');
@@ -4587,14 +4784,14 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     o.frequency.exponentialRampToValueAtTime(44,t+0.09);   // 피치 엔벨로프
     g.gain.setValueAtTime(0.60,t);
     g.gain.exponentialRampToValueAtTime(0.0001,t+0.30);
-    o.connect(g).connect(getMaster());
+    o.connect(g).connect(getMaster(ctx));
     o.start(t); o.stop(t+0.32);
     // 비터 클릭 — 작은 스피커에서 킥이 들리게 하는 성분
     const c=ctx.createOscillator(), cg=ctx.createGain();
     c.type='triangle'; c.frequency.setValueAtTime(1100,t);
     cg.gain.setValueAtTime(0.10,t);
     cg.gain.exponentialRampToValueAtTime(0.0001,t+0.022);
-    c.connect(cg).connect(getMaster());
+    c.connect(cg).connect(getMaster(ctx));
     c.start(t); c.stop(t+0.03);
   }
 
@@ -4604,14 +4801,14 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const g=ctx.createGain();
     g.gain.setValueAtTime(0.50,t);
     g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
-    src.connect(bp).connect(g).connect(getMaster());
+    src.connect(bp).connect(g).connect(getMaster(ctx));
     src.start(t); src.stop(t+0.18);
     // 몸통
     const o=ctx.createOscillator(), og=ctx.createGain();
     o.type='triangle'; o.frequency.setValueAtTime(190,t);
     og.gain.setValueAtTime(0.26,t);
     og.gain.exponentialRampToValueAtTime(0.0001,t+0.09);
-    o.connect(og).connect(getMaster());
+    o.connect(og).connect(getMaster(ctx));
     o.start(t); o.stop(t+0.1);
   }
   function hat(ctx, t, open){
@@ -4621,7 +4818,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     const d = open?0.16:0.045;
     g.gain.setValueAtTime(0.20,t);
     g.gain.exponentialRampToValueAtTime(0.0001,t+d);
-    src.connect(hp).connect(g).connect(getMaster());
+    src.connect(hp).connect(g).connect(getMaster(ctx));
     src.start(t); src.stop(t+d+0.02);
   }
   function bassNote(ctx, t, midi, dur){
@@ -4629,7 +4826,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     // 서브 사인을 아래에 깔아 두께를 준다.
     const f=midiToFreq(midi);
     const bus=ctx.createGain(); bus.gain.value=1;
-    bus.connect(getMaster());
+    bus.connect(getMaster(ctx));
 
     const lp=ctx.createBiquadFilter();
     lp.type='lowpass'; lp.Q.value=6;
@@ -4685,7 +4882,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   function scheduleStep(step, when){
-    const ctx=getCtx();
+    const ctx=jamCtx;
+    if(!ctx || ctx!==audioCtx || ctx.state!=='running'){ stop(); return; }
     const all=flatSteps();
     if(all.length===0){ stop(); return; }   // 마디가 다 지워졌으면 멈춘다
     const cell=all[step % all.length];
@@ -4700,7 +4898,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       if(st.hat.includes(s))   hat(ctx, when, s%8===4 && styleKey==='ballad');
     }
     if(tracks.click && s%4===0){
-      playClick(when - ctx.currentTime, cell.stepInBar===0);
+      playClick(when - ctx.currentTime, cell.stepInBar===0, ctx);
     }
     const secPerStep = (60/jamBpm)/4;
     if(tracks.bass){
@@ -4721,7 +4919,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   function scheduler(){
-    const ctx=getCtx();
+    const ctx=jamCtx;
+    if(!playing || !ctx || ctx!==audioCtx || ctx.state!=='running'){
+      stop();
+      return;
+    }
     const bpm=jamBpm;
     const secPerStep=(60/bpm)/4;
     const st=STYLES[styleKey];
@@ -4760,7 +4962,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
   function visualLoop(gen){
     if(!playing || gen!==visualGen) return;
-    const ctx=getCtx();
+    const ctx=jamCtx;
+    if(!ctx || ctx!==audioCtx || ctx.state!=='running'){
+      stop();
+      return;
+    }
     while(scheduledMarks.length && scheduledMarks[0].time <= ctx.currentTime){
       const m=scheduledMarks.shift();
       const bars=progTimeline.querySelectorAll('.prog-bar');
@@ -4777,32 +4983,58 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   }
 
   function stop(){
+    if(!playing && !startPending) return;
+    startToken++;
+    startPending=false;
     playing=false;
+    jamCtx=null;
     clearTimeout(timerID);
     scheduledMarks=[];
     visualBarIdx=-1;
     jamStart.classList.remove('on');
+    jamStart.setAttribute('aria-label','재생');
+    jamStart.setAttribute('aria-busy','false');
     jamStart.querySelector('svg').innerHTML='<path d="M8 5.5v13l11-6.5z"/>';
     setTabSounding('jam', false, 'play');
     progTimeline.querySelectorAll('.prog-bar').forEach(b=>b.classList.remove('now'));
   }
 
-  jamStart.addEventListener('click', ()=>{
-    if(playing){ stop(); return; }
+  jamStart.addEventListener('click', async ()=>{
+    if(playing || startPending){ stop(); return; }
     if(progression.length===0) return;
-    const ctx=getCtx();
-    playing=true;
-    stepCursor=0; scheduledMarks=[];
-    visualBarIdx=-1;
-    nextStepTime=ctx.currentTime+0.06;
-    scheduler();
-    visualLoop(++visualGen);
-    jamStart.classList.add('on');
-    jamStart.querySelector('svg').innerHTML='<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
-    setTabSounding('jam', true, 'play');
+    const token=++startToken;
+    startPending=true;
+    jamStart.setAttribute('aria-label','시작 중');
+    jamStart.setAttribute('aria-busy','true');
+    try{
+      const ctx=await ensureCtx('ambient');
+      if(token!==startToken || !startPending){
+        if(audioCtx===ctx && !anySounding()) releaseCtx();
+        return;
+      }
+      jamCtx=ctx;
+      playing=true;
+      stepCursor=0; scheduledMarks=[];
+      visualBarIdx=-1;
+      nextStepTime=ctx.currentTime+0.06;
+      jamStart.classList.add('on');
+      jamStart.setAttribute('aria-label','정지');
+      jamStart.setAttribute('aria-busy','false');
+      jamStart.querySelector('svg').innerHTML='<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
+      setTabSounding('jam',true,'play');
+      scheduler();
+      visualLoop(++visualGen);
+    }catch(error){
+      if(token===startToken){
+        stop();
+        releaseCtx();
+      }
+    }finally{
+      if(token===startToken) startPending=false;
+    }
   });
 
-  registerTransport({ isPlaying:()=>playing, stop });
+  registerTransport({ isPlaying:()=>playing || startPending, stop });
 
   /* ---------- 초기화 ---------- */
   jamPresetKey='pop'; jamPresetDD.set(PRESET_KEYS.indexOf('pop'));
@@ -4935,7 +5167,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ===================== 서비스워커 등록 ===================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js?v=105').then(reg=>{
+    navigator.serviceWorker.register('service-worker.js?v=107').then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
       reg.update().catch(()=>{});
       reg.addEventListener('updatefound', ()=>{
