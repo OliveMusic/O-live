@@ -141,7 +141,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.7');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.9');
 }
 
 test.afterEach(async({page})=>{
@@ -167,7 +167,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=127');
+  expect(workerUrl).toContain('service-worker.js?v=129');
 });
 
 test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{
@@ -193,6 +193,42 @@ test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유
   expect(metrics.rightGap).toBeLessThanOrEqual(1);
   expect(metrics.baselineGap).toBeLessThanOrEqual(3);
   expect(Math.abs(metrics.height-intervalHeight)).toBeLessThanOrEqual(1);
+});
+
+test('청음 오답 후 선택지를 같은 루트로 비교하고 올리브로 다음 문제를 시작한다',async({page})=>{
+  await preparePage(page);
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.evaluate(()=>{
+    Math.random=()=>0;
+    window.__earTones=[];
+    window.playTone=(...args)=>{ window.__earTones.push(args); return {}; };
+  });
+  await page.locator('#earModes .pill',{hasText:'음정'}).click();
+
+  const choices=page.locator('#earChoices .choice-row');
+  const wrong=choices.first();
+  const correct=page.locator('#earChoices .choice-row',{hasText:'장2도'});
+  await wrong.click();
+
+  await expect(wrong).toHaveClass(/wrong/);
+  await expect(correct).toHaveClass(/correct/);
+  await expect(page.locator('#earFeedback')).toHaveText('오답');
+  await expect(page.locator('#earPlayBtn')).toHaveAttribute('aria-label','다음 문제');
+  for(let i=0;i<await choices.count();i++) await expect(choices.nth(i)).toBeEnabled();
+  await expect(page.locator('#earTotal')).toHaveText('1');
+  await expect.poll(()=>page.evaluate(()=>window.__earTones.length)).toBe(2);
+
+  await correct.click();
+  await expect.poll(()=>page.evaluate(()=>window.__earTones.length)).toBe(4);
+  await expect(page.locator('#earTotal')).toHaveText('1');
+  await page.locator('#earReplay').click();
+  await expect.poll(()=>page.evaluate(()=>window.__earTones.length)).toBe(6);
+
+  await page.locator('#earPlayBtn').click();
+  await expect(page.locator('#earFeedback')).toBeEmpty();
+  await expect(page.locator('#earPlayBtn')).toHaveAttribute('aria-label','문제 듣기');
+  await expect(choices.first()).not.toHaveClass(/wrong|correct/);
+  await expect.poll(()=>page.evaluate(()=>window.__earTones.length)).toBe(8);
 });
 
 test('메트로놈 재생 중 튜너로 가면 방해 음원이 즉시 정지한다',async({page})=>{

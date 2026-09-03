@@ -50,7 +50,7 @@
   ];
 
   let mode = 'interval', level = 1;
-  let current = null, answered = false, nextTimer = null, playFlash = null;
+  let current = null, answered = false, reviewingWrong = false, nextTimer = null, playFlash = null;
   let score = 0, total = 0, streak = 0;
 
   const earModes    = document.getElementById('earModes');
@@ -322,9 +322,11 @@
   function newQuestion(autoPlay){
     clearTimeout(nextTimer); nextTimer=null;
     answered=false;
+    reviewingWrong=false;
     earFeedback.textContent='';
     earFeedback.className='feedback-msg';
     earPrompt.textContent='소리를 듣고 정답을 선택하세요';
+    earPlayBtn.setAttribute('aria-label','문제 듣기');
 
     const pool = bank();
     const answer = pool[Math.floor(Math.random()*pool.length)];
@@ -356,39 +358,48 @@
   }
 
   function check(picked, answer, el){
-    if(answered) return;
+    // 오답을 확인한 뒤에는 선택지를 같은 루트로 자유롭게 비교한다.
+    // 채점과 기록은 첫 선택에서만 일어난다.
+    if(answered){
+      if(reviewingWrong) playAnswer(picked);
+      return;
+    }
     answered=true;
-    earChoices.querySelectorAll('.choice-row').forEach(b=>b.disabled=true);
     total++;
     const correct=picked===answer;
     if(correct){
+      earChoices.querySelectorAll('.choice-row').forEach(b=>b.disabled=true);
       score++; streak++;
       el.classList.add('correct');
       earFeedback.textContent='정답';
       earFeedback.className='feedback-msg ok';
     } else {
+      reviewingWrong=true;
       streak=0;
       el.classList.add('wrong');
-      earFeedback.textContent='정답은 '+answer.ko;
+      earFeedback.textContent='오답';
       earFeedback.className='feedback-msg no';
+      earPrompt.textContent='선택지를 눌러 비교 · 올리브로 다음 문제';
+      earPlayBtn.setAttribute('aria-label','다음 문제');
       Array.from(earChoices.children).forEach(b=>{
         if(b.querySelector('.ko').textContent===answer.ko) b.classList.add('correct');
       });
+      playAnswer(picked);
     }
     renderStats();
     recordEarResult(correct);
-    nextTimer=setTimeout(()=>newQuestion(true), 1500);
+    if(correct) nextTimer=setTimeout(()=>newQuestion(true), 1500);
   }
 
   /* ---------- 재생 ---------- */
-  function playCurrent(){
+  function playAnswer(answer, flashButton=false){
     if(!current) return;
-    const ctx=getCtx();
-    const {answer, root}=current;
-    earPlayBtn.classList.add('playing');
-    clearTimeout(playFlash);                 // 연타하면 앞 타이머가 먼저 꺼버렸다
-    playFlash=setTimeout(()=>earPlayBtn.classList.remove('playing'), 900);
-
+    const {root}=current;
+    if(flashButton){
+      earPlayBtn.classList.add('playing');
+      clearTimeout(playFlash);               // 연타하면 앞 타이머가 먼저 꺼버렸다
+      playFlash=setTimeout(()=>earPlayBtn.classList.remove('playing'), 900);
+    }
     if(mode==='interval'){
       playTone(midiToFreq(root), 0.5, 0, 'triangle', 0.98);
       playTone(midiToFreq(root+answer.semis), 0.5, 0.6, 'triangle', 0.98);
@@ -400,6 +411,10 @@
     } else {
       answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.3, i*0.23, 'triangle', 0.84));
     }
+  }
+  function playCurrent(){
+    if(!current) return;
+    playAnswer(current.answer,true);
   }
   // 다음 문제가 예약돼 있는 동안도 '소리 낼 예정'인 상태다.
   // 화면이 꺼질 때 같이 세우지 않으면 세션 밖에서 울린다.
@@ -414,11 +429,13 @@
     }
   });
 
-  earPlayBtn.addEventListener('click', playCurrent);
+  earPlayBtn.addEventListener('click', ()=>{
+    if(reviewingWrong) newQuestion(true);
+    else playCurrent();
+  });
   earReplay.addEventListener('click', playCurrent);
 
   renderStats();
   renderEarCalendar();
   newQuestion(false);
 })();
-

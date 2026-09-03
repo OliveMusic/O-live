@@ -86,6 +86,8 @@
     --on-signal:#ffffff;
     --signal-display:#93ab76;      /* 어두운 디스플레이 창 위에서는 밝은 톤 */
     --signal-soft:rgba(104,124,82,.14);
+    --error:#8b514a;              /* 청음 오답 — 앱 톤에 맞춘 저채도 벽돌색 */
+    --on-error:#ffffff;
     --olive-thumb: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 22.83 18.95%27%3E%3Cg transform=%27rotate(-12 11.42 9.48)%27%3E%3Cellipse cx=%2711.42%27 cy=%279.48%27 rx=%2711.5%27 ry=%279.375%27 fill=%27%23687c52%27/%3E%3Ccircle cx=%2715.974%27 cy=%279.48%27 r=%273.473%27 fill=%27%23e5e3dd%27/%3E%3C/g%3E%3C/svg%3E");  /* 슬라이더 손잡이: 씨=카드색(불투명) */
 
     --r:9px;
@@ -120,6 +122,8 @@
       --on-signal:#1e2417;   /* 다크의 세이지는 밝아서 어두운 글자가 읽힌다 */
       --signal-display:#a3b58c;
       --signal-soft:rgba(151,169,130,.17);
+      --error:#9d625a;
+      --on-error:#fff8f5;
     }
   }
 
@@ -1247,15 +1251,15 @@
   .choice-row.correct .ko{ color:var(--on-signal); }
   .choice-row.correct .en{ color:rgba(255,255,255,.55); }
   .choice-row.correct .degrees{color:var(--on-signal);}
-  .choice-row.wrong{ background:var(--signal); border-color:var(--signal); }
-  .choice-row.wrong .ko{ color:var(--on-signal); }
-  .choice-row.wrong .en{ color:rgba(255,255,255,.6); }
-  .choice-row.wrong .degrees{color:var(--on-signal);}
+  .choice-row.wrong{ background:var(--error); border-color:var(--error); }
+  .choice-row.wrong .ko{ color:var(--on-error); }
+  .choice-row.wrong .en{ color:var(--on-error); opacity:.62; }
+  .choice-row.wrong .degrees{color:var(--on-error);}
   .choice-row[disabled]{ opacity:1; }
   .choice-row:disabled:not(.correct):not(.wrong){ opacity:.45; }
 
   .feedback-msg.ok{ color:var(--ink); }
-  .feedback-msg.no{ color:var(--signal); }
+  .feedback-msg.no{ color:var(--error); }
 
   /* ---------- 리듬: 비트 그리드 ---------- */
   .beat-grid{ padding:4px 0; overflow-x:auto; }
@@ -2035,19 +2039,19 @@
   </section>
 </div>
 
-<script src="app-version.js?v=127"></script>
+<script src="app-version.js?v=129"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=127"></script>
-<script src="js/audio-runtime.js?v=127"></script>
-<script src="js/core.js?v=127"></script>
-<script src="js/metronome.js?v=127"></script>
-<script src="js/tuner-engine.js?v=127"></script>
-<script src="js/tuner.js?v=127"></script>
-<script src="js/scales.js?v=127"></script>
-<script src="js/ear-trainer.js?v=127"></script>
-<script src="js/rhythm-trainer.js?v=127"></script>
-<script src="js/jam-session.js?v=127"></script>
-<script src="js/app-shell.js?v=127"></script>
+<script src="cloud-sync.js?v=129"></script>
+<script src="js/audio-runtime.js?v=129"></script>
+<script src="js/core.js?v=129"></script>
+<script src="js/metronome.js?v=129"></script>
+<script src="js/tuner-engine.js?v=129"></script>
+<script src="js/tuner.js?v=129"></script>
+<script src="js/scales.js?v=129"></script>
+<script src="js/ear-trainer.js?v=129"></script>
+<script src="js/rhythm-trainer.js?v=129"></script>
+<script src="js/jam-session.js?v=129"></script>
+<script src="js/app-shell.js?v=129"></script>
 </body>
 </html>
