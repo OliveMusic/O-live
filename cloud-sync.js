@@ -26,6 +26,7 @@
   let ui={};
   let sheetTrigger=null;
   let schemaContract={ready:false,version:0,checkedAt:0};
+  const sessionSubscribers=new Set();
 
   function readJSON(key,fallback){
     try{
@@ -155,7 +156,7 @@
     const code=String(error&&error.code||'');
     const message=String(error&&error.message||'');
     return ['42703','42883','PGRST202','PGRST204'].includes(code) ||
-      /olive_schema_version|record_ear_answer|p_training_mode|interval_correct_count|chord_correct_count|scale_correct_count|schema cache/i.test(message);
+      /olive_schema_version|record_ear_answer|p_training_mode|interval_correct_count|chord_correct_count|scale_correct_count|practice_recordings|practice_recording|schema cache/i.test(message);
   }
   function showSchemaUpgrade(fromButton){
     const code=schemaErrorCode();
@@ -460,16 +461,124 @@
     }
     if(handlers.clearPreferences) handlers.clearPreferences();
   }
+  function notifySession(){
+    sessionSubscribers.forEach(listener=>{
+      try{ listener(currentUser); }catch(error){ console.warn('[O\'live cloud session]',error); }
+    });
+  }
+  function subscribeSession(listener){
+    if(typeof listener!=='function') return ()=>{};
+    sessionSubscribers.add(listener);
+    Promise.resolve().then(()=>listener(currentUser));
+    return ()=>sessionSubscribers.delete(listener);
+  }
+  async function ensureRecordingAccess(){
+    if(!client || !currentUser){
+      const error=new Error('Authentication required'); error.code='AUTH-401'; throw error;
+    }
+    if(!navigator.onLine){
+      const error=new Error('Network unavailable'); error.code='NET-001'; throw error;
+    }
+    if(!await checkSchemaContract(false)){
+      const error=new Error('Recording schema is not ready'); error.code=schemaErrorCode(); throw error;
+    }
+  }
+  async function listRecordings(){
+    await ensureRecordingAccess();
+    const {data,error}=await client.from('practice_recordings')
+      .select('id,title,object_path,duration_ms,byte_size,mime_type,recorded_at,created_at')
+      .eq('status','ready')
+      .order('recorded_at',{ascending:false})
+      .limit(50);
+    if(error) throw error;
+    return data||[];
+  }
+  async function uploadRecording(recording){
+    await ensureRecordingAccess();
+    const id=String(recording&&recording.id||'');
+    const extension=String(recording&&recording.extension||'').toLowerCase();
+    const objectPath=`${activeUserId}/${id}.${extension}`;
+    const mimeType=String(recording&&recording.mimeType||'').toLowerCase();
+    const {error:reserveError}=await client.rpc('reserve_practice_recording',{
+      p_recording_id:id,
+      p_title:String(recording&&recording.title||''),
+      p_object_path:objectPath,
+      p_duration_ms:Math.round(Number(recording&&recording.durationMs)||0),
+      p_byte_size:Number(recording&&recording.blob&&recording.blob.size)||0,
+      p_mime_type:mimeType,
+    });
+    if(reserveError) throw reserveError;
+    let uploaded=false;
+    try{
+      const {error:uploadError}=await client.storage.from('practice-recordings').upload(
+        objectPath,recording.blob,{contentType:mimeType,cacheControl:'3600',upsert:false}
+      );
+      if(uploadError) throw uploadError;
+      uploaded=true;
+      const {data,error:finalizeError}=await client.rpc('finalize_practice_recording',{
+        p_recording_id:id,
+      });
+      if(finalizeError) throw finalizeError;
+      if(!data) throw new Error('Recording finalize failed');
+      return true;
+    }catch(error){
+      if(uploaded){
+        try{ await client.storage.from('practice-recordings').remove([objectPath]); }catch(e){}
+      }
+      try{ await client.rpc('cancel_practice_recording',{p_recording_id:id}); }catch(e){}
+      throw error;
+    }
+  }
+  async function renameRecording(id,title){
+    await ensureRecordingAccess();
+    const {data,error}=await client.rpc('rename_practice_recording',{
+      p_recording_id:id,p_title:title,
+    });
+    if(error) throw error;
+    if(!data) throw new Error('Recording was not found');
+    return true;
+  }
+  async function deleteRecording(recording){
+    await ensureRecordingAccess();
+    const path=String(recording&&recording.object_path||'');
+    const id=String(recording&&recording.id||'');
+    const {error:storageError}=await client.storage.from('practice-recordings').remove([path]);
+    if(storageError) throw storageError;
+    const {error}=await client.rpc('remove_practice_recording',{p_recording_id:id});
+    if(error) throw error;
+    return true;
+  }
+  async function downloadRecording(recording){
+    await ensureRecordingAccess();
+    const {data,error}=await client.storage.from('practice-recordings')
+      .download(String(recording&&recording.object_path||''));
+    if(error) throw error;
+    return {blob:data};
+  }
+  async function deleteAllRecordingObjects(){
+    if(!client || !currentUser || !client.storage) return;
+    const {data,error}=await client.storage.from('practice-recordings')
+      .list(activeUserId,{limit:100,offset:0});
+    if(error){
+      if(isSchemaMismatchError(error) || /bucket not found/i.test(String(error.message||''))) return;
+      throw error;
+    }
+    const paths=(data||[]).filter(item=>item&&item.name).map(item=>`${activeUserId}/${item.name}`);
+    if(!paths.length) return;
+    const {error:removeError}=await client.storage.from('practice-recordings').remove(paths);
+    if(removeError) throw removeError;
+  }
   async function deleteCloudData(){
     if(!client || !currentUser || syncing) return;
     const accepted=window.confirm(
-      '클라우드의 청음 기록과 연습 설정을 모두 삭제할까요? 계정은 유지되며, 삭제한 데이터는 복구할 수 없습니다.'
+      '클라우드의 녹음, 청음 기록과 연습 설정을 모두 삭제할까요? 계정은 유지되며, 삭제한 데이터는 복구할 수 없습니다.'
     );
     if(!accepted) return;
     syncing=true;
     renderSheet();
     setMessage('클라우드 데이터를 삭제하는 중입니다');
     try{
+      await deleteAllRecordingObjects();
       const {error}=await client.rpc('delete_my_cloud_data');
       if(error) throw error;
       clearLocalAccountData();
@@ -487,7 +596,7 @@
   async function deleteAccount(){
     if(!client || !currentUser || syncing) return;
     const accepted=window.confirm(
-      'O’live 계정을 완전히 삭제할까요? 청음 기록과 연습 설정도 함께 삭제되며 복구할 수 없습니다.'
+      'O’live 계정을 완전히 삭제할까요? 녹음, 청음 기록과 연습 설정도 함께 삭제되며 복구할 수 없습니다.'
     );
     if(!accepted) return;
     syncing=true;
@@ -552,6 +661,7 @@
       setState(configured?'signedout':'unconfigured');
       setMessage('');
       renderSheet();
+      notifySession();
       return;
     }
     currentUser=user;
@@ -560,6 +670,7 @@
     handlers.useUserHistory(user.id,cached);
     setState(navigator.onLine?'syncing':'offline');
     renderSheet();
+    notifySession();
     await syncAndRefresh(false);
   }
   function recordAnswer(date,correct,mode){
@@ -638,5 +749,12 @@
     recordAnswer,
     openAccount:openSheet,
     isConfigured:()=>configured,
+    getUser:()=>currentUser,
+    subscribeSession,
+    listRecordings,
+    uploadRecording,
+    renameRecording,
+    deleteRecording,
+    downloadRecording,
   };
 })();

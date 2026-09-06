@@ -141,7 +141,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.2.9');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.0');
 }
 
 test.afterEach(async({page})=>{
@@ -167,7 +167,33 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=129');
+  expect(workerUrl).toContain('service-worker.js?v=130');
+});
+
+test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
+  await preparePage(page);
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await expect(page.locator('#trainerSeg .seg-btn')).toHaveCount(3);
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expect(page.locator('#pane-record')).toBeVisible();
+  await expect(page.locator('#recordGuest')).toBeVisible();
+  await expect(page.locator('#recordWorkspace')).toBeHidden();
+  await expect(page.locator('#recordUsage')).toHaveText('0 / 50');
+
+  const olive=await page.locator('.record-olive-static').evaluate(element=>{
+    const rect=element.getBoundingClientRect();
+    const seed=getComputedStyle(element,'::after');
+    return {width:rect.width,height:rect.height,transform:getComputedStyle(element).transform,
+      seedWidth:seed.width,seedHeight:seed.height};
+  });
+  expect(olive.width).toBeCloseTo(76,1);
+  expect(olive.height).toBeCloseTo(62.5,1);
+  expect(olive.transform).not.toBe('none');
+  expect(olive.seedWidth).toBe('23px');
+  expect(olive.seedHeight).toBe('23px');
+
+  await page.locator('#recordConnect').click();
+  await expect(page.locator('#cloudAuthSheet')).toBeVisible();
 });
 
 test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{

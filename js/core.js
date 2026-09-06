@@ -408,6 +408,8 @@ const tabTitles = {metronome:'메트로놈', tuner:'튜너', scales:'스케일',
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     const id = btn.dataset.tab;
+    const leavingTrainer = id !== 'trainer' && document.getElementById('tab-trainer').classList.contains('active');
+    if(leavingTrainer && window.OliveRecorder) window.OliveRecorder.stopForNavigation();
     const enteringTuner = id === 'tuner' && !btn.classList.contains('active');
     if(enteringTuner){
       // 튜닝을 방해하지 않도록 루프와 예약된 다음 문제를 모두 멈춘다.

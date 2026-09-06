@@ -7,7 +7,7 @@ const read=file=>fs.readFileSync(file,'utf8');
 const indexHtml=read('index.html');
 const appScripts=[
   'js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner-engine.js','js/tuner.js','js/scales.js',
-  'js/ear-trainer.js','js/rhythm-trainer.js','js/jam-session.js','js/app-shell.js',
+  'js/ear-trainer.js','js/rhythm-trainer.js','js/recorder.js','js/jam-session.js','js/app-shell.js',
 ].map(read).join('\n');
 const index=indexHtml+'\n'+appScripts;
 const about=read('about.html');
@@ -34,7 +34,9 @@ for(const href of ['about.html','privacy.html','terms.html']){
 
 assert.match(about,/Google 계정 연결은 선택 사항/);
 assert.match(about,/마이크로 음정을 확인/);
-assert.match(privacy,/마이크 오디오는 음정을 계산하기 위해/);
+assert.match(privacy,/튜너의 마이크 오디오는/);
+assert.match(privacy,/클라우드에 저장/);
+assert.match(privacy,/저장하기 전에 버린 녹음은 서버로 전송되지 않습니다/);
 assert.match(privacy,/Google API 서비스 사용자 데이터 정책/);
 assert.match(privacy,/데이터%20삭제%20요청/);
 assert.match(privacy,/클라우드 데이터 삭제/);

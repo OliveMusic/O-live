@@ -4,9 +4,13 @@
   if(!seg) return;
   seg.querySelectorAll('.seg-btn').forEach(b=>{
     b.addEventListener('click', ()=>{
+      const previous=seg.querySelector('.seg-btn.active');
+      const m=b.dataset.mode;
+      if(previous && previous.dataset.mode==='record' && m!=='record' && window.OliveRecorder){
+        window.OliveRecorder.stopForNavigation();
+      }
       seg.querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active'));
       b.classList.add('active');
-      const m=b.dataset.mode;
       document.querySelectorAll('.trainer-pane').forEach(p=>
         p.classList.toggle('active', p.id==='pane-'+m));
       // 리듬 그리드는 보이게 된 뒤에야 폭을 잴 수 있다

@@ -69,6 +69,29 @@ Deno.serve(async (request) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const { data: recordingObjects, error: listError } = await adminClient.storage
+    .from("practice-recordings")
+    .list(user.id, { limit: 100, offset: 0 });
+  if (listError && !/bucket not found/i.test(listError.message)) {
+    return new Response(JSON.stringify({ error: listError.message }), {
+      status: 500,
+      headers,
+    });
+  }
+  const recordingPaths = (recordingObjects ?? [])
+    .filter((item) => item.name)
+    .map((item) => `${user.id}/${item.name}`);
+  if (recordingPaths.length) {
+    const { error: storageError } = await adminClient.storage
+      .from("practice-recordings")
+      .remove(recordingPaths);
+    if (storageError) {
+      return new Response(JSON.stringify({ error: storageError.message }), {
+        status: 500,
+        headers,
+      });
+    }
+  }
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
   if (deleteError) {
     return new Response(JSON.stringify({ error: deleteError.message }), {

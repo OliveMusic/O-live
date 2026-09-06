@@ -1522,7 +1522,7 @@
 
   /* ---------- 트레이너: 하위 모드 전환 ---------- */
   .seg{
-    display:grid; grid-template-columns:1fr 1fr; gap:4px;
+    display:grid; grid-template-columns:repeat(3,1fr); gap:4px;
     background:var(--body-hi); border-radius:var(--r-pill); padding:4px;
   }
   .seg-btn{
@@ -1535,6 +1535,151 @@
   .seg-btn.active{ background:var(--signal); color:var(--on-signal); }
   .trainer-pane{ display:none; }
   .trainer-pane.active{ display:block; animation:in .24s var(--ease-out); }
+
+  /* ---------- 녹음 ---------- */
+  .record-stage{ text-align:center; padding:20px 0 8px; }
+  .record-signin{ padding:18px 8px 8px; text-align:center; }
+  .record-signin p{
+    max-width:280px; margin:17px auto 20px;
+    color:var(--ink-3); font-size:.7188rem; line-height:1.65;
+  }
+  .record-signin .btn{ max-width:330px; margin-inline:auto; }
+  /* 튜너와 청음 오브의 비율·기울기·씨 위치를 그대로 쓴다. */
+  .record-olive-static,.record-olive{
+    position:relative; width:76px; height:62.5px; border-radius:50%;
+    transform:rotate(-11deg); display:flex; align-items:center; justify-content:center;
+  }
+  .record-olive-static{
+    margin:2px auto 0; background:var(--key); border:1px solid var(--line);
+  }
+  .record-olive{
+    margin:18px auto 0; padding:0; cursor:pointer;
+    background:var(--key); border:1px solid var(--line);
+    transition:background .15s var(--ease-out), border-color .15s var(--ease-out), transform .12s var(--ease-out);
+  }
+  .record-olive:active{ transform:rotate(-11deg) scale(.94); }
+  .record-olive::after,.record-olive-static::after{
+    content:''; position:absolute; left:calc(50% + 15px); top:50%;
+    width:23px; height:23px; border-radius:50%; background:var(--panel);
+    transform:translate(-50%,-50%);
+  }
+  .record-olive svg,.record-olive-static svg{
+    width:23px; height:23px; transform:rotate(11deg) translateX(-11px);
+    fill:none; stroke:var(--ink-2); stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round;
+  }
+  .record-olive .record-seed-symbol{
+    position:absolute; z-index:2; left:calc(50% + 15px); top:50%;
+    width:9px; height:9px; border-radius:50%; background:var(--error);
+    transform:translate(-50%,-50%) rotate(11deg);
+  }
+  .record-olive[data-mode="starting"]{ background:var(--signal-soft); border-color:var(--signal); }
+  .record-olive[data-mode="recording"]{ background:var(--signal); border-color:var(--signal); }
+  .record-olive[data-mode="recording"] svg{ stroke:var(--on-signal); }
+  .record-olive[data-mode="recording"]::after{ background:var(--seed-on); }
+  .record-olive[data-mode="recording"] .record-seed-symbol{
+    width:9px; height:9px; border-radius:2px; background:var(--on-signal);
+  }
+  .record-olive[data-mode="preview"] .record-seed-symbol{
+    width:0; height:0; border-radius:0; background:transparent;
+    border-left:7px solid var(--ink-2); border-top:5px solid transparent; border-bottom:5px solid transparent;
+    transform:translate(-38%,-50%) rotate(11deg);
+  }
+  .record-olive[data-mode="preview"].playing{ background:var(--signal); border-color:var(--signal); }
+  .record-timer{
+    font-size:3.65rem; font-weight:200; line-height:1; letter-spacing:-.04em;
+    font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1; font-optical-sizing:auto;
+  }
+  .record-state{
+    min-height:20px; margin-top:10px; display:flex; align-items:center; justify-content:center; gap:6px;
+    color:var(--ink-2); font-size:.7188rem; font-weight:500;
+  }
+  .record-state-dot{ width:7px; height:7px; border-radius:50%; background:var(--error); }
+  .record-level{
+    width:min(250px,76%); height:3px; margin:22px auto 4px; border-radius:3px;
+    overflow:hidden; background:var(--line-soft);
+  }
+  .record-level-fill{
+    display:block; width:100%; height:100%; transform:scaleX(0); transform-origin:left center;
+    background:var(--signal); transition:transform .07s linear;
+  }
+  .record-hint{ min-height:18px; margin:14px 0 0; }
+  .record-draft{ max-width:330px; margin:20px auto 0; }
+  .record-title{
+    width:100%; min-height:44px; padding:10px 12px; border-radius:var(--r);
+    border:1px solid var(--line); background:var(--key); color:var(--ink);
+    font:500 .75rem/1.4 inherit; outline:none;
+  }
+  .record-title:focus{ border-color:var(--signal); box-shadow:0 0 0 2px var(--signal-soft); }
+  .record-draft-actions{ display:grid; grid-template-columns:1fr 1.45fr; gap:7px; margin-top:8px; }
+  .record-message{ min-height:19px; margin:12px 0 0; color:var(--signal); font-size:.6875rem; }
+  .record-message.error{ color:var(--error); }
+  .record-list-head{ margin-bottom:4px; }
+  .record-usage{ color:var(--ink-3); font-size:.6875rem; font-variant-numeric:tabular-nums; }
+  .record-list{ margin:0 -8px -8px; }
+  .record-empty{ margin:0; padding:34px 12px; text-align:center; color:var(--ink-3); font-size:.7188rem; }
+  .record-row{
+    min-height:66px; display:grid; grid-template-columns:52px minmax(0,1fr) auto 44px;
+    align-items:center; gap:8px; padding:7px 0 7px 8px; border-top:1px solid var(--line-soft);
+  }
+  .record-row-play{
+    position:relative; width:52px; height:44px; padding:0; border-radius:50%;
+    transform:rotate(-11deg); background:var(--key); border:1px solid var(--line); cursor:pointer;
+    transition:background .12s var(--ease-out),border-color .12s var(--ease-out),transform .12s var(--ease-out);
+  }
+  .record-row-play::after{
+    content:''; position:absolute; left:calc(50% + 10px); top:50%; width:17px; height:17px;
+    border-radius:50%; background:var(--panel); transform:translate(-50%,-50%);
+  }
+  .record-row-play span{
+    position:absolute; z-index:2; left:calc(50% + 11px); top:50%; width:0; height:0;
+    border-left:6px solid var(--ink-2); border-top:4px solid transparent; border-bottom:4px solid transparent;
+    transform:translate(-50%,-50%) rotate(11deg);
+  }
+  .record-row-play:active{ transform:rotate(-11deg) scale(.92); }
+  .record-row-play.playing{ background:var(--signal); border-color:var(--signal); }
+  .record-row-play.playing span{
+    width:7px; height:8px; border:0; background:linear-gradient(90deg,var(--ink-2) 0 2px,transparent 2px 5px,var(--ink-2) 5px 7px);
+  }
+  .record-row-copy{ min-width:0; display:flex; flex-direction:column; gap:4px; }
+  .record-row-copy strong{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.75rem; font-weight:500; }
+  .record-row-copy small{ color:var(--ink-3); font-size:.625rem; }
+  .record-row-duration{ color:var(--ink-2); font-size:.6875rem; font-variant-numeric:tabular-nums; }
+  .record-row-more{
+    width:44px; height:44px; padding:0; border:0; background:transparent; color:var(--ink-3);
+    font-size:.7rem; letter-spacing:1px; cursor:pointer; border-radius:50%;
+  }
+  .record-row-more:active{ background:var(--key); }
+  body.record-menu-open{ overflow:hidden; }
+  .record-menu-backdrop{
+    position:fixed; inset:0; z-index:80; display:flex; align-items:flex-end; justify-content:center;
+    padding:16px max(12px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+    background:rgba(10,10,9,.48); opacity:0; transition:opacity .18s var(--ease-out);
+  }
+  .record-menu-backdrop[hidden]{ display:none; }
+  .record-menu-backdrop.open{ opacity:1; }
+  .record-menu-wrap{
+    width:min(100%,480px); transform:translateY(calc(100% + 24px));
+    transition:transform .22s var(--ease-out);
+  }
+  .record-menu-backdrop.open .record-menu-wrap{ transform:translateY(0); }
+  .record-menu-sheet,.record-menu-cancel{
+    overflow:hidden; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--body-hi);
+  }
+  .record-menu-title{
+    display:block; padding:14px 16px 10px; color:var(--ink-3); font-size:.6875rem;
+    font-weight:500; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .record-menu-sheet button,.record-menu-cancel{
+    width:100%; min-height:48px; border:0; border-top:1px solid var(--line-soft);
+    background:transparent; color:var(--ink); font:500 .7812rem/1 inherit; cursor:pointer;
+  }
+  .record-menu-sheet button:active,.record-menu-cancel:active{ background:var(--key-press); }
+  .record-menu-sheet .danger{ color:var(--error); }
+  .record-menu-cancel{ margin-top:8px; border:1px solid var(--line); }
+
+  @media (prefers-reduced-motion:reduce){
+    .record-menu-backdrop,.record-menu-wrap{ transition:opacity .18s ease; transform:none; }
+  }
 
   /* ---------- 잼: 상단 트랜스포트 ---------- */
   /* 키·모드 드롭다운이 남는 공간을 다 갖고, BPM은 재생 버튼 왼쪽에 붙는다.
@@ -1782,6 +1927,7 @@
         <div class="seg" id="trainerSeg">
           <button class="seg-btn active" data-mode="ear">청음</button>
           <button class="seg-btn" data-mode="rhythm">리듬</button>
+          <button class="seg-btn" data-mode="record">녹음</button>
         </div>
       </div>
 
@@ -1905,6 +2051,55 @@
       </div>
     
       </div>
+
+      <div class="trainer-pane" id="pane-record">
+        <div class="card">
+          <div class="record-signin" id="recordGuest">
+            <span class="record-olive-static" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <rect x="9" y="4" width="6" height="11" rx="3"/>
+                <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3M9 20h6"/>
+              </svg>
+            </span>
+            <p>녹음은 연결한 계정에 비공개로 저장됩니다.</p>
+            <button class="btn primary wide" id="recordConnect" type="button">Google 계정 연결</button>
+          </div>
+
+          <div class="record-stage" id="recordWorkspace" hidden>
+            <div class="record-timer" id="recordTimer">00:00</div>
+            <div class="record-state">
+              <i class="record-state-dot" id="recordStateDot" hidden></i>
+              <span id="recordState">새 녹음</span>
+            </div>
+            <div class="record-level" aria-hidden="true"><i class="record-level-fill" id="recordLevelFill"></i></div>
+            <button class="record-olive" id="recordToggle" type="button" data-mode="idle" aria-label="녹음 시작">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="9" y="4" width="6" height="11" rx="3"/>
+                <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3M9 20h6"/>
+              </svg>
+              <span class="record-seed-symbol" aria-hidden="true"></span>
+            </button>
+            <p class="hint record-hint" id="recordHint">최대 5분 · 저장하기 전에 먼저 들어볼 수 있습니다</p>
+
+            <div class="record-draft" id="recordDraft" hidden>
+              <input class="record-title" id="recordTitle" type="text" maxlength="80" autocomplete="off" aria-label="녹음 이름">
+              <div class="record-draft-actions">
+                <button class="btn" id="recordDiscard" type="button">버리기</button>
+                <button class="btn primary" id="recordSave" type="button">저장</button>
+              </div>
+            </div>
+            <p class="record-message" id="recordMessage" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <div class="card" id="recordListCard" hidden>
+          <div class="row record-list-head">
+            <h2 style="margin:0;">내 녹음</h2>
+            <span class="record-usage" id="recordUsage">0 / 50</span>
+          </div>
+          <div class="record-list" id="recordList"></div>
+        </div>
+      </div>
     </section>
 
     <!-- JAM -->
@@ -1982,6 +2177,18 @@
   </nav>
 </div>
 
+<div class="record-menu-backdrop" id="recordMenuBackdrop" hidden>
+  <div class="record-menu-wrap">
+    <section class="record-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="recordMenuTitle">
+      <strong class="record-menu-title" id="recordMenuTitle"></strong>
+      <button id="recordMenuRename" type="button">이름 변경</button>
+      <button id="recordMenuDownload" type="button">다운로드</button>
+      <button class="danger" id="recordMenuDelete" type="button">삭제</button>
+    </section>
+    <button class="record-menu-cancel" id="recordMenuCancel" type="button">취소</button>
+  </div>
+</div>
+
 <div class="cloud-sheet-backdrop" id="cloudAuthSheet" hidden>
   <section class="cloud-sheet" role="dialog" aria-modal="true" aria-labelledby="cloudAuthTitle">
     <div class="cloud-sheet-handle" aria-hidden="true"></div>
@@ -1993,7 +2200,7 @@
       </svg>
     </div>
     <h2 id="cloudAuthTitle">연습 기록과 설정</h2>
-    <p class="cloud-sheet-lead">계정을 연결하면 날짜별 청음 점수와 연습 설정을 자동 저장하고 다른 기기에서 이어갈 수 있습니다.</p>
+    <p class="cloud-sheet-lead">계정을 연결하면 녹음, 날짜별 청음 점수와 연습 설정을 저장하고 다른 기기에서 이어갈 수 있습니다.</p>
 
     <div id="cloudLoggedOut">
       <button class="cloud-provider google" id="cloudGoogleLogin" type="button">
@@ -2033,25 +2240,26 @@
     </div>
     <p class="cloud-auth-message" id="cloudAuthMessage" role="status"></p>
     <p class="cloud-privacy">
-      청음 점수와 연습 설정만 저장하며, 계정 비밀번호는 앱이 보거나 보관하지 않습니다.
+      직접 저장한 녹음, 청음 점수와 연습 설정을 보관하며, 계정 비밀번호는 앱이 보거나 보관하지 않습니다.
       <a href="privacy.html">개인정보처리방침</a>
     </p>
   </section>
 </div>
 
-<script src="app-version.js?v=129"></script>
+<script src="app-version.js?v=130"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=129"></script>
-<script src="js/audio-runtime.js?v=129"></script>
-<script src="js/core.js?v=129"></script>
-<script src="js/metronome.js?v=129"></script>
-<script src="js/tuner-engine.js?v=129"></script>
-<script src="js/tuner.js?v=129"></script>
-<script src="js/scales.js?v=129"></script>
-<script src="js/ear-trainer.js?v=129"></script>
-<script src="js/rhythm-trainer.js?v=129"></script>
-<script src="js/jam-session.js?v=129"></script>
-<script src="js/app-shell.js?v=129"></script>
+<script src="cloud-sync.js?v=130"></script>
+<script src="js/audio-runtime.js?v=130"></script>
+<script src="js/core.js?v=130"></script>
+<script src="js/metronome.js?v=130"></script>
+<script src="js/tuner-engine.js?v=130"></script>
+<script src="js/tuner.js?v=130"></script>
+<script src="js/scales.js?v=130"></script>
+<script src="js/ear-trainer.js?v=130"></script>
+<script src="js/rhythm-trainer.js?v=130"></script>
+<script src="js/recorder.js?v=130"></script>
+<script src="js/jam-session.js?v=130"></script>
+<script src="js/app-shell.js?v=130"></script>
 </body>
 </html>

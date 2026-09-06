@@ -1,12 +1,12 @@
 {
   "name": "olive-music-pwa",
-  "version": "1.2.9",
+  "version": "1.3.0",
   "private": true,
   "description": "O'live — 브라우저에서 사용하는 음악 연습 도구",
   "scripts": {
-    "check": "node --check app-version.js && node --check cloud-config.js && node --check cloud-sync.js && node --check service-worker.js && node --check js/audio-runtime.js && node --check js/core.js && node --check js/metronome.js && node --check js/tuner-engine.js && node --check js/tuner.js && node --check js/scales.js && node --check js/ear-trainer.js && node --check js/rhythm-trainer.js && node --check js/jam-session.js && node --check js/app-shell.js && node --check playwright.config.cjs && node --check tests/e2e/app.spec.cjs",
+    "check": "node --check app-version.js && node --check cloud-config.js && node --check cloud-sync.js && node --check service-worker.js && node --check js/audio-runtime.js && node --check js/core.js && node --check js/metronome.js && node --check js/tuner-engine.js && node --check js/tuner.js && node --check js/scales.js && node --check js/ear-trainer.js && node --check js/rhythm-trainer.js && node --check js/recorder.js && node --check js/jam-session.js && node --check js/app-shell.js && node --check playwright.config.cjs && node --check tests/e2e/app.spec.cjs",
     "check:release": "node scripts/check-release.cjs",
-    "test": "npm run check && npm run check:release && node tests/cloud-sync.test.cjs && node tests/cloud-features.test.cjs && node tests/audio-lifecycle.test.cjs && node tests/tuner-engine.test.cjs && node tests/public-pages.test.cjs && node tests/touch-targets.test.cjs",
+    "test": "npm run check && npm run check:release && node tests/cloud-sync.test.cjs && node tests/cloud-features.test.cjs && node tests/recordings.test.cjs && node tests/audio-lifecycle.test.cjs && node tests/tuner-engine.test.cjs && node tests/public-pages.test.cjs && node tests/touch-targets.test.cjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
