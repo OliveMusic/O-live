@@ -496,7 +496,7 @@
   async function listRecordings(){
     await ensureRecordingAccess();
     const {data,error}=await client.from('practice_recordings')
-      .select('id,title,object_path,duration_ms,byte_size,mime_type,waveform,recorded_at,created_at')
+      .select('id,title,object_path,duration_ms,byte_size,mime_type,waveform,playback_gain,recorded_at,created_at')
       .eq('status','ready')
       .order('recorded_at',{ascending:false})
       .limit(50);
@@ -531,6 +531,7 @@
       p_mime_type:mimeType,
       p_waveform:Array.isArray(recording&&recording.waveform)?recording.waveform:[],
       p_recorded_at:String(recording&&recording.recordedAt||new Date().toISOString()),
+      p_playback_gain:Number(recording&&recording.playbackGain)||1,
     });
     if(reserveError) throw reserveError;
     let uploaded=false;

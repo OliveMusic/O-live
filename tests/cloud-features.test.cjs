@@ -8,7 +8,7 @@ const sync=fs.readFileSync('cloud-sync.js','utf8');
 const migration=fs.readFileSync('supabase/002_preferences_and_deletion.sql','utf8');
 const retention=fs.readFileSync('supabase/003_sync_event_retention.sql','utf8');
 const breakdown=fs.readFileSync('supabase/004_ear_score_breakdown.sql','utf8');
-const schemaContract=fs.readFileSync('supabase/008_recording_timestamps.sql','utf8');
+const schemaContract=fs.readFileSync('supabase/009_recording_playback_gain.sql','utf8');
 const edge=fs.readFileSync('supabase/functions/delete-account/index.ts','utf8');
 
 for(const section of ['metronome','tuner','scales','earTrainer','rhythmTrainer','jam']){
@@ -56,7 +56,7 @@ assert.match(breakdown,/p_training_mode text/);
 assert.match(breakdown,/create or replace function public\.import_ear_history\(/);
 
 assert.match(schemaContract,/create or replace function public\.olive_schema_version\(\)/);
-assert.match(schemaContract,/select 8::integer/);
+assert.match(schemaContract,/select 9::integer/);
 assert.match(schemaContract,/grant execute on function public\.olive_schema_version\(\) to authenticated/);
 
 assert.match(edge,/supabase-js@2\.110\.8/);

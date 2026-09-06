@@ -14,7 +14,8 @@
    - `supabase/006_recordings.sql`
    - `supabase/007_recording_waveforms.sql`
    - `supabase/008_recording_timestamps.sql`
-   마지막 파일까지 실행해야 앱의 클라우드 상태가 `DB-008` 없이 정상으로 표시됩니다.
+   - `supabase/009_recording_playback_gain.sql`
+   마지막 파일까지 실행해야 앱의 클라우드 상태가 `DB-009` 없이 정상으로 표시됩니다.
 3. Project Settings > API에서 **Project URL**과 **Publishable key**를 복사합니다.
 4. `cloud-config.js`의 `supabaseUrl`, `supabasePublishableKey`에 붙여 넣습니다.
 5. Authentication > URL Configuration에서 실제 배포 주소를 Site URL로 등록하고, 다음 주소들을 Redirect URLs에 추가합니다.
@@ -28,6 +29,7 @@
 파일당 최대 5분·15MiB 제한과 사용자별 접근 정책을 함께 만듭니다.
 `007_recording_waveforms.sql`은 녹음별 작은 파형 요약을 저장해 다른 기기에서도 바로 표시합니다.
 `008_recording_timestamps.sql`은 저장 시각과 별도로 실제 녹음을 시작한 시각을 보존합니다.
+`009_recording_playback_gain.sql`은 녹음 중 실시간 증폭 없이 녹음별 고정 재생 배율을 보존합니다.
 
 ### 계정 직접 삭제 Edge Function
 

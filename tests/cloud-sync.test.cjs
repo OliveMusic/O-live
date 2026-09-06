@@ -80,7 +80,7 @@ function makeContext({config,storage,supabase}){
       addEventListener:(name,handler)=>{ documentListeners[name]=handler; },
     },
     addEventListener:(name,handler)=>{ windowListeners[name]=handler; },
-    OLIVE_RELEASE:{version:'1.3.9',build:139,schemaVersion:8},
+    OLIVE_RELEASE:{version:'1.3.10',build:140,schemaVersion:9},
     OLIVE_CLOUD_CONFIG:config,
     supabase,
   };
@@ -160,7 +160,7 @@ async function testConfiguredQueueAndMigration(){
     },
     async rpc(name,args){
       rpcCalls.push({name,args});
-      if(name==='olive_schema_version') return {data:8,error:null};
+      if(name==='olive_schema_version') return {data:9,error:null};
       if(name==='record_ear_answer'){
         recordCount++;
         if(recordCount===1) await new Promise(resolve=>setTimeout(resolve,20));
@@ -180,6 +180,7 @@ async function testConfiguredQueueAndMigration(){
                         return {data:[{
                           id:'recording-1',title:'9월 6일 녹음',object_path:'user-1/recording-1.m4a',
                           duration_ms:69000,byte_size:1000,mime_type:'audio/mp4',
+                          playback_gain:3.25,
                           recorded_at:'2026-09-06T09:00:00.000Z',created_at:'2026-09-06T09:00:00.000Z',
                         }],error:null};
                       },
@@ -297,6 +298,7 @@ async function testConfiguredQueueAndMigration(){
 
   const recordings=await context.OliveCloud.listRecordings();
   assert.equal(recordings[0].object_path,'user-1/recording-1.m4a');
+  assert.equal(recordings[0].playback_gain,3.25);
   assert.equal(recordings[0].playback_url,'https://storage.example.com/user-1/recording-1.m4a?token=test');
 
   await elements.cloudGoogleLogin.listeners.click();
@@ -373,10 +375,10 @@ async function testSchemaUpgradeMessage(){
   });
 
   assert.equal(elements.earCloudTitle.textContent,'클라우드 업데이트 필요');
-  assert.match(elements.earCloudStatus.textContent,/DB-008/);
+  assert.match(elements.earCloudStatus.textContent,/DB-009/);
   assert.equal(dataReadCount,0);
   await elements.cloudSyncNow.listeners.click();
-  assert.match(elements.cloudAuthMessage.textContent,/오류 코드 DB-008/);
+  assert.match(elements.cloudAuthMessage.textContent,/오류 코드 DB-009/);
   assert.equal(elements.cloudAuthMessage.classList.contains('error'),true);
 }
 
