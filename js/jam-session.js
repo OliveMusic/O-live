@@ -488,7 +488,7 @@
 
   /* ---------- 스케줄러 ---------- */
   let timerID=null, nextStepTime=0, stepCursor=0;
-  const LOOKAHEAD=25, AHEAD=0.14;
+  const LOOKAHEAD=25, AHEAD=0.14, BACKGROUND_AHEAD=2.5;
   let scheduledMarks=[];
 
   // 스텝마다 다시 만들면 1초에 수백 개의 객체가 버려진다. 바뀔 때만 다시 만든다.
@@ -544,7 +544,15 @@
 
   function scheduler(){
     const ctx=jamCtx;
-    if(!playing || !ctx || ctx!==audioCtx || ctx.state!=='running'){
+    if(!playing || !ctx || ctx!==audioCtx){
+      stop();
+      return;
+    }
+    if(ctx.state!=='running'){
+      if(document.visibilityState!=='visible'){
+        timerID=setTimeout(scheduler,250);
+        return;
+      }
       stop();
       return;
     }
@@ -555,15 +563,22 @@
       nextStepTime = ctx.currentTime + 0.05;
       scheduledMarks.length = 0;
     }
+    if(document.visibilityState!=='visible'){
+      while(scheduledMarks.length && scheduledMarks[0].time < ctx.currentTime-0.25){
+        scheduledMarks.shift();
+      }
+    }
     // scheduleStep 안에서 stop()이 불릴 수 있으므로 매 바퀴 playing을 다시 본다
-    while(playing && nextStepTime < ctx.currentTime + AHEAD){
+    const ahead=document.visibilityState==='visible' ? AHEAD : BACKGROUND_AHEAD;
+    while(playing && nextStepTime < ctx.currentTime + ahead){
       // 셔플 필: 홀수 16분을 뒤로 민다
       const swingOff = (st.swing && stepCursor%2===1) ? secPerStep*st.swing : 0;
       scheduleStep(stepCursor, nextStepTime + swingOff);
       nextStepTime += secPerStep;
       stepCursor++;
     }
-    if(playing) timerID=setTimeout(scheduler, LOOKAHEAD);
+    if(playing) timerID=setTimeout(scheduler,
+      document.visibilityState==='visible' ? LOOKAHEAD : 250);
   }
 
   let visualGen=0, visualBarIdx=-1;
@@ -631,7 +646,7 @@
     jamStart.setAttribute('aria-label','시작 중');
     jamStart.setAttribute('aria-busy','true');
     try{
-      const ctx=await ensurePlaybackCtx();
+      const ctx=await ensureBackgroundPlaybackCtx('잼 세션');
       if(token!==startToken || !startPending){
         if(audioCtx===ctx && !anySounding()) releaseCtx();
         return;
@@ -658,7 +673,18 @@
     }
   });
 
-  registerTransport({ isPlaying:()=>playing || startPending, stop });
+  registerTransport({
+    isPlaying:()=>playing || startPending,
+    stop,
+    background:true,
+    label:'잼 세션',
+  });
+
+  document.addEventListener('visibilitychange',()=>{
+    if(!playing || document.visibilityState==='visible') return;
+    clearTimeout(timerID);
+    scheduler();
+  });
 
   /* ---------- 초기화 ---------- */
   jamPresetKey='pop'; jamPresetDD.set(PRESET_KEYS.indexOf('pop'));

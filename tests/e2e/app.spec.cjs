@@ -13,6 +13,10 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   }));
   await page.addInitScript(({withCloud,storedPreferences,micMode,recordingRows})=>{
     sessionStorage.setItem('olive-startup-state-v2','shown');
+    const audioSession={type:'auto'};
+    try{ Object.defineProperty(navigator,'audioSession',{configurable:true,value:audioSession}); }
+    catch(error){}
+    window.__testAudioSession=audioSession;
     if(storedPreferences){
       localStorage.setItem('olive-preferences-v1',JSON.stringify(storedPreferences));
     }
@@ -257,7 +261,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.12');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.13');
 }
 
 test.afterEach(async({page})=>{
@@ -283,7 +287,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=142');
+  expect(workerUrl).toContain('service-worker.js?v=143');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -506,6 +510,45 @@ test('메트로놈 재생 중 튜너로 가면 방해 음원이 즉시 정지한
   await expect(start).not.toHaveClass(/running|starting/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).not.toHaveClass(/sounding/);
   await expect(page.locator('#tab-tuner')).toBeVisible();
+});
+
+test('화면이 잠긴 상태에서도 메트로놈과 잼 재생 상태를 유지한다',async({page})=>{
+  await preparePage(page);
+  const setVisibility=value=>page.evaluate(next=>{
+    window.__testVisibility=next;
+    if(!Object.prototype.hasOwnProperty.call(document,'visibilityState')){
+      Object.defineProperty(document,'visibilityState',{
+        configurable:true,
+        get:()=>window.__testVisibility,
+      });
+    }
+    document.dispatchEvent(new Event('visibilitychange'));
+  },value);
+
+  const metro=page.locator('#metroStart');
+  await metro.click();
+  await expect(metro).toHaveClass(/running/);
+  await expect.poll(()=>page.evaluate(()=>window.__testAudioSession.type)).toBe('playback');
+  await setVisibility('hidden');
+  await page.waitForTimeout(350);
+  await expect(metro).toHaveClass(/running/);
+  await expect(page.locator('.tab-btn[data-tab="metronome"]')).toHaveClass(/sounding/);
+  await setVisibility('visible');
+  await metro.click();
+  await expect(metro).not.toHaveClass(/running/);
+
+  await page.locator('.tab-btn[data-tab="jam"]').click();
+  const jam=page.locator('#jamStart');
+  await jam.click();
+  await expect(jam).toHaveClass(/on/);
+  await expect.poll(()=>page.evaluate(()=>window.__testAudioSession.type)).toBe('playback');
+  await setVisibility('hidden');
+  await page.waitForTimeout(350);
+  await expect(jam).toHaveClass(/on/);
+  await expect(page.locator('.tab-btn[data-tab="jam"]')).toHaveClass(/sounding/);
+  await setVisibility('visible');
+  await jam.click();
+  await expect(jam).not.toHaveClass(/on/);
 });
 
 test('튜너가 마이크를 연결하고 정지할 때 트랙을 확실히 놓는다',async({page})=>{

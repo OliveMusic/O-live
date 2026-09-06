@@ -83,10 +83,16 @@ assert.match(index,/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?\.startup-
 assert.match(index,/function ensureCtx\(mode='ambient', forceFresh=false\)/);
 assert.match(index,/await withTimeout\(resumeCtx\(ctx\),1400\)/);
 assert.doesNotMatch(index,/audioCtx\.resume\(\)\.catch\(\(\)=>\{\}\)/);
-assert.match(index,/visibilitychange[\s\S]*?stopAllTransports\(\);[\s\S]*?releaseCtx\(\);/);
+assert.match(index,/function ensureBackgroundPlaybackCtx\(label\)/);
+assert.match(index,/visibilitychange[\s\S]*?stopForegroundTransports\(\);[\s\S]*?hasBackgroundTransportPlaying\(\)/);
+assert.match(index,/startBackgroundMedia\(activeBackgroundLabel\(\)\)/);
+assert.match(index,/setActionHandler\(action,stopBackgroundTransports\)/);
 assert.match(index,/playClick\(time - metroCtx\.currentTime, level, metroCtx\)/);
 assert.match(index,/orbLabel\.textContent='시작 중'/);
-assert.equal((index.match(/const ctx=await ensurePlaybackCtx\(\)/g)||[]).length,3);
+assert.equal((index.match(/const ctx=await ensurePlaybackCtx\(\)/g)||[]).length,1);
+assert.equal((index.match(/const ctx=await ensureBackgroundPlaybackCtx\(/g)||[]).length,2);
+assert.match(index,/backgroundScheduleAheadTime = 2\.5/);
+assert.match(index,/BACKGROUND_AHEAD=2\.5/);
 assert.match(index,/let playing=false, startPending=false, startToken=0, rhythmCtx=null/);
 assert.match(index,/let playing = false, startPending = false, startToken = 0, jamCtx = null/);
 assert.match(index,/let listening=false, micStarting=false, micStartToken=0/);

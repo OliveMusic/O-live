@@ -38,6 +38,7 @@ class FakeAudioContext{
 
 let sounding=false;
 let stopCalls=0;
+let stopForegroundCalls=0;
 const sandbox={
   window:{AudioContext:FakeAudioContext},
   navigator:{audioSession:{type:'auto'}},
@@ -50,13 +51,15 @@ const sandbox={
   __send:null,
   __gtrCache:new Map(),
   anySounding:()=>sounding,
+  hasBackgroundTransportPlaying:()=>false,
   stopAllTransports:()=>{ stopCalls++; },
+  stopForegroundTransports:()=>{ stopForegroundCalls++; },
 };
 sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
 vm.runInContext(
   html.slice(start,end)+
-  '\n;globalThis.audioRuntime={ensureCtx,ensureRecordingCtx,ensurePlaybackCtx,beginPlaybackFromGesture,resumeCtx,releaseCtx,getCtx,'+
+  '\n;globalThis.audioRuntime={ensureCtx,ensureRecordingCtx,ensurePlaybackCtx,ensureBackgroundPlaybackCtx,beginPlaybackFromGesture,resumeCtx,releaseCtx,getCtx,'+
   'getContext:()=>audioCtx,getMode:()=>__ctxMode};',
   sandbox
 );
@@ -123,6 +126,13 @@ vm.runInContext(
   assert.equal(runtime.getContext(),null);
   assert.equal(stopCalls,1,'interrupted playback stops registered transports');
   assert.equal(recovered.closeCalls,1);
+
+  sounding=false;
+  const background=await runtime.ensureBackgroundPlaybackCtx('메트로놈');
+  assert.equal(background.state,'running');
+  assert.equal(runtime.getMode(),'playback');
+  assert.equal(sandbox.navigator.audioSession.type,'playback');
+  assert.equal(stopForegroundCalls,1,'background playback stops only foreground transports');
 
   console.log('audio lifecycle tests passed');
 })().catch(error=>{

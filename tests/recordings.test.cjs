@@ -68,12 +68,16 @@ assert.match(recorder,/메트로놈·잼과 함께 사용할 수 있습니다 ·
 assert.match(recorder,/window\.confirm\(`“\$\{row\.title\}” 녹음을 삭제할까요/);
 
 assert.match(audioRuntime,/function ensurePlaybackCtx\(\)/);
-assert.match(audioRuntime,/recording\?'play-and-record':'ambient'/);
+assert.match(audioRuntime,/recording\?'play-and-record':background\?'playback':'ambient'/);
+assert.match(audioRuntime,/function ensureBackgroundPlaybackCtx\(label\)/);
+assert.match(audioRuntime,/navigator\.audioSession\.type = mode/);
+assert.match(audioRuntime,/function startBackgroundMedia\(label\)/);
 assert.match(audioRuntime,/function beginPlaybackFromGesture\(\)/);
 assert.match(audioRuntime,/function beginPlaybackFromGesture\(\)\{[\s\S]*?recording\?'play-and-record':'playback'/);
 assert.match(audioRuntime,/ctx\.resume\(\)/);
 assert.match(audioRuntime,/if\(!anySounding\(\) && !recording\)[\s\S]*?setAudioSession\('ambient'\)/);
-for(const source of [metronome,rhythm,jam]) assert.match(source,/await ensurePlaybackCtx\(\)/);
+assert.match(rhythm,/await ensurePlaybackCtx\(\)/);
+for(const source of [metronome,jam]) assert.match(source,/await ensureBackgroundPlaybackCtx\(/);
 assert.doesNotMatch(core,/leavingTrainer|stopForNavigation/);
 assert.match(core,/enteringTuner[\s\S]*?stopAllTransports\(\)/);
 assert.doesNotMatch(appShell,/stopForNavigation/);

@@ -41,7 +41,7 @@
   let startPending = false, startToken = 0, metroCtx = null;
   let currentStep = 0, nextNoteTime = 0.0, timerID = null;
   let rollBeat = 0;
-  const scheduleAheadTime = 0.12, lookahead = 25;
+  const scheduleAheadTime = 0.12, backgroundScheduleAheadTime = 2.5, lookahead = 25;
   let scheduledBeats = [];
 
   const bpmNum = document.getElementById('bpmNum');
@@ -237,7 +237,15 @@
   }
   function scheduler(){
     const ctx = metroCtx;
-    if(!isPlaying || !ctx || ctx!==audioCtx || ctx.state!=='running'){
+    if(!isPlaying || !ctx || ctx!==audioCtx){
+      stopMetro('재시도');
+      return;
+    }
+    if(ctx.state!=='running'){
+      if(document.visibilityState!=='visible'){
+        timerID=setTimeout(scheduler,250);
+        return;
+      }
       stopMetro('재시도');
       return;
     }
@@ -247,11 +255,18 @@
       nextNoteTime = ctx.currentTime + 0.05;
       scheduledBeats.length = 0;
     }
-    while(nextNoteTime < ctx.currentTime + scheduleAheadTime){
+    if(document.visibilityState!=='visible'){
+      while(scheduledBeats.length && scheduledBeats[0].time < ctx.currentTime-0.25){
+        scheduledBeats.shift();
+      }
+    }
+    const ahead=document.visibilityState==='visible' ? scheduleAheadTime : backgroundScheduleAheadTime;
+    while(nextNoteTime < ctx.currentTime + ahead){
       scheduleNote(currentStep, nextNoteTime);
       advanceNote();
     }
-    if(isPlaying) timerID = setTimeout(scheduler, lookahead);
+    if(isPlaying) timerID = setTimeout(scheduler,
+      document.visibilityState==='visible' ? lookahead : 250);
   }
   let visualGen = 0;
   function visualLoop(gen){
@@ -296,7 +311,7 @@
     metroStart.classList.add('starting');
     metroStart.setAttribute('aria-busy','true');
     try{
-      const ctx=await ensurePlaybackCtx();
+      const ctx=await ensureBackgroundPlaybackCtx('메트로놈');
       if(token!==startToken || !startPending){
         if(audioCtx===ctx && !anySounding()) releaseCtx();
         return;
@@ -343,7 +358,18 @@
     beatDotsEl.querySelectorAll('.beat-dot').forEach(d=>d.classList.remove('on','mid-on','accent-on'));
   }
   metroStart.addEventListener('click', ()=> (isPlaying || startPending) ? stopMetro() : startMetro());
-  registerTransport({ isPlaying:()=>isPlaying || startPending, stop:stopMetro });
+  registerTransport({
+    isPlaying:()=>isPlaying || startPending,
+    stop:stopMetro,
+    background:true,
+    label:'메트로놈',
+  });
+
+  document.addEventListener('visibilitychange',()=>{
+    if(!isPlaying || document.visibilityState==='visible') return;
+    clearTimeout(timerID);
+    scheduler();
+  });
 
   window.OlivePreferences.register('metronome',
     ()=>({bpm,meter:meter.label,subdivision:sub.key,accent:accentOn}),

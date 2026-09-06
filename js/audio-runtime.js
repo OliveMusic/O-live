@@ -3,18 +3,94 @@ let audioCtx = null;
 let __ctxMode = null;
 let __ctxResumePromise = null;
 let __ctxReadyPromise = null;
+let __backgroundAudio = null;
+let __backgroundAudioUrl = '';
 
 /* iOS는 오디오 세션에 '용도'를 붙인다.
    ambient : 다른 앱 소리와 섞인다. 음악을 틀어 놓고 메트로놈을 쓸 수 있다.
              잠금화면 위젯도 뜨지 않는다. 대신 무음 스위치를 따른다.
+   playback : 잠금 화면에서도 재생할 메트로놈·잼과 녹음 파일에 쓴다.
    play-and-record : 마이크도 같이 쓴다. 튜너나 녹음을 켤 때 이쪽으로 바꾼다. */
 function setAudioSession(mode){
   try{ if(navigator.audioSession) navigator.audioSession.type = mode; }catch(e){}
 }
 
+/* iPhone의 홈 화면 웹앱은 Web Audio만 울릴 때보다 실제 미디어 요소가 함께
+   재생될 때 백그라운드 오디오로 더 안정적으로 취급한다. 들리지 않는 짧은 WAV를
+   반복해 미디어 세션을 유지하고, 실제 소리는 기존 Web Audio 그래프가 낸다. */
+function silentWavUrl(){
+  if(__backgroundAudioUrl) return __backgroundAudioUrl;
+  const sampleRate=8000, sampleCount=2000;
+  const buffer=new ArrayBuffer(44+sampleCount);
+  const view=new DataView(buffer);
+  const text=(offset,value)=>{
+    for(let index=0;index<value.length;index++) view.setUint8(offset+index,value.charCodeAt(index));
+  };
+  text(0,'RIFF'); view.setUint32(4,36+sampleCount,true); text(8,'WAVE');
+  text(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22,1,true); view.setUint32(24,sampleRate,true);
+  view.setUint32(28,sampleRate,true); view.setUint16(32,1,true); view.setUint16(34,8,true);
+  text(36,'data'); view.setUint32(40,sampleCount,true);
+  for(let index=44;index<buffer.byteLength;index++) view.setUint8(index,128);
+  __backgroundAudioUrl=URL.createObjectURL(new Blob([buffer],{type:'audio/wav'}));
+  return __backgroundAudioUrl;
+}
+
+async function startBackgroundMedia(label){
+  if(typeof Audio!=='function' || typeof URL==='undefined' || typeof Blob==='undefined') return;
+  if(!__backgroundAudio){
+    const audio=new Audio();
+    audio.loop=true;
+    audio.preload='auto';
+    audio.playsInline=true;
+    audio.src=silentWavUrl();
+    __backgroundAudio=audio;
+  }
+  try{
+    if(typeof MediaMetadata==='function' && navigator.mediaSession){
+      navigator.mediaSession.metadata=new MediaMetadata({
+        title:label||'연습 재생', artist:"O'live", album:'음악 연습',
+      });
+      navigator.mediaSession.playbackState='playing';
+      if(typeof navigator.mediaSession.setActionHandler==='function'){
+        for(const action of ['pause','stop']){
+          try{ navigator.mediaSession.setActionHandler(action,stopBackgroundTransports); }catch(e){}
+        }
+      }
+    }
+  }catch(e){}
+  try{
+    const result=__backgroundAudio.play();
+    if(result && typeof result.then==='function') await withTimeout(result,1400);
+  }catch(e){ /* playback 오디오 세션만으로 이어갈 수 있으므로 실제 재생은 막지 않는다. */ }
+}
+
+function stopBackgroundMedia(){
+  if(__backgroundAudio){
+    try{ __backgroundAudio.pause(); }catch(e){}
+    try{ __backgroundAudio.currentTime=0; }catch(e){}
+    __backgroundAudio=null;
+  }
+  if(__backgroundAudioUrl){
+    try{ URL.revokeObjectURL(__backgroundAudioUrl); }catch(e){}
+    __backgroundAudioUrl='';
+  }
+  try{
+    if(navigator.mediaSession){
+      navigator.mediaSession.playbackState='none';
+      if(typeof navigator.mediaSession.setActionHandler==='function'){
+        for(const action of ['pause','stop']){
+          try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
+        }
+      }
+    }
+  }catch(e){}
+}
+
 /* 컨텍스트를 통째로 버린다. 여기에 매달려 있던 것들도 같이 놓아야
    다음에 만들 때 새 컨텍스트의 노드로 다시 세워진다. */
 function releaseCtx(){
+  stopBackgroundMedia();
   if(!audioCtx) return Promise.resolve();
   const old = audioCtx;
   audioCtx = null; __ctxMode = null; __ctxResumePromise = null;
@@ -33,6 +109,11 @@ function createCtx(mode='ambient'){
   audioCtx=ctx; __ctxMode=mode; __ctxResumePromise=null;
   ctx.addEventListener('statechange', ()=>{
     if(ctx!==audioCtx || !anySounding()) return;
+    if((ctx.state==='interrupted' || ctx.state==='suspended') &&
+       __ctxMode==='playback' && hasBackgroundTransportPlaying()){
+      resumeCtx(ctx).catch(()=>{});
+      return;
+    }
     if(ctx.state==='interrupted' || ctx.state==='closed' || ctx.state==='suspended'){
       stopAllTransports();
       releaseCtx();
@@ -108,6 +189,7 @@ function ensureRecordingCtx(preservePlayback=false){
 
 function ensurePlaybackCtx(){
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  const background=hasBackgroundTransportPlaying();
   // 녹음 파일 재생은 iPhone의 playback 세션을 사용한다. 메트로놈·잼처럼
   // ambient 세션으로 돌아가는 도구가 시작되면 파일 재생 상태도 먼저 정리해야
   // 닫힌 오디오 연결 위에 재생 버튼만 남지 않는다. 실제 녹음은 건드리지 않는다.
@@ -115,11 +197,23 @@ function ensurePlaybackCtx(){
      typeof window.OliveRecorder.stopPlayback==='function'){
     window.OliveRecorder.stopPlayback();
     if(audioCtx && audioCtx.state!=='closed'){
-      setAudioSession('ambient');
-      __ctxMode='ambient';
+      setAudioSession(background?'playback':'ambient');
+      __ctxMode=background?'playback':'ambient';
     }
   }
-  return ensureCtx(recording?'play-and-record':'ambient');
+  return ensureCtx(recording?'play-and-record':background?'playback':'ambient');
+}
+
+/* 메트로놈과 잼은 잠금 화면에서도 이어져야 한다. 녹음 중이면 공유 중인
+   play-and-record 컨텍스트를 보존하고, 그 밖에는 playback 세션을 쓴다. */
+function ensureBackgroundPlaybackCtx(label){
+  const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  if(!recording) stopForegroundTransports();
+  const playback=beginPlaybackFromGesture();
+  // 미디어 요소는 사용자 터치가 유효한 이 호출 스택에서 시작하되,
+  // 보조 경로가 늦어져도 첫 박을 기다리게 하지는 않는다.
+  startBackgroundMedia(label).catch(()=>{});
+  return playback.ready.then(()=>playback.ctx);
 }
 
 /* 파일 재생 탭에서 동기적으로 호출한다. resume()을 사용자 제스처 안에서
@@ -188,9 +282,32 @@ function anySounding(){
 
 const __transports=[];
 function registerTransport(transport){ __transports.push(transport); }
+function hasBackgroundTransportPlaying(){
+  return __transports.some(transport=>{
+    try{ return Boolean(transport.background && transport.isPlaying()); }
+    catch(e){ return false; }
+  });
+}
+function activeBackgroundLabel(){
+  const active=__transports.filter(transport=>{
+    try{ return Boolean(transport.background && transport.isPlaying()); }
+    catch(e){ return false; }
+  });
+  return active.length ? active[active.length-1].label : '';
+}
 function stopAllTransports(){
   __transports.forEach(transport=>{
     try{ if(transport.isPlaying()) transport.stop(); }catch(e){}
+  });
+}
+function stopForegroundTransports(){
+  __transports.forEach(transport=>{
+    try{ if(!transport.background && transport.isPlaying()) transport.stop(); }catch(e){}
+  });
+}
+function stopBackgroundTransports(){
+  __transports.forEach(transport=>{
+    try{ if(transport.background && transport.isPlaying()) transport.stop(); }catch(e){}
   });
 }
 
@@ -202,6 +319,19 @@ function setTabSounding(tab,on,source){
   if(btn) btn.classList.toggle('sounding',__sounding[tab].size>0);
   keepAwake(anySounding());
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  if(hasBackgroundTransportPlaying()){
+    if(!recording){
+      setAudioSession('playback');
+      if(audioCtx && audioCtx.state!=='closed') __ctxMode='playback';
+    }
+    startBackgroundMedia(activeBackgroundLabel()).catch(()=>{});
+  }else{
+    stopBackgroundMedia();
+    if(!recording){
+      setAudioSession('ambient');
+      if(audioCtx && audioCtx.state!=='closed') __ctxMode='ambient';
+    }
+  }
   if(!anySounding() && !recording){
     setAudioSession('ambient');
     if(audioCtx && audioCtx.state!=='closed') __ctxMode='ambient';
@@ -209,9 +339,26 @@ function setTabSounding(tab,on,source){
 }
 
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible') return;
-  stopAllTransports();
+  if(document.visibilityState==='visible'){
+    if(hasBackgroundTransportPlaying() && audioCtx){
+      setAudioSession('playback');
+      __ctxMode='playback';
+      startBackgroundMedia(activeBackgroundLabel()).catch(()=>{});
+      if(audioCtx.state!=='running') resumeCtx(audioCtx).catch(()=>{});
+    }
+    return;
+  }
+  stopForegroundTransports();
   keepAwake(false);
+  if(hasBackgroundTransportPlaying()){
+    setAudioSession('playback');
+    if(audioCtx && audioCtx.state!=='closed'){
+      __ctxMode='playback';
+      startBackgroundMedia(activeBackgroundLabel()).catch(()=>{});
+      if(audioCtx.state!=='running') resumeCtx(audioCtx).catch(()=>{});
+    }
+    return;
+  }
   releaseCtx();
 });
 window.addEventListener('pagehide',()=>{
