@@ -83,6 +83,13 @@ vm.runInContext(
   assert.equal(first.resumeCalls,beforeGestureResume+1,'gesture playback resumes synchronously');
   await gesturePlayback.ready;
 
+  sandbox.window.OliveRecorder={isRecording:()=>false};
+  const recordingPlayback=runtime.beginPlaybackFromGesture();
+  assert.equal(recordingPlayback.ctx,first);
+  assert.equal(runtime.getMode(),'playback');
+  assert.equal(sandbox.navigator.audioSession.type,'playback');
+  await recordingPlayback.ready;
+
   first.state='suspended';
   const beforeResumeCalls=first.resumeCalls;
   await Promise.all([runtime.resumeCtx(first),runtime.resumeCtx(first)]);

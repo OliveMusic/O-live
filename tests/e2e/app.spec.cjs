@@ -74,7 +74,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
     }
     if(micMode!=='native'){
       let analyserSampleCursor=0,analyserFrame=0;
-      const harness={requests:0,stops:0,pending:false,contexts:0,zeroGainConnections:0};
+      const harness={requests:0,stops:0,pending:false,contexts:0,zeroGainConnections:0,gainNodes:[]};
       class FakeNode{
         connect(next){
           if(this.gain && this.gain.value===0) harness.zeroGainConnections++;
@@ -139,6 +139,21 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
         createGain(){
           const node=new FakeNode();
           node.gain={value:1};
+          harness.gainNodes.push(node);
+          return node;
+        }
+        createDynamicsCompressor(){
+          const node=new FakeNode();
+          node.threshold={value:0}; node.knee={value:0}; node.ratio={value:0};
+          node.attack={value:0}; node.release={value:0};
+          harness.compressor=node;
+          return node;
+        }
+        createMediaStreamDestination(){
+          const node=new FakeNode();
+          const track={stop(){ harness.processedStops=(harness.processedStops||0)+1; },addEventListener(){}};
+          node.stream={getTracks:()=>[track],getAudioTracks:()=>[track]};
+          harness.processedStream=node.stream;
           return node;
         }
       }
@@ -185,7 +200,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
       if(micMode==='meter-signal'){
         class FakeMediaRecorder extends EventTarget{
           static isTypeSupported(){ return true; }
-          constructor(){ super(); this.mimeType='audio/mp4'; }
+          constructor(input){ super(); this.mimeType='audio/mp4'; harness.recorderStream=input; }
           start(){}
           stop(){ this.dispatchEvent(new Event('stop')); }
         }
@@ -200,7 +215,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.7');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.8');
 }
 
 test.afterEach(async({page})=>{
@@ -226,7 +241,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=137');
+  expect(workerUrl).toContain('service-worker.js?v=138');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -312,6 +327,12 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
   expect(await page.evaluate(()=>window.__micHarness.lastConstraints.audio)).toMatchObject({
     echoCancellation:false,noiseSuppression:false,autoGainControl:true,
   });
+  expect(await page.evaluate(()=>({
+    processed:window.__micHarness.recorderStream===window.__micHarness.processedStream,
+    gain:window.__micHarness.gainNodes.some(node=>node.gain.value===2),
+    threshold:window.__micHarness.compressor.threshold.value,
+    ratio:window.__micHarness.compressor.ratio.value,
+  }))).toEqual({processed:true,gain:true,threshold:-8,ratio:4});
   await expect.poll(()=>page.locator('#recordLevelFill').evaluate(element=>{
     const transform=getComputedStyle(element).transform;
     return transform==='none'?0:new DOMMatrix(transform).a;

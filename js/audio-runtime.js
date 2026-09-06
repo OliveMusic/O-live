@@ -115,7 +115,7 @@ function ensurePlaybackCtx(){
    바로 시작하고, 파일 다운로드와 디코딩은 활성화된 컨텍스트에서 이어간다. */
 function beginPlaybackFromGesture(){
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
-  const mode=recording?'play-and-record':'ambient';
+  const mode=recording?'play-and-record':'playback';
   const unusable=!audioCtx || audioCtx.state==='closed' || audioCtx.state==='interrupted';
   if(unusable){
     if(audioCtx) releaseCtx();

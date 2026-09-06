@@ -7,6 +7,7 @@
   const MAX_RECORDINGS=50;
   const WAVEFORM_POINTS=160;
   const WAVEFORM_MAX_POINTS=240;
+  const CAPTURE_GAIN=2;
   const recordGuest=document.getElementById('recordGuest');
   const recordWorkspace=document.getElementById('recordWorkspace');
   const recordListCard=document.getElementById('recordListCard');
@@ -53,6 +54,9 @@
   let levelAnalyser=null;
   let levelSource=null;
   let levelSink=null;
+  let captureGain=null;
+  let captureCompressor=null;
+  let captureDestination=null;
   let levelSamples=null;
   let waveformLevels=[];
   let lastWaveformCaptureAt=0;
@@ -179,16 +183,26 @@
     recordTitle.value=draft.title;
     setButtonMode('preview');
   }
+  function teardownCaptureGraph(){
+    if(captureDestination && captureDestination.stream){
+      captureDestination.stream.getTracks().forEach(track=>{ try{ track.stop(); }catch(e){} });
+    }
+    try{ if(levelSource) levelSource.disconnect(); }catch(e){}
+    try{ if(captureGain) captureGain.disconnect(); }catch(e){}
+    try{ if(captureCompressor) captureCompressor.disconnect(); }catch(e){}
+    try{ if(captureDestination) captureDestination.disconnect(); }catch(e){}
+    try{ if(levelSink) levelSink.disconnect(); }catch(e){}
+    levelSource=levelAnalyser=levelSink=levelSamples=null;
+    captureGain=captureCompressor=captureDestination=null;
+    cancelAnimationFrame(levelFrame); levelFrame=0;
+    recordLevel.style.transform='scaleX(0)';
+  }
   function stopTracks(){
     if(stream){
       stream.getTracks().forEach(track=>{ try{ track.stop(); }catch(e){} });
       stream=null;
     }
-    try{ if(levelSource) levelSource.disconnect(); }catch(e){}
-    try{ if(levelSink) levelSink.disconnect(); }catch(e){}
-    levelSource=levelAnalyser=levelSink=levelSamples=null;
-    cancelAnimationFrame(levelFrame); levelFrame=0;
-    recordLevel.style.transform='scaleX(0)';
+    teardownCaptureGraph();
   }
   function finishAudioSession(){
     stopTracks();
@@ -236,18 +250,38 @@
     setTimer(elapsed);
     if(elapsed>=MAX_DURATION_MS) stopRecording();
   }
-  function setupLevel(ctx){
-    if(!stream || !ctx) return;
-    levelSource=ctx.createMediaStreamSource(stream);
+  function setupLevel(ctx,source){
+    if(!source || !ctx) return;
     levelAnalyser=ctx.createAnalyser();
     levelAnalyser.fftSize=512;
     levelAnalyser.smoothingTimeConstant=.65;
     levelSink=ctx.createGain();
     levelSink.gain.value=0;
-    levelSource.connect(levelAnalyser);
+    source.connect(levelAnalyser);
     levelAnalyser.connect(levelSink);
     levelSink.connect(ctx.destination);
     levelFrame=requestAnimationFrame(drawLevel);
+  }
+  function setupCapture(ctx){
+    levelSource=ctx.createMediaStreamSource(stream);
+    if(typeof ctx.createMediaStreamDestination!=='function' || typeof ctx.createDynamicsCompressor!=='function'){
+      setupLevel(ctx,levelSource);
+      return stream;
+    }
+    captureGain=ctx.createGain();
+    captureGain.gain.value=CAPTURE_GAIN;
+    captureCompressor=ctx.createDynamicsCompressor();
+    captureCompressor.threshold.value=-8;
+    captureCompressor.knee.value=8;
+    captureCompressor.ratio.value=4;
+    captureCompressor.attack.value=.005;
+    captureCompressor.release.value=.18;
+    captureDestination=ctx.createMediaStreamDestination();
+    levelSource.connect(captureGain);
+    captureGain.connect(captureCompressor);
+    captureCompressor.connect(captureDestination);
+    setupLevel(ctx,captureCompressor);
+    return captureDestination.stream;
   }
   async function startRecording(){
     if(!currentUser){ window.OliveCloud.openAccount(); return; }
@@ -278,7 +312,18 @@
       const mimeType=chooseMimeType();
       const options={audioBitsPerSecond:96000};
       if(mimeType) options.mimeType=mimeType;
-      recorder=new MediaRecorder(stream,options);
+      const processedStream=setupCapture(ctx);
+      try{
+        recorder=new MediaRecorder(processedStream,options);
+      }catch(error){
+        if(processedStream===stream) throw error;
+        // 일부 구형 Safari가 Web Audio에서 만든 스트림의 MediaRecorder 생성을
+        // 거부하면 녹음 자체는 기존 마이크 스트림으로 계속 사용할 수 있게 한다.
+        teardownCaptureGraph();
+        levelSource=ctx.createMediaStreamSource(stream);
+        setupLevel(ctx,levelSource);
+        recorder=new MediaRecorder(stream,options);
+      }
       chunks=[];
       waveformLevels=[];
       lastWaveformCaptureAt=0;
@@ -292,7 +337,6 @@
       stream.getAudioTracks().forEach(track=>track.addEventListener('ended',()=>{
         if(recording) stopRecording();
       },{once:true}));
-      setupLevel(ctx);
       /* iPhone Safari의 MP4 MediaRecorder는 timeslice로 잘게 나눈 조각을
          다시 합쳤을 때 긴 녹음이 재생 불가능해지는 경우가 있다.
          최대 5분·96kbps면 메모리 부담이 작으므로 stop 때 한 파일로 받는다. */
@@ -349,7 +393,10 @@
     if(!draft) return;
     if(!draftAudio.paused){ draftAudio.pause(); return; }
     stopCloudPlayback();
-    try{ await draftAudio.play(); }
+    try{
+      setAudioSession('playback');
+      await draftAudio.play();
+    }
     catch(e){ setMessage('재생 버튼을 다시 눌러주세요',true); }
   }
   function currentCloudPosition(){
