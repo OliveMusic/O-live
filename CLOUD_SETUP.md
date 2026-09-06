@@ -12,7 +12,8 @@
    - `supabase/004_ear_score_breakdown.sql`
    - `supabase/005_schema_contract.sql`
    - `supabase/006_recordings.sql`
-   마지막 파일까지 실행해야 앱의 클라우드 상태가 `DB-006` 없이 정상으로 표시됩니다.
+   - `supabase/007_recording_waveforms.sql`
+   마지막 파일까지 실행해야 앱의 클라우드 상태가 `DB-007` 없이 정상으로 표시됩니다.
 3. Project Settings > API에서 **Project URL**과 **Publishable key**를 복사합니다.
 4. `cloud-config.js`의 `supabaseUrl`, `supabasePublishableKey`에 붙여 넣습니다.
 5. Authentication > URL Configuration에서 실제 배포 주소를 Site URL로 등록하고, 다음 주소들을 Redirect URLs에 추가합니다.
@@ -24,6 +25,7 @@
 
 `006_recordings.sql`은 비공개 `practice-recordings` 버킷, 계정당 최대 50개·250MiB,
 파일당 최대 5분·15MiB 제한과 사용자별 접근 정책을 함께 만듭니다.
+`007_recording_waveforms.sql`은 녹음별 작은 파형 요약을 저장해 다른 기기에서도 바로 표시합니다.
 
 ### 계정 직접 삭제 Edge Function
 

@@ -5,6 +5,8 @@
 
   const MAX_DURATION_MS=5*60*1000;
   const MAX_RECORDINGS=50;
+  const WAVEFORM_POINTS=160;
+  const WAVEFORM_MAX_POINTS=240;
   const recordGuest=document.getElementById('recordGuest');
   const recordWorkspace=document.getElementById('recordWorkspace');
   const recordListCard=document.getElementById('recordListCard');
@@ -50,12 +52,25 @@
   let levelAnalyser=null;
   let levelSource=null;
   let levelSink=null;
+  let waveformLevels=[];
+  let lastWaveformCaptureAt=0;
   let draft=null;
   let draftUrl='';
+  let expandedRecordingId='';
   let cloudPlayingId='';
+  let cloudMediaId='';
+  let cloudPlaybackMode='';
+  let cloudStartedAt=0;
+  let cloudStartedOffset=0;
+  let cloudDecodedBuffer=null;
+  let cloudDecodedContext=null;
   let cloudSource=null;
   let cloudPlayToken=0;
+  let cloudProgressFrame=0;
   const cloudBlobs=new Map();
+  const waveformCache=new Map();
+  const waveformLoads=new Map();
+  const playbackPositions=new Map();
   let loadingList=false;
 
   function makeId(){
@@ -74,6 +89,26 @@
     const date=new Date(value);
     if(Number.isNaN(date.getTime())) return '';
     return `${date.getFullYear()}. ${pad(date.getMonth()+1)}. ${pad(date.getDate())}`;
+  }
+  function clamp(value,min,max){ return Math.min(max,Math.max(min,value)); }
+  function rowDurationSeconds(row){ return Math.max(0,Number(row&&row.duration_ms)||0)/1000; }
+  function normalizeWaveform(values){
+    if(!Array.isArray(values) || !values.length || values.length>WAVEFORM_MAX_POINTS) return [];
+    return values.map(value=>Math.round(clamp(Number(value)||0,0,100)));
+  }
+  function compactWaveform(levels,targetPoints){
+    if(!Array.isArray(levels) || !levels.length) return [];
+    const points=Math.max(1,Math.min(WAVEFORM_MAX_POINTS,targetPoints||WAVEFORM_POINTS));
+    const peaks=[];
+    for(let index=0;index<points;index++){
+      const start=Math.floor(index*levels.length/points);
+      const end=Math.max(start+1,Math.floor((index+1)*levels.length/points));
+      let peak=0;
+      for(let sample=start;sample<end && sample<levels.length;sample++) peak=Math.max(peak,Number(levels[sample])||0);
+      peaks.push(peak);
+    }
+    const ceiling=Math.max(.002,...peaks);
+    return peaks.map(value=>Math.round(clamp(Math.sqrt(value/ceiling)*100,0,100)));
   }
   function defaultTitle(){
     const date=new Date();
@@ -159,7 +194,7 @@
     draftUrl=''; draft=null;
     renderIdle();
   }
-  function drawLevel(){
+  function drawLevel(now){
     if(!recording || !levelAnalyser) return;
     const data=new Uint8Array(levelAnalyser.fftSize);
     levelAnalyser.getByteTimeDomainData(data);
@@ -169,6 +204,10 @@
       sum+=sample*sample;
     }
     const rms=Math.sqrt(sum/data.length);
+    if(!lastWaveformCaptureAt || now-lastWaveformCaptureAt>=40){
+      waveformLevels.push(rms);
+      lastWaveformCaptureAt=now;
+    }
     recordLevel.style.transform=`scaleX(${Math.min(1,Math.max(.018,rms*7)).toFixed(3)})`;
     levelFrame=requestAnimationFrame(drawLevel);
   }
@@ -222,6 +261,8 @@
       if(mimeType) options.mimeType=mimeType;
       recorder=new MediaRecorder(stream,options);
       chunks=[];
+      waveformLevels=[];
+      lastWaveformCaptureAt=0;
       recorder.addEventListener('dataavailable',event=>{
         if(event.data && event.data.size) chunks.push(event.data);
       });
@@ -275,7 +316,11 @@
     if(durationMs<1000 || !blob.size){
       renderIdle(); setMessage('1초 이상 녹음해 주세요',true); return;
     }
-    draft={blob,durationMs,mimeType:type,title:defaultTitle(),extension:extensionFor(type)};
+    draft={
+      blob,durationMs,mimeType:type,title:defaultTitle(),extension:extensionFor(type),
+      waveform:compactWaveform(waveformLevels,WAVEFORM_POINTS),
+    };
+    waveformLevels=[];
     draftUrl=URL.createObjectURL(blob);
     draftAudio.src=draftUrl;
     renderDraft();
@@ -287,18 +332,92 @@
     try{ await draftAudio.play(); }
     catch(e){ setMessage('재생 버튼을 다시 눌러주세요',true); }
   }
-  function stopCloudPlayback(){
-    ++cloudPlayToken;
-    cloudFallbackAudio.pause();
-    cloudFallbackAudio.removeAttribute('src');
+  function currentCloudPosition(){
+    if(cloudPlayingId && cloudPlaybackMode==='native'){
+      return Math.max(0,Number(cloudFallbackAudio.currentTime)||0);
+    }
+    if(cloudPlayingId && cloudPlaybackMode==='decoded' && cloudDecodedContext){
+      return Math.max(0,cloudStartedOffset+cloudDecodedContext.currentTime-cloudStartedAt);
+    }
+    return Math.max(0,Number(playbackPositions.get(cloudMediaId))||0);
+  }
+  function updatePlayerProgress(recordingId,position){
+    if(!recordingId) return;
+    const row=rows.find(item=>item.id===recordingId);
+    const player=document.getElementById(`record-player-${recordingId}`);
+    if(!row || !player) return;
+    const duration=rowDurationSeconds(row);
+    const seconds=clamp(Number(position)||0,0,duration||0);
+    const waveform=player.querySelector('.record-waveform');
+    const elapsed=player.querySelector('.record-player-elapsed');
+    if(waveform){
+      waveform.style.setProperty('--wave-progress',`${duration?seconds/duration*100:0}%`);
+      waveform.setAttribute('aria-valuenow',String(Math.round(seconds)));
+      waveform.setAttribute('aria-valuetext',`${formatDuration(seconds*1000)} / ${formatDuration(row.duration_ms)}`);
+    }
+    if(elapsed) elapsed.textContent=formatDuration(seconds*1000);
+  }
+  function stopCloudProgress(){
+    cancelAnimationFrame(cloudProgressFrame);
+    cloudProgressFrame=0;
+  }
+  function startCloudProgress(){
+    stopCloudProgress();
+    const tick=()=>{
+      if(!cloudPlayingId) return;
+      const position=currentCloudPosition();
+      playbackPositions.set(cloudPlayingId,position);
+      updatePlayerProgress(cloudPlayingId,position);
+      cloudProgressFrame=requestAnimationFrame(tick);
+    };
+    cloudProgressFrame=requestAnimationFrame(tick);
+  }
+  function releaseCloudSource(){
     const source=cloudSource;
     cloudSource=null;
-    if(source){
-      source.onended=null;
-      try{ source.stop(); }catch(e){}
-      try{ source.disconnect(); }catch(e){}
-    }
+    if(!source) return;
+    source.onended=null;
+    try{ source.stop(); }catch(e){}
+    try{ source.disconnect(); }catch(e){}
+  }
+  function stopCloudPlayback(resetPosition){
+    const mediaId=cloudMediaId||cloudPlayingId;
+    ++cloudPlayToken;
+    stopCloudProgress();
+    cloudFallbackAudio.pause();
+    cloudFallbackAudio.removeAttribute('src');
+    releaseCloudSource();
+    if(resetPosition!==false && mediaId) playbackPositions.delete(mediaId);
     cloudPlayingId='';
+    cloudMediaId='';
+    cloudPlaybackMode='';
+    cloudStartedAt=0;
+    cloudStartedOffset=0;
+    cloudDecodedBuffer=null;
+    cloudDecodedContext=null;
+    setTabSounding('trainer',false,'recording-playback');
+    renderList();
+  }
+  function pauseCloudPlayback(){
+    if(!cloudPlayingId) return;
+    const id=cloudPlayingId;
+    playbackPositions.set(id,currentCloudPosition());
+    ++cloudPlayToken;
+    stopCloudProgress();
+    if(cloudPlaybackMode==='native') cloudFallbackAudio.pause();
+    else releaseCloudSource();
+    cloudPlaybackMode=cloudPlaybackMode==='native'?'native-paused':'decoded-paused';
+    cloudPlayingId='';
+    setTabSounding('trainer',false,'recording-playback');
+    renderList();
+  }
+  function finishCloudPlayback(){
+    const id=cloudMediaId||cloudPlayingId;
+    stopCloudProgress();
+    releaseCloudSource();
+    if(id) playbackPositions.delete(id);
+    cloudPlayingId='';
+    cloudPlaybackMode=cloudPlaybackMode==='native'?'native-paused':'decoded-paused';
     setTabSounding('trainer',false,'recording-playback');
     renderList();
   }
@@ -313,6 +432,9 @@
       URL.revokeObjectURL(entry.url);
       cloudBlobs.delete(id);
     });
+    waveformCache.forEach((value,id)=>{ if(!ids.has(id)) waveformCache.delete(id); });
+    playbackPositions.forEach((value,id)=>{ if(!ids.has(id)) playbackPositions.delete(id); });
+    if(expandedRecordingId && !ids.has(expandedRecordingId)) expandedRecordingId='';
   }
   function rememberCloudBlob(row,blob){
     if(!row || !row.id || !blob) return null;
@@ -323,6 +445,8 @@
     return entry;
   }
   function forgetCloudBlob(recordingId){
+    waveformCache.delete(recordingId);
+    playbackPositions.delete(recordingId);
     const entry=cloudBlobs.get(recordingId);
     if(!entry) return;
     URL.revokeObjectURL(entry.url);
@@ -384,7 +508,32 @@
       }catch(error){ fail(error); }
     }));
   }
-  async function playDecodedBlob(playback,recordingBlob,row,token){
+  function startDecodedSource(ctx,buffer,row,token,offset){
+    try{
+      releaseCloudSource();
+      const source=ctx.createBufferSource();
+      const duration=Math.max(0,Number(buffer.duration)||rowDurationSeconds(row));
+      const startAt=clamp(Number(offset)||0,0,Math.max(0,duration-.02));
+      source.buffer=buffer;
+      source.connect(ctx.destination);
+      source.onended=()=>{
+        if(cloudSource!==source || token!==cloudPlayToken) return;
+        try{ source.disconnect(); }catch(e){}
+        cloudSource=null;
+        finishCloudPlayback();
+      };
+      cloudSource=source;
+      cloudDecodedBuffer=buffer;
+      cloudDecodedContext=ctx;
+      cloudStartedOffset=startAt;
+      cloudStartedAt=ctx.currentTime;
+      cloudPlaybackMode='decoded';
+      source.start(0,startAt);
+      setTabSounding('trainer',true,'recording-playback');
+      setMessage(''); renderList(); startCloudProgress();
+    }catch(error){ throw playbackStageError('audio',error); }
+  }
+  async function playDecodedBlob(playback,recordingBlob,row,token,offset){
     const [ctx,result]=await Promise.all([
       playback.ready.catch(error=>{ throw playbackStageError('audio',error); }),
       Promise.resolve(recordingBlob).catch(error=>{ throw playbackStageError('download',error); }),
@@ -394,22 +543,7 @@
     try{ buffer=await decodeAudioBlob(ctx,result.blob); }
     catch(error){ throw playbackStageError('decode',error); }
     if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-    try{
-      const source=ctx.createBufferSource();
-      source.buffer=buffer;
-      source.connect(ctx.destination);
-      source.onended=()=>{
-        if(cloudSource!==source) return;
-        try{ source.disconnect(); }catch(e){}
-        cloudSource=null; cloudPlayingId='';
-        setTabSounding('trainer',false,'recording-playback');
-        renderList();
-      };
-      cloudSource=source;
-      source.start(0);
-      setTabSounding('trainer',true,'recording-playback');
-      setMessage(''); renderList();
-    }catch(error){ throw playbackStageError('audio',error); }
+    startDecodedSource(ctx,buffer,row,token,offset);
   }
   function handlePlaybackFailure(error,row,token){
     if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
@@ -422,9 +556,19 @@
         ? '이 녹음 파일을 재생할 수 없습니다 · 다운로드로 확인해 주세요'
         : '오디오 재생을 시작하지 못했습니다',true);
   }
-  function playRow(row){
-    if(cloudPlayingId===row.id){ stopCloudPlayback(); return; }
-    stopCloudPlayback();
+  function prepareNativeOffset(offset){
+    const apply=()=>{
+      const duration=Number(cloudFallbackAudio.duration)||0;
+      try{ cloudFallbackAudio.currentTime=clamp(Number(offset)||0,0,Math.max(0,duration-.02)); }catch(e){}
+    };
+    if(cloudFallbackAudio.readyState>=1) apply();
+    else cloudFallbackAudio.addEventListener('loadedmetadata',apply,{once:true});
+  }
+  function playRow(row,requestedOffset){
+    const seeking=Number.isFinite(requestedOffset);
+    if(cloudPlayingId===row.id && !seeking){ pauseCloudPlayback(); return; }
+    if(cloudPlayingId===row.id) pauseCloudPlayback();
+    else if(cloudPlayingId || (cloudMediaId && cloudMediaId!==row.id)) stopCloudPlayback();
     draftAudio.pause();
     let playback;
     try{ playback=beginPlaybackFromGesture(); }
@@ -432,10 +576,31 @@
     // 네이티브 재생이 성공하면 Web Audio 준비 결과를 기다리지 않으므로
     // 그 경로의 실패도 처리된 Promise로 남겨 콘솔 오류를 만들지 않는다.
     playback.ready.catch(()=>{});
+    const offset=clamp(seeking?requestedOffset:Number(playbackPositions.get(row.id))||0,0,rowDurationSeconds(row));
+    playbackPositions.set(row.id,offset);
+    if(cloudMediaId===row.id && cloudPlaybackMode==='native-paused' && cloudFallbackAudio.getAttribute('src')){
+      const token=++cloudPlayToken;
+      cloudPlayingId=row.id;
+      cloudPlaybackMode='native';
+      prepareNativeOffset(offset);
+      Promise.resolve(cloudFallbackAudio.play()).then(()=>{
+        if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+        setTabSounding('trainer',true,'recording-playback');
+        setMessage(''); renderList(); startCloudProgress();
+      }).catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token));
+      renderList(); return;
+    }
+    if(cloudMediaId===row.id && cloudPlaybackMode==='decoded-paused' && cloudDecodedBuffer && cloudDecodedContext){
+      const token=++cloudPlayToken;
+      cloudPlayingId=row.id;
+      startDecodedSource(cloudDecodedContext,cloudDecodedBuffer,row,token,offset);
+      return;
+    }
     const cached=cloudBlobs.get(row.id);
     const token=++cloudPlayToken;
     setMessage('녹음을 불러오는 중입니다');
     cloudPlayingId=row.id;
+    cloudMediaId=row.id;
     const recordingBlob=cached
       ? Promise.resolve({blob:cached.blob,cached:true})
       : findPlaybackBlob(row);
@@ -445,24 +610,158 @@
     const playbackUrl=cached ? cached.url : String(row.playback_url||'');
     if(playbackUrl){
       cloudFallbackAudio.src=playbackUrl;
+      cloudPlaybackMode='native';
+      prepareNativeOffset(offset);
       const playPromise=cloudFallbackAudio.play();
       Promise.resolve(playPromise).then(()=>{
         if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
         setTabSounding('trainer',true,'recording-playback');
-        setMessage(''); renderList();
+        setMessage(''); renderList(); startCloudProgress();
       }).catch(error=>{
         if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
         console.warn('[O\'live native recording playback]',error);
         cloudFallbackAudio.pause();
         cloudFallbackAudio.removeAttribute('src');
-        playDecodedBlob(playback,recordingBlob,row,token)
+        cloudPlaybackMode='';
+        playDecodedBlob(playback,recordingBlob,row,token,offset)
           .catch(fallbackError=>handlePlaybackFailure(fallbackError,row,token));
       });
       renderList();
       return;
     }
-    playDecodedBlob(playback,recordingBlob,row,token)
+    playDecodedBlob(playback,recordingBlob,row,token,offset)
       .catch(error=>handlePlaybackFailure(error,row,token));
+    renderList();
+  }
+  function waveformPath(values){
+    const source=normalizeWaveform(values);
+    if(!source.length) return '';
+    return source.map((value,index)=>{
+      const x=((index+.5)/source.length*100).toFixed(3);
+      const half=(2.25+value/100*16.75).toFixed(3);
+      return `M${x} ${(20-half).toFixed(3)}V${(20+Number(half)).toFixed(3)}`;
+    }).join('');
+  }
+  function createWaveformSvg(values,className){
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 100 40');
+    svg.setAttribute('preserveAspectRatio','none');
+    svg.setAttribute('aria-hidden','true');
+    svg.classList.add('record-waveform-svg',className);
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',waveformPath(values));
+    svg.appendChild(path);
+    return svg;
+  }
+  async function waveformFromBlob(blob){
+    const OfflineContext=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+    const Context=OfflineContext||(window.AudioContext||window.webkitAudioContext);
+    if(!Context) throw new Error('Audio decoding unavailable');
+    const ctx=OfflineContext ? new OfflineContext(1,1,44100) : new Context();
+    try{
+      const buffer=await decodeAudioBlob(ctx,blob);
+      const levels=[];
+      for(let point=0;point<WAVEFORM_POINTS;point++){
+        const start=Math.floor(point*buffer.length/WAVEFORM_POINTS);
+        const end=Math.max(start+1,Math.floor((point+1)*buffer.length/WAVEFORM_POINTS));
+        const step=Math.max(1,Math.floor((end-start)/192));
+        let peak=0;
+        for(let channel=0;channel<buffer.numberOfChannels;channel++){
+          const samples=buffer.getChannelData(channel);
+          for(let index=start;index<end;index+=step) peak=Math.max(peak,Math.abs(samples[index]||0));
+        }
+        levels.push(peak);
+      }
+      return compactWaveform(levels,WAVEFORM_POINTS);
+    }finally{
+      if(!OfflineContext && ctx && typeof ctx.close==='function') ctx.close().catch(()=>{});
+    }
+  }
+  function loadRowWaveform(row){
+    const supplied=normalizeWaveform(row&&row.waveform);
+    if(supplied.length){ waveformCache.set(row.id,supplied); return Promise.resolve(supplied); }
+    if(waveformCache.has(row.id)) return Promise.resolve(waveformCache.get(row.id));
+    if(waveformLoads.has(row.id)) return waveformLoads.get(row.id);
+    const userId=sessionUserId;
+    const pending=findPlaybackBlob(row).then(result=>waveformFromBlob(result.blob)).then(values=>{
+      if(sessionUserId!==userId || !values.length) return values;
+      waveformCache.set(row.id,values);
+      row.waveform=values;
+      if(window.OliveCloud.saveRecordingWaveform){
+        window.OliveCloud.saveRecordingWaveform(row.id,values)
+          .catch(error=>console.warn('[O\'live recording waveform sync]',error));
+      }
+      if(expandedRecordingId===row.id) renderList();
+      return values;
+    }).catch(error=>{
+      console.warn('[O\'live recording waveform]',error);
+      return [];
+    }).finally(()=>waveformLoads.delete(row.id));
+    waveformLoads.set(row.id,pending);
+    return pending;
+  }
+  function seekRow(row,ratio,playAfterSeek){
+    const position=clamp(Number(ratio)||0,0,1)*rowDurationSeconds(row);
+    playbackPositions.set(row.id,position);
+    updatePlayerProgress(row.id,position);
+    if(playAfterSeek || cloudPlayingId===row.id) playRow(row,position);
+  }
+  function createExpandedPlayer(row){
+    const player=document.createElement('div');
+    player.className='record-player';
+    player.id=`record-player-${row.id}`;
+    player.dataset.recordingId=row.id;
+    const play=document.createElement('button');
+    play.type='button';
+    play.className='record-player-play'+(cloudPlayingId===row.id?' playing':'');
+    play.setAttribute('aria-label',`${row.title} ${cloudPlayingId===row.id?'일시 정지':'재생'}`);
+    play.innerHTML='<span aria-hidden="true"></span>';
+    play.addEventListener('click',()=>playRow(row));
+    const detail=document.createElement('div'); detail.className='record-player-detail';
+    const waveform=document.createElement('div'); waveform.className='record-waveform';
+    waveform.tabIndex=0; waveform.setAttribute('role','slider');
+    waveform.setAttribute('aria-label',`${row.title} 재생 위치`);
+    waveform.setAttribute('aria-valuemin','0');
+    waveform.setAttribute('aria-valuemax',String(Math.round(rowDurationSeconds(row))));
+    const values=waveformCache.get(row.id)||normalizeWaveform(row.waveform);
+    const shown=values.length?values:Array(WAVEFORM_POINTS).fill(8);
+    if(!values.length) waveform.classList.add('loading');
+    waveform.append(createWaveformSvg(shown,'base'),createWaveformSvg(shown,'played'));
+    waveform.addEventListener('click',event=>{
+      const bounds=waveform.getBoundingClientRect();
+      seekRow(row,bounds.width?(event.clientX-bounds.left)/bounds.width:0,true);
+    });
+    waveform.addEventListener('keydown',event=>{
+      const duration=rowDurationSeconds(row);
+      const current=Number(playbackPositions.get(row.id))||0;
+      let next=current;
+      if(event.key==='ArrowLeft') next=current-5;
+      else if(event.key==='ArrowRight') next=current+5;
+      else if(event.key==='Home') next=0;
+      else if(event.key==='End') next=duration;
+      else return;
+      event.preventDefault();
+      seekRow(row,duration?clamp(next,0,duration)/duration:0,false);
+    });
+    const times=document.createElement('div'); times.className='record-player-times';
+    const elapsed=document.createElement('span'); elapsed.className='record-player-elapsed';
+    const total=document.createElement('span'); total.textContent=formatDuration(row.duration_ms);
+    times.append(elapsed,total);
+    detail.append(waveform,times); player.append(play,detail);
+    requestAnimationFrame(()=>updatePlayerProgress(row.id,
+      cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0));
+    if(!values.length) loadRowWaveform(row);
+    return player;
+  }
+  function toggleRowExpanded(row){
+    if(expandedRecordingId===row.id){
+      expandedRecordingId='';
+      if(cloudMediaId===row.id) stopCloudPlayback();
+      else renderList();
+      return;
+    }
+    if(cloudMediaId && cloudMediaId!==row.id) stopCloudPlayback();
+    expandedRecordingId=row.id;
     renderList();
   }
   function renderList(){
@@ -477,21 +776,25 @@
       recordList.appendChild(state); return;
     }
     rows.forEach(row=>{
+      const entry=document.createElement('div'); entry.className='record-entry';
       const item=document.createElement('div'); item.className='record-row';
-      const play=document.createElement('button');
-      play.type='button'; play.className='record-row-play'+(cloudPlayingId===row.id?' playing':'');
-      play.setAttribute('aria-label',`${row.title} ${cloudPlayingId===row.id?'정지':'재생'}`);
-      play.innerHTML='<span aria-hidden="true"></span>';
-      play.addEventListener('click',()=>playRow(row));
+      const open=document.createElement('button'); open.type='button'; open.className='record-row-open';
+      open.setAttribute('aria-expanded',expandedRecordingId===row.id?'true':'false');
+      open.setAttribute('aria-controls',`record-player-${row.id}`);
+      open.setAttribute('aria-label',`${row.title} 녹음 ${expandedRecordingId===row.id?'접기':'열기'}`);
       const copy=document.createElement('span'); copy.className='record-row-copy';
       const title=document.createElement('strong'); title.textContent=row.title;
       const date=document.createElement('small'); date.textContent=formatDate(row.recorded_at);
       copy.append(title,date);
       const duration=document.createElement('span'); duration.className='record-row-duration'; duration.textContent=formatDuration(row.duration_ms);
+      open.append(copy,duration);
+      open.addEventListener('click',()=>toggleRowExpanded(row));
       const more=document.createElement('button'); more.type='button'; more.className='record-row-more';
       more.textContent='•••'; more.setAttribute('aria-label',`${row.title} 메뉴`);
       more.addEventListener('click',()=>openMenu(row,more));
-      item.append(play,copy,duration,more); recordList.appendChild(item);
+      item.append(open,more); entry.appendChild(item);
+      if(expandedRecordingId===row.id) entry.appendChild(createExpandedPlayer(row));
+      recordList.appendChild(entry);
     });
   }
   async function loadRecordings(){
@@ -500,6 +803,10 @@
     loadingList=true; renderList();
     try{
       rows=await window.OliveCloud.listRecordings();
+      rows.forEach(row=>{
+        const waveform=normalizeWaveform(row.waveform);
+        if(waveform.length) waveformCache.set(row.id,waveform);
+      });
       pruneCloudPlaybackCache();
       await hydrateCloudPlaybackCache(userId);
       setMessage('');
@@ -590,6 +897,7 @@
       const previousId=sessionUserId;
       if(recording || startPending) stopRecording();
       discardDraft(); stopCloudPlayback(); clearCloudPlaybackCache();
+      waveformCache.clear(); waveformLoads.clear(); playbackPositions.clear(); expandedRecordingId='';
       const cache=recordingCache();
       if(cache) cache.clearUser(previousId).catch(error=>console.warn('[O\'live recording cache clear]',error));
     }
@@ -620,7 +928,7 @@
   draftAudio.addEventListener('play',()=>{ recordState.textContent='재생 중'; setButtonMode('preview'); setTabSounding('trainer',true,'recording-preview'); });
   draftAudio.addEventListener('pause',()=>{ if(draft){ recordState.textContent='녹음 확인'; setButtonMode('preview'); } setTabSounding('trainer',false,'recording-preview'); });
   draftAudio.addEventListener('ended',()=>{ recordState.textContent='녹음 확인'; setButtonMode('preview'); setTabSounding('trainer',false,'recording-preview'); });
-  cloudFallbackAudio.addEventListener('ended',stopCloudPlayback);
+  cloudFallbackAudio.addEventListener('ended',finishCloudPlayback);
   registerTransport({
     isPlaying:()=>recording || startPending || !draftAudio.paused || Boolean(cloudPlayingId),
     stop:()=>{

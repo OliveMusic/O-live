@@ -496,7 +496,7 @@
   async function listRecordings(){
     await ensureRecordingAccess();
     const {data,error}=await client.from('practice_recordings')
-      .select('id,title,object_path,duration_ms,byte_size,mime_type,recorded_at,created_at')
+      .select('id,title,object_path,duration_ms,byte_size,mime_type,waveform,recorded_at,created_at')
       .eq('status','ready')
       .order('recorded_at',{ascending:false})
       .limit(50);
@@ -529,6 +529,7 @@
       p_duration_ms:Math.round(Number(recording&&recording.durationMs)||0),
       p_byte_size:Number(recording&&recording.blob&&recording.blob.size)||0,
       p_mime_type:mimeType,
+      p_waveform:Array.isArray(recording&&recording.waveform)?recording.waveform:[],
     });
     if(reserveError) throw reserveError;
     let uploaded=false;
@@ -556,6 +557,16 @@
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('rename_practice_recording',{
       p_recording_id:id,p_title:title,
+    });
+    if(error) throw error;
+    if(!data) throw new Error('Recording was not found');
+    return true;
+  }
+  async function saveRecordingWaveform(id,waveform){
+    await ensureRecordingAccess();
+    const {data,error}=await client.rpc('save_practice_recording_waveform',{
+      p_recording_id:id,
+      p_waveform:Array.isArray(waveform)?waveform:[],
     });
     if(error) throw error;
     if(!data) throw new Error('Recording was not found');
@@ -776,6 +787,7 @@
     subscribeSession,
     listRecordings,
     uploadRecording,
+    saveRecordingWaveform,
     renameRecording,
     deleteRecording,
     downloadRecording,

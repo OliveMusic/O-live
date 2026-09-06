@@ -80,7 +80,7 @@ function makeContext({config,storage,supabase}){
       addEventListener:(name,handler)=>{ documentListeners[name]=handler; },
     },
     addEventListener:(name,handler)=>{ windowListeners[name]=handler; },
-    OLIVE_RELEASE:{version:'1.3.4',build:134,schemaVersion:6},
+    OLIVE_RELEASE:{version:'1.3.5',build:135,schemaVersion:7},
     OLIVE_CLOUD_CONFIG:config,
     supabase,
   };
@@ -160,7 +160,7 @@ async function testConfiguredQueueAndMigration(){
     },
     async rpc(name,args){
       rpcCalls.push({name,args});
-      if(name==='olive_schema_version') return {data:6,error:null};
+      if(name==='olive_schema_version') return {data:7,error:null};
       if(name==='record_ear_answer'){
         recordCount++;
         if(recordCount===1) await new Promise(resolve=>setTimeout(resolve,20));
@@ -373,10 +373,10 @@ async function testSchemaUpgradeMessage(){
   });
 
   assert.equal(elements.earCloudTitle.textContent,'클라우드 업데이트 필요');
-  assert.match(elements.earCloudStatus.textContent,/DB-006/);
+  assert.match(elements.earCloudStatus.textContent,/DB-007/);
   assert.equal(dataReadCount,0);
   await elements.cloudSyncNow.listeners.click();
-  assert.match(elements.cloudAuthMessage.textContent,/오류 코드 DB-006/);
+  assert.match(elements.cloudAuthMessage.textContent,/오류 코드 DB-007/);
   assert.equal(elements.cloudAuthMessage.classList.contains('error'),true);
 }
 

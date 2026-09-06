@@ -2,7 +2,7 @@ const {test,expect}=require('playwright/test');
 
 const pageErrors=new WeakMap();
 
-async function preparePage(page,{cloudClient=false,preferences=null,microphone='native'}={}){
+async function preparePage(page,{cloudClient=false,preferences=null,microphone='native',recordings=[]}={}){
   const errors=[];
   pageErrors.set(page,errors);
   page.on('pageerror',error=>errors.push(error.message));
@@ -11,12 +11,45 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
     contentType:'application/javascript',
     body:'',
   }));
-  await page.addInitScript(({withCloud,storedPreferences,micMode})=>{
+  await page.addInitScript(({withCloud,storedPreferences,micMode,recordingRows})=>{
     sessionStorage.setItem('olive-startup-state-v2','shown');
     if(storedPreferences){
       localStorage.setItem('olive-preferences-v1',JSON.stringify(storedPreferences));
     }
-    if(withCloud){
+    if(withCloud==='recordings'){
+      const user={
+        id:'recording-browser-user',email:'recording@example.com',
+        app_metadata:{provider:'google'},user_metadata:{full_name:'Recording Test'},
+      };
+      const client={
+        auth:{
+          onAuthStateChange(){ return {data:{subscription:{unsubscribe(){}}}}; },
+          async getSession(){ return {data:{session:{user}},error:null}; },
+        },
+        async rpc(name){ return {data:name==='olive_schema_version'?7:true,error:null}; },
+        from(table){
+          if(table==='practice_recordings') return {
+            select(){ return {eq(){ return {order(){ return {async limit(){ return {data:recordingRows,error:null}; }}; }}; }}; },
+          };
+          if(table==='user_preferences') return {
+            select(){ return {eq(){ return {async maybeSingle(){ return {data:null,error:null}; }}; }}; },
+            async upsert(){ return {data:null,error:null}; },
+          };
+          return {select(){ return {async order(){ return {data:[],error:null}; }}; }};
+        },
+        storage:{from(){ return {
+          async createSignedUrls(paths){
+            return {data:paths.map(path=>({path,signedUrl:`https://storage.example.com/${path}?token=test`})),error:null};
+          },
+          async download(){ return {data:new Blob(['recording'],{type:'audio/mp4'}),error:null}; },
+        }; }},
+      };
+      window.supabase={createClient:()=>client};
+      Object.defineProperty(HTMLMediaElement.prototype,'duration',{configurable:true,get(){ return 69; }});
+      Object.defineProperty(HTMLMediaElement.prototype,'readyState',{configurable:true,get(){ return 1; }});
+      HTMLMediaElement.prototype.play=function(){ return Promise.resolve(); };
+      HTMLMediaElement.prototype.pause=function(){};
+    }else if(withCloud){
       const client={
         auth:{
           onAuthStateChange(){ return {data:{subscription:{unsubscribe(){}}}}; },
@@ -146,10 +179,10 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
         value:{getUserMedia},
       });
     }
-  },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
+  },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.4');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.5');
 }
 
 test.afterEach(async({page})=>{
@@ -175,7 +208,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=134');
+  expect(workerUrl).toContain('service-worker.js?v=135');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -215,6 +248,40 @@ test('녹음 더보기 메뉴의 취소 버튼이 불투명한 패널 배경을 
   );
   expect(background).not.toBe('rgba(0, 0, 0, 0)');
   expect(background).not.toBe('transparent');
+});
+
+test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이 나타난다',async({page})=>{
+  const waveform=Array.from({length:80},(_,index)=>18+(index*17)%82);
+  await preparePage(page,{
+    cloudClient:'recordings',
+    recordings:[{
+      id:'recording-1',title:'9월 6일 녹음',object_path:'recording-browser-user/recording-1.m4a',
+      duration_ms:69000,byte_size:1000,mime_type:'audio/mp4',waveform,
+      recorded_at:'2026-09-06T09:00:00.000Z',created_at:'2026-09-06T09:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expect(page.locator('.record-row-open')).toHaveCount(1);
+  await expect(page.locator('.record-player')).toHaveCount(0);
+  await page.locator('.record-row-open').click();
+  await expect(page.locator('.record-player')).toBeVisible();
+  await expect(page.locator('.record-player-play')).toBeVisible();
+  await expect(page.locator('.record-waveform[role="slider"]')).toBeVisible();
+  await expect(page.locator('.record-waveform-svg.base path')).toHaveAttribute('d',/M/);
+
+  const box=await page.locator('.record-waveform').boundingBox();
+  expect(box).toBeTruthy();
+  await page.mouse.click(box.x+box.width*.75,box.y+box.height/2);
+  await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
+  await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/5[01-3]/);
+  await expect(page.locator('.record-player-elapsed')).toHaveText('00:51');
+  await page.locator('.record-player-play').click();
+  await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
+
+  await page.locator('.record-row-more').click();
+  await expect(page.locator('#recordMenuBackdrop')).toBeVisible();
+  await expect(page.locator('.record-row-open')).toHaveAttribute('aria-expanded','true');
 });
 
 test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',async({page})=>{
@@ -482,8 +549,8 @@ test('클라우드 스키마가 오래되면 저장 대신 구체적인 업데�
   await preparePage(page,{cloudClient:true});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(page.locator('#earCloudTitle')).toHaveText('클라우드 업데이트 필요');
-  await expect(page.locator('#earCloudStatus')).toContainText('DB-006');
+  await expect(page.locator('#earCloudStatus')).toContainText('DB-007');
   await page.locator('#earCloudAction').evaluate(element=>element.click());
   await page.locator('#cloudSyncNow').click();
-  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-006');
+  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-007');
 });

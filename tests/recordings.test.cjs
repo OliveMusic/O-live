@@ -11,7 +11,9 @@ const rhythm=fs.readFileSync('js/rhythm-trainer.js','utf8');
 const jam=fs.readFileSync('js/jam-session.js','utf8');
 const cloud=fs.readFileSync('cloud-sync.js','utf8');
 const recordingCache=fs.readFileSync('js/recording-cache.js','utf8');
-const migration=fs.readFileSync('supabase/006_recordings.sql','utf8');
+const baseMigration=fs.readFileSync('supabase/006_recordings.sql','utf8');
+const waveformMigration=fs.readFileSync('supabase/007_recording_waveforms.sql','utf8');
+const migration=baseMigration+'\n'+waveformMigration;
 const edge=fs.readFileSync('supabase/functions/delete-account/index.ts','utf8');
 
 assert.match(index,/grid-template-columns:repeat\(3,1fr\)/);
@@ -26,11 +28,14 @@ assert.doesNotMatch(index,/id="pane-record"[\s\S]*?<h2>연주 녹음<\/h2>/);
 // 튜너·청음과 같은 올리브 기울기, 비율, 씨 위치를 사용한다.
 assert.match(index,/\.record-olive-static,\.record-olive\{[\s\S]*?width:76px; height:62\.5px;[\s\S]*?transform:rotate\(-11deg\)/);
 assert.match(index,/\.record-olive::after,\.record-olive-static::after\{[\s\S]*?left:calc\(50% \+ 15px\);[\s\S]*?width:23px; height:23px;/);
-assert.match(index,/\.record-row-play\{[\s\S]*?transform:rotate\(-11deg\)/);
+assert.match(index,/\.record-player-play\{[\s\S]*?transform:rotate\(-11deg\)/);
 assert.match(index,/\.record-draft-actions\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-assert.match(index,/\.record-row\{[\s\S]*?min-height:54px;[\s\S]*?grid-template-columns:44px/);
-assert.match(index,/\.record-row-play\{[\s\S]*?width:44px; height:44px;/);
-assert.match(index,/\.record-row-play::before\{[\s\S]*?width:34px; height:28px;/);
+assert.match(index,/\.record-row\{[\s\S]*?min-height:54px;[\s\S]*?grid-template-columns:minmax\(0,1fr\) 44px/);
+assert.match(index,/\.record-player-play\{[\s\S]*?width:44px; height:44px;/);
+assert.match(index,/\.record-player-play::before\{[\s\S]*?width:34px; height:28px;/);
+assert.match(index,/\.record-player\{[\s\S]*?grid-template-columns:44px minmax\(0,1fr\)/);
+assert.match(index,/\.record-waveform\{[\s\S]*?height:44px/);
+assert.match(index,/\.record-waveform-svg\.played\{[\s\S]*?clip-path:inset/);
 assert.match(index,/\.record-menu-cancel\{[^}]*background:var\(--body-hi\)/);
 
 assert.match(recorder,/const MAX_DURATION_MS=5\*60\*1000/);
@@ -77,12 +82,20 @@ assert.match(recorder,/await cache\.remove\(currentUser\.id,row\.id\)/);
 
 // iOS Safari에서는 서명 주소를 네이티브 플레이어로 즉시 재생하고,
 // 실패할 때만 제스처에서 미리 연 Web Audio 디코딩 경로를 사용한다.
-const playRow=recorder.match(/function playRow\(row\)\{[\s\S]*?\n  \}/)?.[0]||'';
+const playRow=recorder.match(/function playRow\(row,requestedOffset\)\{[\s\S]*?\n  \}/)?.[0]||'';
 assert.match(playRow,/beginPlaybackFromGesture\(\)/);
 assert.match(playRow,/findPlaybackBlob\(row\)/);
 assert.match(playRow,/row\.playback_url/);
 assert.match(playRow,/cloudFallbackAudio\.play\(\)/);
-assert.match(playRow,/playDecodedBlob\(playback,recordingBlob,row,token\)/);
+assert.match(playRow,/playDecodedBlob\(playback,recordingBlob,row,token/);
+assert.match(recorder,/function createExpandedPlayer\(row\)/);
+assert.match(recorder,/waveform\.setAttribute\('role','slider'\)/);
+assert.match(recorder,/seekRow\(row,bounds\.width\?/);
+assert.match(recorder,/async function waveformFromBlob\(blob\)/);
+assert.match(recorder,/waveform:compactWaveform\(waveformLevels,WAVEFORM_POINTS\)/);
+assert.match(recorder,/saveRecordingWaveform\(row\.id,values\)/);
+assert.match(cloud,/p_waveform:Array\.isArray/);
+assert.match(cloud,/rpc\('save_practice_recording_waveform'/);
 assert.match(recorder,/const result=await window\.OliveCloud\.downloadRecording\(row\)/);
 assert.match(recorder,/decodeAudioBlob\(ctx,result\.blob\)/);
 assert.match(recorder,/ctx\.createBufferSource\(\)/);
@@ -98,7 +111,9 @@ assert.match(migration,/Users upload reserved recording objects/);
 assert.match(migration,/Users read their own recording objects/);
 assert.match(migration,/Users delete their own recording objects/);
 assert.match(migration,/delete from public\.practice_recordings where user_id=v_user_id/);
-assert.match(migration,/select 6::integer/);
+assert.match(waveformMigration,/add column if not exists waveform smallint\[\]/);
+assert.match(waveformMigration,/create or replace function public\.save_practice_recording_waveform/);
+assert.match(waveformMigration,/select 7::integer/);
 
 assert.match(edge,/from\("practice-recordings"\)/);
 assert.match(edge,/\.remove\(recordingPaths\)/);
