@@ -261,7 +261,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.13');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.14');
 }
 
 test.afterEach(async({page})=>{
@@ -287,7 +287,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=143');
+  expect(workerUrl).toContain('service-worker.js?v=144');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -512,7 +512,7 @@ test('메트로놈 재생 중 튜너로 가면 방해 음원이 즉시 정지한
   await expect(page.locator('#tab-tuner')).toBeVisible();
 });
 
-test('화면이 잠긴 상태에서도 메트로놈과 잼 재생 상태를 유지한다',async({page})=>{
+test('잠금 중 재생을 유지하고 잠금 화면의 일시정지로 메트로놈을 멈춘다',async({page})=>{
   await preparePage(page);
   const setVisibility=value=>page.evaluate(next=>{
     window.__testVisibility=next;
@@ -533,9 +533,13 @@ test('화면이 잠긴 상태에서도 메트로놈과 잼 재생 상태를 유�
   await page.waitForTimeout(350);
   await expect(metro).toHaveClass(/running/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).toHaveClass(/sounding/);
+  await page.locator('audio[data-olive-background="true"]').evaluate(audio=>{
+    audio.dispatchEvent(new Event('playing'));
+    audio.dispatchEvent(new Event('pause'));
+  });
+  await expect(metro).not.toHaveClass(/running|starting/);
+  await expect(page.locator('.tab-btn[data-tab="metronome"]')).not.toHaveClass(/sounding/);
   await setVisibility('visible');
-  await metro.click();
-  await expect(metro).not.toHaveClass(/running/);
 
   await page.locator('.tab-btn[data-tab="jam"]').click();
   const jam=page.locator('#jamStart');

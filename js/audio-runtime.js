@@ -5,6 +5,8 @@ let __ctxResumePromise = null;
 let __ctxReadyPromise = null;
 let __backgroundAudio = null;
 let __backgroundAudioUrl = '';
+let __stoppingBackgroundMedia = false;
+let __backgroundMediaArmed = false;
 
 /* iOS는 오디오 세션에 '용도'를 붙인다.
    ambient : 다른 앱 소리와 섞인다. 음악을 틀어 놓고 메트로놈을 쓸 수 있다.
@@ -44,13 +46,29 @@ async function startBackgroundMedia(label){
     audio.preload='auto';
     audio.playsInline=true;
     audio.src=silentWavUrl();
+    audio.hidden=true;
+    audio.dataset.oliveBackground='true';
+    audio.addEventListener('playing',()=>{
+      if(audio===__backgroundAudio) __backgroundMediaArmed=true;
+    });
+    // iPhone의 잠금 화면은 Media Session 콜백 대신 실제 <audio>만
+    // 일시정지시키는 경우가 있다. 그 이벤트도 앱의 재생 정지로 연결한다.
+    audio.addEventListener('pause',()=>{
+      if(__stoppingBackgroundMedia || !__backgroundMediaArmed || audio!==__backgroundAudio ||
+         !hasBackgroundTransportPlaying()) return;
+      __backgroundMediaArmed=false;
+      stopBackgroundTransports();
+    });
     __backgroundAudio=audio;
+    if(document.body) document.body.appendChild(audio);
   }
   try{
-    if(typeof MediaMetadata==='function' && navigator.mediaSession){
-      navigator.mediaSession.metadata=new MediaMetadata({
-        title:label||'연습 재생', artist:"O'live", album:'음악 연습',
-      });
+    if(navigator.mediaSession){
+      if(typeof MediaMetadata==='function'){
+        navigator.mediaSession.metadata=new MediaMetadata({
+          title:label||'연습 재생', artist:"O'live", album:'음악 연습',
+        });
+      }
       navigator.mediaSession.playbackState='playing';
       if(typeof navigator.mediaSession.setActionHandler==='function'){
         for(const action of ['pause','stop']){
@@ -62,14 +80,20 @@ async function startBackgroundMedia(label){
   try{
     const result=__backgroundAudio.play();
     if(result && typeof result.then==='function') await withTimeout(result,1400);
+    if(__backgroundAudio && !__backgroundAudio.paused) __backgroundMediaArmed=true;
   }catch(e){ /* playback 오디오 세션만으로 이어갈 수 있으므로 실제 재생은 막지 않는다. */ }
 }
 
 function stopBackgroundMedia(){
   if(__backgroundAudio){
-    try{ __backgroundAudio.pause(); }catch(e){}
-    try{ __backgroundAudio.currentTime=0; }catch(e){}
+    const audio=__backgroundAudio;
+    __stoppingBackgroundMedia=true;
+    __backgroundMediaArmed=false;
+    try{ audio.pause(); }catch(e){}
+    try{ audio.currentTime=0; }catch(e){}
+    try{ audio.remove(); }catch(e){}
     __backgroundAudio=null;
+    __stoppingBackgroundMedia=false;
   }
   if(__backgroundAudioUrl){
     try{ URL.revokeObjectURL(__backgroundAudioUrl); }catch(e){}
@@ -334,7 +358,9 @@ function setTabSounding(tab,on,source){
   }
   if(!anySounding() && !recording){
     setAudioSession('ambient');
-    if(audioCtx && audioCtx.state!=='closed') __ctxMode='ambient';
+    // 잠금 중에는 몇 박을 미리 예약한다. 마지막 재생을 멈출 때 컨텍스트를
+    // 닫아 두면 그 예약음도 즉시 취소되어 뒤늦게 틱 소리가 남지 않는다.
+    releaseCtx();
   }
 }
 

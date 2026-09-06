@@ -132,7 +132,7 @@ function playTone(freq, duration=0.6, when=0, type='sine', gainVal=0.43){
   return {osc, gain};
 }
 // level: 0 약 · 1 중(묶음 첫 박) · 2 강(마디 첫 박). true/false도 받는다.
-function playClick(when, accent, preparedCtx){
+function playClick(when, accent, preparedCtx, destination){
   const lv = accent === true ? 2 : accent === false ? 0 : (accent|0);
   const ctx = preparedCtx || getCtx();
   const t0 = ctx.currentTime + Math.max(when,0);
@@ -142,9 +142,10 @@ function playClick(when, accent, preparedCtx){
   const gain = ctx.createGain();
   gain.gain.setValueAtTime(lv===2 ? 0.62 : lv===1 ? 0.50 : 0.40, t0);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0+0.045);
-  osc.connect(gain).connect(getMaster(ctx));
+  osc.connect(gain).connect(destination || getMaster(ctx));
   osc.start(t0);
   osc.stop(t0+0.06);
+  return {osc, gain};
 }
 
 /* ===================== 악기 음색 =====================

@@ -38,7 +38,7 @@
   ];
   let sub = SUBS[0];
   let isPlaying = false;
-  let startPending = false, startToken = 0, metroCtx = null;
+  let startPending = false, startToken = 0, metroCtx = null, metroOutput = null;
   let currentStep = 0, nextNoteTime = 0.0, timerID = null;
   let rollBeat = 0;
   const scheduleAheadTime = 0.12, backgroundScheduleAheadTime = 2.5, lookahead = 25;
@@ -227,7 +227,8 @@
     const level = !isBeatStart || !accentOn ? 0
                 : beatIndex === 0 ? 2
                 : midBeats.has(beatIndex) ? 1 : 0;
-    if(sub.hits.indexOf(pos) >= 0) playClick(time - metroCtx.currentTime, level, metroCtx);
+    if(sub.hits.indexOf(pos) >= 0)
+      playClick(time - metroCtx.currentTime, level, metroCtx, metroOutput);
     scheduledBeats.push({step, time, isBeatStart, beatIndex, level});
   }
   function advanceNote(){
@@ -318,6 +319,8 @@
       }
       if(document.visibilityState!=='visible') throw new Error('PageNotVisible');
       metroCtx=ctx;
+      metroOutput=ctx.createGain();
+      metroOutput.connect(getMaster(ctx));
       isPlaying=true;
       currentStep=0;
       rollBeat=0;
@@ -334,6 +337,10 @@
       if(token!==startToken) return;
       startPending=false;
       metroCtx=null;
+      if(metroOutput){
+        try{ metroOutput.disconnect(); }catch(e){}
+        metroOutput=null;
+      }
       orbLabel.textContent='재시도';
       metroStart.classList.remove('starting','running','flash');
       metroStart.setAttribute('aria-busy','false');
@@ -348,6 +355,13 @@
     startToken++;
     startPending=false;
     isPlaying=false;
+    // 백그라운드에서 미리 예약해 둔 클릭음도 이 출력 버스를 끊는 순간
+    // 바로 무음이 된다. 다른 반주가 같은 AudioContext를 써도 영향을 주지 않는다.
+    if(metroOutput){
+      try{ metroOutput.gain.value=0; }catch(e){}
+      try{ metroOutput.disconnect(); }catch(e){}
+      metroOutput=null;
+    }
     metroCtx=null;
     clearTimeout(timerID);
     orbLabel.textContent=label;
