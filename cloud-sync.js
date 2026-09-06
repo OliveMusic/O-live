@@ -317,10 +317,12 @@
   }
   async function signOut(){
     if(!client || syncing) return;
+    const userId=activeUserId;
     syncing=true;
     renderSheet();
     setMessage('연결을 해제하는 중입니다');
     const {error}=await client.auth.signOut();
+    if(!error) await clearRecordingAudioCache(userId);
     syncing=false;
     renderSheet();
     if(error) setMessage(error.message,true);
@@ -452,14 +454,22 @@
       await uploadPreferences(local);
     }
   }
-  function clearLocalAccountData(){
-    if(activeUserId){
+  async function clearRecordingAudioCache(userId){
+    const cache=window.OliveRecordingCache;
+    if(!userId || !cache || typeof cache.clearUser!=='function') return;
+    try{ await cache.clearUser(userId); }
+    catch(error){ console.warn('[O\'live recording cache clear]',error); }
+  }
+  async function clearLocalAccountData(){
+    const userId=activeUserId;
+    if(userId){
       try{
-        localStorage.removeItem(USER_HISTORY_PREFIX+activeUserId);
-        localStorage.removeItem(QUEUE_PREFIX+activeUserId);
+        localStorage.removeItem(USER_HISTORY_PREFIX+userId);
+        localStorage.removeItem(QUEUE_PREFIX+userId);
       }catch(e){}
     }
     if(handlers.clearPreferences) handlers.clearPreferences();
+    await clearRecordingAudioCache(userId);
   }
   function notifySession(){
     sessionSubscribers.forEach(listener=>{
@@ -491,15 +501,7 @@
       .order('recorded_at',{ascending:false})
       .limit(50);
     if(error) throw error;
-    const recordings=data||[];
-    if(!recordings.length) return recordings;
-    const {data:signedRows,error:signedError}=await client.storage.from('practice-recordings')
-      .createSignedUrls(recordings.map(row=>row.object_path),60*60);
-    if(signedError) throw signedError;
-    return recordings.map((row,index)=>{
-      const signed=(signedRows||[]).find(item=>item&&item.path===row.object_path) || (signedRows||[])[index];
-      return {...row,playback_url:signed&&!signed.error&&signed.signedUrl||''};
-    });
+    return data||[];
   }
   async function uploadRecording(recording){
     await ensureRecordingAccess();
@@ -589,7 +591,7 @@
       await deleteAllRecordingObjects();
       const {error}=await client.rpc('delete_my_cloud_data');
       if(error) throw error;
-      clearLocalAccountData();
+      await clearLocalAccountData();
       handlers.useUserHistory(activeUserId,{});
       setMessage('클라우드 데이터를 삭제했습니다');
       if(location.reload) location.reload();
@@ -613,7 +615,7 @@
     try{
       const {error}=await client.functions.invoke('delete-account',{body:{confirm:true}});
       if(error) throw error;
-      clearLocalAccountData();
+      await clearLocalAccountData();
       try{ await client.auth.signOut({scope:'local'}); }catch(e){}
       if(location.reload) location.reload();
     }catch(error){

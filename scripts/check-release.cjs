@@ -25,7 +25,7 @@ assert.match(schema,new RegExp(`select ${release.schemaVersion}::integer`),'data
 
 const versionedAssets=[
   'cloud-sync.js','js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner-engine.js','js/tuner.js','js/scales.js',
-  'js/ear-trainer.js','js/rhythm-trainer.js','js/recorder.js','js/jam-session.js','js/app-shell.js',
+  'js/ear-trainer.js','js/rhythm-trainer.js','js/recording-cache.js','js/recorder.js','js/jam-session.js','js/app-shell.js',
 ];
 for(const asset of versionedAssets){
   const escaped=asset.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');

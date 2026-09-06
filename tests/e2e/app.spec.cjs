@@ -40,7 +40,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
       window.supabase={createClient:()=>client};
     }
     if(micMode!=='native'){
-      let analyserSampleCursor=0;
+      let analyserSampleCursor=0,analyserFrame=0;
       const harness={requests:0,stops:0,pending:false,contexts:0,zeroGainConnections:0};
       class FakeNode{
         connect(next){
@@ -76,14 +76,22 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
               array.fill(0);
               return;
             }
+            const pluckFrame=analyserFrame%40;
+            const pluckEnvelope=Math.exp(-pluckFrame/24);
             for(let i=0;i<array.length;i++){
               const frequency=micMode==='fan-tone' ? 93 : 82.4069;
               const phase=2*Math.PI*frequency*(analyserSampleCursor+i)/48000;
               array[i]=micMode==='fan-tone'
                 ? Math.sin(phase)*0.001+Math.sin(phase*2)*0.00035
-                : Math.sin(phase)*0.0003;
+                : pluckEnvelope*0.0003*(
+                    Math.sin(phase)+
+                    Math.sin(phase*2)*0.42+
+                    Math.sin(phase*3)*0.24+
+                    Math.sin(phase*4)*0.12
+                  );
             }
             analyserSampleCursor+=array.length;
+            analyserFrame++;
           };
           return node;
         }
@@ -141,7 +149,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.1');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.3');
 }
 
 test.afterEach(async({page})=>{
@@ -167,7 +175,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=131');
+  expect(workerUrl).toContain('service-worker.js?v=133');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -181,9 +189,9 @@ test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 �
   await expect(page.locator('#recordUsage')).toHaveText('0 / 50');
 
   const olive=await page.locator('.record-olive-static').evaluate(element=>{
-    const rect=element.getBoundingClientRect();
+    const style=getComputedStyle(element);
     const seed=getComputedStyle(element,'::after');
-    return {width:rect.width,height:rect.height,transform:getComputedStyle(element).transform,
+    return {width:parseFloat(style.width),height:parseFloat(style.height),transform:style.transform,
       seedWidth:seed.width,seedHeight:seed.height};
   });
   expect(olive.width).toBeCloseTo(76,1);
@@ -194,6 +202,35 @@ test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 �
 
   await page.locator('#recordConnect').click();
   await expect(page.locator('#cloudAuthSheet')).toBeVisible();
+});
+
+test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',async({page})=>{
+  await preparePage(page);
+  const beforeReload=await page.evaluate(async()=>{
+    const payload=new TextEncoder().encode('olive-recording-cache');
+    const blob=new Blob([payload],{type:'audio/webm'});
+    const row={
+      id:'cached-recording',byte_size:blob.size,mime_type:blob.type,
+      object_path:'cache-user/cached-recording.webm',
+    };
+    await window.OliveRecordingCache.put('cache-user',row,blob);
+    const cached=await window.OliveRecordingCache.get('cache-user',row);
+    return cached && cached.size;
+  });
+  expect(beforeReload).toBeGreaterThan(0);
+
+  await page.reload({waitUntil:'domcontentloaded'});
+  const afterReload=await page.evaluate(async()=>{
+    const size=new TextEncoder().encode('olive-recording-cache').byteLength;
+    const row={
+      id:'cached-recording',byte_size:size,mime_type:'audio/webm',
+      object_path:'cache-user/cached-recording.webm',
+    };
+    const cached=await window.OliveRecordingCache.get('cache-user',row);
+    await window.OliveRecordingCache.clearUser('cache-user');
+    return cached && cached.size;
+  });
+  expect(afterReload).toBe(beforeReload);
 });
 
 test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{
@@ -304,7 +341,7 @@ test('파형 Canvas 오류가 나도 튜너 음정 분석은 계속된다',async
   await page.locator('.tab-btn[data-tab="tuner"]').click();
   await page.locator('#tunerSens').fill('80');
   await page.locator('#tunerStart').click();
-  await expect(page.locator('#tunerNote')).toHaveText('E',{timeout:5000});
+  await expect(page.locator('#tunerNote')).toHaveText('E2',{timeout:5000});
   await expect(page.locator('#tunerLevel')).toHaveClass(/ready/);
   await page.locator('#tunerStart').click();
 });
@@ -333,7 +370,7 @@ test('튜너 약한 입력 모드가 기존 음량 문턱 아래의 일렉기타
 
   const mic=page.locator('#tunerStart');
   await mic.click();
-  await expect(page.locator('#tunerNote')).toHaveText('E',{timeout:5000});
+  await expect(page.locator('#tunerNote')).toHaveText('E2',{timeout:5000});
   await expect(page.locator('#tunerLevel')).toHaveClass(/ready/);
   await expect(page.locator('#tunerScopeState')).toHaveText('인식 중');
   await expect(page.locator('#tunerInputDb')).not.toHaveText('—');
@@ -432,8 +469,8 @@ test('클라우드 스키마가 오래되면 저장 대신 구체적인 업데�
   await preparePage(page,{cloudClient:true});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(page.locator('#earCloudTitle')).toHaveText('클라우드 업데이트 필요');
-  await expect(page.locator('#earCloudStatus')).toContainText('DB-005');
-  await page.locator('#earCloudAction').click();
+  await expect(page.locator('#earCloudStatus')).toContainText('DB-006');
+  await page.locator('#earCloudAction').evaluate(element=>element.click());
   await page.locator('#cloudSyncNow').click();
-  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-005');
+  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-006');
 });

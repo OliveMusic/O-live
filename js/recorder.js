@@ -32,7 +32,7 @@
   if(!recordToggle || !window.OliveCloud) return;
 
   const draftAudio=new Audio();
-  const cloudAudio=new Audio();
+  const cloudFallbackAudio=new Audio();
   let currentUser=null;
   let sessionUserId='';
   let rows=[];
@@ -53,6 +53,9 @@
   let draft=null;
   let draftUrl='';
   let cloudPlayingId='';
+  let cloudSource=null;
+  let cloudPlayToken=0;
+  const cloudBlobs=new Map();
   let loadingList=false;
 
   function makeId(){
@@ -282,34 +285,168 @@
     catch(e){ setMessage('재생 버튼을 다시 눌러주세요',true); }
   }
   function stopCloudPlayback(){
-    cloudAudio.pause();
-    cloudAudio.removeAttribute('src');
+    ++cloudPlayToken;
+    cloudFallbackAudio.pause();
+    cloudFallbackAudio.removeAttribute('src');
+    const source=cloudSource;
+    cloudSource=null;
+    if(source){
+      source.onended=null;
+      try{ source.stop(); }catch(e){}
+      try{ source.disconnect(); }catch(e){}
+    }
     cloudPlayingId='';
     setTabSounding('trainer',false,'recording-playback');
     renderList();
   }
+  function clearCloudPlaybackCache(){
+    cloudBlobs.forEach(entry=>URL.revokeObjectURL(entry.url));
+    cloudBlobs.clear();
+  }
+  function pruneCloudPlaybackCache(){
+    const ids=new Set(rows.map(row=>row.id));
+    cloudBlobs.forEach((entry,id)=>{
+      if(ids.has(id)) return;
+      URL.revokeObjectURL(entry.url);
+      cloudBlobs.delete(id);
+    });
+  }
+  function rememberCloudBlob(row,blob){
+    if(!row || !row.id || !blob) return null;
+    const previous=cloudBlobs.get(row.id);
+    if(previous) URL.revokeObjectURL(previous.url);
+    const entry={blob,url:URL.createObjectURL(blob)};
+    cloudBlobs.set(row.id,entry);
+    return entry;
+  }
+  function forgetCloudBlob(recordingId){
+    const entry=cloudBlobs.get(recordingId);
+    if(!entry) return;
+    URL.revokeObjectURL(entry.url);
+    cloudBlobs.delete(recordingId);
+  }
+  function recordingCache(){ return window.OliveRecordingCache||null; }
+  function cacheRowBlob(row,blob,userId){
+    const cache=recordingCache();
+    const ownerId=userId||currentUser&&currentUser.id||'';
+    if(!cache || !ownerId) return Promise.resolve(false);
+    return cache.put(ownerId,row,blob).catch(error=>{
+      console.warn('[O\'live recording cache write]',error);
+      return false;
+    });
+  }
+  async function findPlaybackBlob(row){
+    const memory=cloudBlobs.get(row.id);
+    if(memory) return {blob:memory.blob,cached:true};
+    const cache=recordingCache();
+    const userId=sessionUserId;
+    if(cache && userId){
+      try{
+        const blob=await cache.get(userId,row);
+        if(blob){ rememberCloudBlob(row,blob); return {blob,cached:true}; }
+      }catch(error){ console.warn('[O\'live recording cache read]',error); }
+    }
+    const result=await window.OliveCloud.downloadRecording(row);
+    if(sessionUserId!==userId) throw new Error('Recording session changed');
+    rememberCloudBlob(row,result.blob);
+    cacheRowBlob(row,result.blob,userId);
+    return {blob:result.blob,cached:false};
+  }
+  async function hydrateCloudPlaybackCache(userId){
+    const cache=recordingCache();
+    if(!cache || !userId || !rows.length) return;
+    try{
+      const cached=await cache.getMany(userId,rows);
+      if(sessionUserId!==userId) return;
+      rows.forEach(row=>{
+        const blob=cached.get(row.id);
+        if(blob && !cloudBlobs.has(row.id)) rememberCloudBlob(row,blob);
+      });
+    }catch(error){ console.warn('[O\'live recording cache load]',error); }
+  }
+  function playbackStageError(stage,error){
+    const wrapped=new Error(error&&error.message||stage);
+    wrapped.oliveStage=stage;
+    wrapped.cause=error;
+    return wrapped;
+  }
+  function decodeAudioBlob(ctx,blob){
+    return blob.arrayBuffer().then(buffer=>new Promise((resolve,reject)=>{
+      let settled=false;
+      const finish=value=>{ if(!settled){ settled=true; resolve(value); } };
+      const fail=error=>{ if(!settled){ settled=true; reject(error); } };
+      try{
+        const result=ctx.decodeAudioData(buffer,finish,fail);
+        if(result && typeof result.then==='function') result.then(finish,fail);
+      }catch(error){ fail(error); }
+    }));
+  }
   function playRow(row){
-    if(cloudPlayingId===row.id && !cloudAudio.paused){ stopCloudPlayback(); return; }
+    if(cloudPlayingId===row.id){ stopCloudPlayback(); return; }
     stopCloudPlayback();
     draftAudio.pause();
-    const playbackUrl=String(row.playback_url||'');
-    if(!playbackUrl){
-      setMessage('이 녹음의 재생 주소를 준비하지 못했습니다',true); return;
+    const cached=cloudBlobs.get(row.id);
+    if(cached){
+      const token=++cloudPlayToken;
+      cloudPlayingId=row.id;
+      cloudFallbackAudio.src=cached.url;
+      const cache=recordingCache();
+      if(cache && currentUser) cache.get(currentUser.id,row).catch(()=>{});
+      const playPromise=cloudFallbackAudio.play();
+      if(playPromise && typeof playPromise.then==='function') playPromise.then(()=>{
+        if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+        setTabSounding('trainer',true,'recording-playback');
+        setMessage(''); renderList();
+      }).catch(error=>{
+        if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+        console.warn('[O\'live cached recording playback]',error);
+        stopCloudPlayback(); setMessage('오디오 재생을 시작하지 못했습니다',true);
+      });
+      renderList();
+      return;
     }
+    let playback;
+    try{ playback=beginPlaybackFromGesture(); }
+    catch(error){ setMessage('오디오 재생을 시작하지 못했습니다',true); return; }
+    const token=++cloudPlayToken;
     setMessage('녹음을 불러오는 중입니다');
     cloudPlayingId=row.id;
-    cloudAudio.src=playbackUrl;
-    // iPhone Safari에서는 사용자 탭과 같은 호출 흐름에서 play()를 시작해야 한다.
-    // 비공개 파일 주소는 목록 로딩 때 미리 받아 두므로 네트워크 await가 앞에 끼지 않는다.
-    const playPromise=cloudAudio.play();
-    if(playPromise && typeof playPromise.then==='function') playPromise.then(()=>{
-      if(cloudPlayingId!==row.id) return;
-      setTabSounding('trainer',true,'recording-playback');
-      setMessage(''); renderList();
+    let recordingBlob;
+    try{ recordingBlob=findPlaybackBlob(row); }
+    catch(error){ recordingBlob=Promise.reject(error); }
+    Promise.all([
+      playback.ready.catch(error=>{ throw playbackStageError('audio',error); }),
+      Promise.resolve(recordingBlob).catch(error=>{ throw playbackStageError('download',error); }),
+    ]).then(async([ctx,result])=>{
+      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+      let buffer;
+      try{ buffer=await decodeAudioBlob(ctx,result.blob); }
+      catch(error){ throw playbackStageError('decode',error); }
+      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+      try{
+        const source=ctx.createBufferSource();
+        source.buffer=buffer;
+        source.connect(ctx.destination);
+        source.onended=()=>{
+          if(cloudSource!==source) return;
+          try{ source.disconnect(); }catch(e){}
+          cloudSource=null; cloudPlayingId='';
+          setTabSounding('trainer',false,'recording-playback');
+          renderList();
+        };
+        cloudSource=source;
+        source.start(0);
+        setTabSounding('trainer',true,'recording-playback');
+        setMessage(''); renderList();
+      }catch(error){ throw playbackStageError('audio',error); }
     }).catch(error=>{
-      if(cloudPlayingId!==row.id) return;
+      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
       console.warn('[O\'live recording playback]',error);
-      stopCloudPlayback(); setMessage('녹음을 재생하지 못했습니다',true);
+      const stage=error&&error.oliveStage;
+      stopCloudPlayback();
+      setMessage(stage==='download' ? (!navigator.onLine?'인터넷에 연결한 뒤 다시 재생해 주세요':'녹음 파일을 불러오지 못했습니다')
+        : stage==='decode' && cloudBlobs.has(row.id) ? '재생 준비가 끝났습니다 · 버튼을 다시 눌러주세요'
+        : '오디오 재생을 시작하지 못했습니다',true);
     });
     renderList();
   }
@@ -327,8 +464,8 @@
     rows.forEach(row=>{
       const item=document.createElement('div'); item.className='record-row';
       const play=document.createElement('button');
-      play.type='button'; play.className='record-row-play'+(cloudPlayingId===row.id&&!cloudAudio.paused?' playing':'');
-      play.setAttribute('aria-label',`${row.title} ${cloudPlayingId===row.id&&!cloudAudio.paused?'정지':'재생'}`);
+      play.type='button'; play.className='record-row-play'+(cloudPlayingId===row.id?' playing':'');
+      play.setAttribute('aria-label',`${row.title} ${cloudPlayingId===row.id?'정지':'재생'}`);
       play.innerHTML='<span aria-hidden="true"></span>';
       play.addEventListener('click',()=>playRow(row));
       const copy=document.createElement('span'); copy.className='record-row-copy';
@@ -344,8 +481,14 @@
   }
   async function loadRecordings(){
     if(!currentUser){ rows=[]; renderList(); return; }
+    const userId=currentUser.id;
     loadingList=true; renderList();
-    try{ rows=await window.OliveCloud.listRecordings(); setMessage(''); }
+    try{
+      rows=await window.OliveCloud.listRecordings();
+      pruneCloudPlaybackCache();
+      await hydrateCloudPlaybackCache(userId);
+      setMessage('');
+    }
     catch(error){ rows=[]; setMessage('녹음 저장소를 준비한 뒤 다시 시도해 주세요',true); }
     finally{ loadingList=false; renderList(); }
   }
@@ -357,7 +500,10 @@
     recordSave.disabled=recordDiscard.disabled=true;
     recordSave.textContent='저장 중…'; setMessage('클라우드에 저장하는 중입니다');
     try{
-      await window.OliveCloud.uploadRecording({...draft,id:makeId()});
+      const saved={...draft,id:makeId()};
+      await window.OliveCloud.uploadRecording(saved);
+      rememberCloudBlob(saved,saved.blob);
+      await cacheRowBlob(saved,saved.blob);
       discardDraft(); await loadRecordings(); setMessage('클라우드에 저장했습니다');
     }catch(error){
       const message=/count limit/i.test(error&&error.message||'') ? '녹음은 최대 50개까지 저장할 수 있습니다'
@@ -402,7 +548,7 @@
     if(!row) return;
     setMessage('다운로드를 준비하는 중입니다');
     try{
-      const result=await window.OliveCloud.downloadRecording(row);
+      const result=await findPlaybackBlob(row);
       const url=URL.createObjectURL(result.blob);
       const link=document.createElement('a'); link.href=url;
       link.download=safeFileName(row.title,extensionFor(row.mime_type));
@@ -414,14 +560,23 @@
     const row=selectedRow; closeMenu();
     if(!row || !window.confirm(`“${row.title}” 녹음을 삭제할까요?\n다른 기기에서도 사라지며 복구할 수 없습니다.`)) return;
     setMessage('녹음을 삭제하는 중입니다');
-    try{ await window.OliveCloud.deleteRecording(row); await loadRecordings(); setMessage('녹음을 삭제했습니다'); }
+    try{
+      await window.OliveCloud.deleteRecording(row);
+      forgetCloudBlob(row.id);
+      const cache=recordingCache();
+      if(cache && currentUser) await cache.remove(currentUser.id,row.id);
+      await loadRecordings(); setMessage('녹음을 삭제했습니다');
+    }
     catch(e){ setMessage('녹음을 삭제하지 못했습니다',true); }
   }
   function applySession(user){
     const nextId=user&&user.id||'';
     if(sessionUserId && sessionUserId!==nextId){
+      const previousId=sessionUserId;
       if(recording || startPending) stopRecording();
-      discardDraft(); stopCloudPlayback();
+      discardDraft(); stopCloudPlayback(); clearCloudPlaybackCache();
+      const cache=recordingCache();
+      if(cache) cache.clearUser(previousId).catch(error=>console.warn('[O\'live recording cache clear]',error));
     }
     sessionUserId=nextId; currentUser=user||null;
     recordGuest.hidden=Boolean(currentUser);
@@ -450,10 +605,9 @@
   draftAudio.addEventListener('play',()=>{ recordState.textContent='재생 중'; setButtonMode('preview'); setTabSounding('trainer',true,'recording-preview'); });
   draftAudio.addEventListener('pause',()=>{ if(draft){ recordState.textContent='녹음 확인'; setButtonMode('preview'); } setTabSounding('trainer',false,'recording-preview'); });
   draftAudio.addEventListener('ended',()=>{ recordState.textContent='녹음 확인'; setButtonMode('preview'); setTabSounding('trainer',false,'recording-preview'); });
-  cloudAudio.addEventListener('pause',()=>{ setTabSounding('trainer',false,'recording-playback'); renderList(); });
-  cloudAudio.addEventListener('ended',stopCloudPlayback);
+  cloudFallbackAudio.addEventListener('ended',stopCloudPlayback);
   registerTransport({
-    isPlaying:()=>recording || startPending || !draftAudio.paused || !cloudAudio.paused,
+    isPlaying:()=>recording || startPending || !draftAudio.paused || Boolean(cloudPlayingId),
     stop:()=>{
       if(recording || startPending) stopRecording();
       draftAudio.pause(); stopCloudPlayback();

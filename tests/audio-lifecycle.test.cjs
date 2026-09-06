@@ -56,7 +56,7 @@ sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
 vm.runInContext(
   html.slice(start,end)+
-  '\n;globalThis.audioRuntime={ensureCtx,ensureRecordingCtx,ensurePlaybackCtx,resumeCtx,releaseCtx,getCtx,'+
+  '\n;globalThis.audioRuntime={ensureCtx,ensureRecordingCtx,ensurePlaybackCtx,beginPlaybackFromGesture,resumeCtx,releaseCtx,getCtx,'+
   'getContext:()=>audioCtx,getMode:()=>__ctxMode};',
   sandbox
 );
@@ -75,6 +75,13 @@ vm.runInContext(
   assert.equal(runtime.getMode(),'play-and-record');
   sandbox.window.OliveRecorder={isRecording:()=>true};
   assert.equal(await runtime.ensurePlaybackCtx(),first,'playback shares the recording context');
+
+  first.state='suspended';
+  const beforeGestureResume=first.resumeCalls;
+  const gesturePlayback=runtime.beginPlaybackFromGesture();
+  assert.equal(gesturePlayback.ctx,first);
+  assert.equal(first.resumeCalls,beforeGestureResume+1,'gesture playback resumes synchronously');
+  await gesturePlayback.ready;
 
   first.state='suspended';
   const beforeResumeCalls=first.resumeCalls;

@@ -111,6 +111,32 @@ function ensurePlaybackCtx(){
   return ensureCtx(recording?'play-and-record':'ambient');
 }
 
+/* 파일 재생 탭에서 동기적으로 호출한다. resume()을 사용자 제스처 안에서
+   바로 시작하고, 파일 다운로드와 디코딩은 활성화된 컨텍스트에서 이어간다. */
+function beginPlaybackFromGesture(){
+  const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  const mode=recording?'play-and-record':'ambient';
+  const unusable=!audioCtx || audioCtx.state==='closed' || audioCtx.state==='interrupted';
+  if(unusable){
+    if(audioCtx) releaseCtx();
+    createCtx(mode);
+  }else{
+    setAudioSession(mode);
+    __ctxMode=mode;
+  }
+  const ctx=audioCtx;
+  let ready;
+  try{
+    ready=ctx.state==='running' ? Promise.resolve(ctx) : Promise.resolve(ctx.resume()).then(()=>{
+      if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
+      return ctx;
+    });
+  }catch(error){
+    ready=Promise.reject(error);
+  }
+  return {ctx,ready:withTimeout(ready,1400)};
+}
+
 function getCtx(){
   if(!audioCtx || audioCtx.state==='closed' || audioCtx.state==='interrupted'){
     if(audioCtx) releaseCtx();

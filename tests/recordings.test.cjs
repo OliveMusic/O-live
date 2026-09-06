@@ -10,6 +10,7 @@ const metronome=fs.readFileSync('js/metronome.js','utf8');
 const rhythm=fs.readFileSync('js/rhythm-trainer.js','utf8');
 const jam=fs.readFileSync('js/jam-session.js','utf8');
 const cloud=fs.readFileSync('cloud-sync.js','utf8');
+const recordingCache=fs.readFileSync('js/recording-cache.js','utf8');
 const migration=fs.readFileSync('supabase/006_recordings.sql','utf8');
 const edge=fs.readFileSync('supabase/functions/delete-account/index.ts','utf8');
 
@@ -45,6 +46,8 @@ assert.match(recorder,/window\.confirm\(`“\$\{row\.title\}” 녹음을 삭제
 
 assert.match(audioRuntime,/function ensurePlaybackCtx\(\)/);
 assert.match(audioRuntime,/recording\?'play-and-record':'ambient'/);
+assert.match(audioRuntime,/function beginPlaybackFromGesture\(\)/);
+assert.match(audioRuntime,/ctx\.resume\(\)/);
 assert.match(audioRuntime,/if\(!anySounding\(\) && !recording\)[\s\S]*?setAudioSession\('ambient'\)/);
 for(const source of [metronome,rhythm,jam]) assert.match(source,/await ensurePlaybackCtx\(\)/);
 assert.doesNotMatch(core,/leavingTrainer|stopForNavigation/);
@@ -55,14 +58,30 @@ assert.match(cloud,/subscribeSession/);
 assert.match(cloud,/from\('practice-recordings'\)\.upload/);
 assert.match(cloud,/rpc\('reserve_practice_recording'/);
 assert.match(cloud,/rpc\('finalize_practice_recording'/);
-assert.match(cloud,/createSignedUrls\(recordings\.map\(row=>row\.object_path\),60\*60\)/);
+assert.doesNotMatch(cloud,/createSignedUrls/);
 assert.match(cloud,/storage\.from\('practice-recordings'\)\s*\.download/);
 assert.match(cloud,/await deleteAllRecordingObjects\(\)/);
+assert.match(cloud,/await clearRecordingAudioCache\(userId\)/);
 
-// iOS Safari가 사용자 탭을 잃지 않도록 재생 전에 비동기 다운로드를 두지 않는다.
+assert.match(recordingCache,/const MAX_ENTRIES=10/);
+assert.match(recordingCache,/const MAX_BYTES=50\*1024\*1024/);
+assert.match(recordingCache,/root\.indexedDB\.open/);
+assert.match(recordingCache,/storage\.persist\(\)/);
+assert.match(recorder,/cache\.getMany\(userId,rows\)/);
+assert.match(recorder,/findPlaybackBlob\(row\)/);
+assert.match(recorder,/await cacheRowBlob\(saved,saved\.blob\)/);
+assert.match(recorder,/await cache\.remove\(currentUser\.id,row\.id\)/);
+
+// iOS Safari에서 제스처로 컨텍스트를 먼저 연 뒤 인증 다운로드·디코딩·재생을 잇는다.
 const playRow=recorder.match(/function playRow\(row\)\{[\s\S]*?\n  \}/)?.[0]||'';
-assert.match(playRow,/cloudAudio\.src=playbackUrl;[\s\S]*?cloudAudio\.play\(\)/);
-assert.doesNotMatch(playRow,/await\s+window|downloadRecording\(/);
+assert.match(playRow,/beginPlaybackFromGesture\(\)/);
+assert.match(playRow,/findPlaybackBlob\(row\)/);
+assert.match(recorder,/const result=await window\.OliveCloud\.downloadRecording\(row\)/);
+assert.match(playRow,/decodeAudioBlob\(ctx,result\.blob\)/);
+assert.match(playRow,/ctx\.createBufferSource\(\)/);
+assert.match(playRow,/cloudFallbackAudio\.play\(\)/);
+assert.match(recorder,/재생 준비가 끝났습니다 · 버튼을 다시 눌러주세요/);
+assert.doesNotMatch(recorder,/const cloudAudio=new Audio\(\)/);
 
 assert.match(migration,/create table if not exists public\.practice_recordings/);
 assert.match(migration,/status in \('pending','ready'\)/);

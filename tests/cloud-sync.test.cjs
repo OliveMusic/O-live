@@ -80,7 +80,7 @@ function makeContext({config,storage,supabase}){
       addEventListener:(name,handler)=>{ documentListeners[name]=handler; },
     },
     addEventListener:(name,handler)=>{ windowListeners[name]=handler; },
-    OLIVE_RELEASE:{version:'1.3.1',build:131,schemaVersion:6},
+    OLIVE_RELEASE:{version:'1.3.3',build:133,schemaVersion:6},
     OLIVE_CLOUD_CONFIG:config,
     supabase,
   };
@@ -122,7 +122,6 @@ async function testConfiguredQueueAndMigration(){
   const preferenceUpserts=[];
   const functionCalls=[];
   const oauthCalls=[];
-  const signedUrlCalls=[];
   let recordCount=0;
   const client={
     auth:{
@@ -149,10 +148,6 @@ async function testConfiguredQueueAndMigration(){
       from(bucket){
         assert.equal(bucket,'practice-recordings');
         return {
-          async createSignedUrls(paths,expiresIn){
-            signedUrlCalls.push({paths,expiresIn});
-            return {data:paths.map(path=>({path,signedUrl:`https://storage.example/${path}?token=test`,error:null})),error:null};
-          },
           async list(){ return {data:[],error:null}; },
           async remove(){ return {data:[],error:null}; },
         };
@@ -239,6 +234,7 @@ async function testConfiguredQueueAndMigration(){
   let renderedHistory={};
   let appliedPreferences=null;
   let preferencesCleared=false;
+  const recordingCacheClears=[];
   const {context,elements}=makeContext({
     config:{
       supabaseUrl:'https://olive-test.supabase.co',
@@ -248,6 +244,9 @@ async function testConfiguredQueueAndMigration(){
     storage,
     supabase,
   });
+  context.OliveRecordingCache={
+    async clearUser(userId){ recordingCacheClears.push(userId); },
+  };
   await context.OliveCloud.init({
     getAnonymousHistory:()=>JSON.parse(storage.getItem('olive-ear-history-v1')||'{}'),
     clearAnonymousHistory(){
@@ -292,10 +291,8 @@ async function testConfiguredQueueAndMigration(){
   assert.equal(preferenceUpserts.length,0);
 
   const recordings=await context.OliveCloud.listRecordings();
-  assert.equal(signedUrlCalls.length,1);
-  assert.equal(signedUrlCalls[0].expiresIn,3600);
-  assert.deepEqual(signedUrlCalls[0].paths,['user-1/recording-1.m4a']);
-  assert.equal(recordings[0].playback_url,'https://storage.example/user-1/recording-1.m4a?token=test');
+  assert.equal(recordings[0].object_path,'user-1/recording-1.m4a');
+  assert.equal(Object.hasOwn(recordings[0],'playback_url'),false);
 
   await elements.cloudGoogleLogin.listeners.click();
   assert.equal(oauthCalls[0].options.redirectTo,'http://127.0.0.1:8765/');
@@ -314,13 +311,18 @@ async function testConfiguredQueueAndMigration(){
     []
   );
 
+  await elements.cloudLogout.listeners.click();
+  assert.deepEqual(recordingCacheClears,['user-1']);
+
   await elements.cloudDeleteData.listeners.click();
   assert.equal(rpcCalls.filter(call=>call.name==='delete_my_cloud_data').length,1);
   assert.equal(preferencesCleared,true);
   assert.equal(storage.getItem('olive-ear-history-user-v1:user-1'),null);
+  assert.deepEqual(recordingCacheClears,['user-1','user-1']);
 
   await elements.cloudDeleteAccount.listeners.click();
   assert.equal(functionCalls.filter(call=>call.name==='delete-account').length,1);
+  assert.deepEqual(recordingCacheClears,['user-1','user-1','user-1']);
 }
 
 async function testSchemaUpgradeMessage(){
