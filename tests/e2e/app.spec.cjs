@@ -149,7 +149,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.3');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.4');
 }
 
 test.afterEach(async({page})=>{
@@ -175,7 +175,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=133');
+  expect(workerUrl).toContain('service-worker.js?v=134');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -202,6 +202,19 @@ test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 �
 
   await page.locator('#recordConnect').click();
   await expect(page.locator('#cloudAuthSheet')).toBeVisible();
+});
+
+test('녹음 더보기 메뉴의 취소 버튼이 불투명한 패널 배경을 유지한다',async({page})=>{
+  await preparePage(page);
+  await page.locator('#recordMenuBackdrop').evaluate(element=>{
+    element.hidden=false;
+    element.classList.add('open');
+  });
+  const background=await page.locator('#recordMenuCancel').evaluate(
+    element=>getComputedStyle(element).backgroundColor,
+  );
+  expect(background).not.toBe('rgba(0, 0, 0, 0)');
+  expect(background).not.toBe('transparent');
 });
 
 test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',async({page})=>{

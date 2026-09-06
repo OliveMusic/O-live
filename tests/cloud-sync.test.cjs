@@ -80,7 +80,7 @@ function makeContext({config,storage,supabase}){
       addEventListener:(name,handler)=>{ documentListeners[name]=handler; },
     },
     addEventListener:(name,handler)=>{ windowListeners[name]=handler; },
-    OLIVE_RELEASE:{version:'1.3.3',build:133,schemaVersion:6},
+    OLIVE_RELEASE:{version:'1.3.4',build:134,schemaVersion:6},
     OLIVE_CLOUD_CONFIG:config,
     supabase,
   };
@@ -150,6 +150,11 @@ async function testConfiguredQueueAndMigration(){
         return {
           async list(){ return {data:[],error:null}; },
           async remove(){ return {data:[],error:null}; },
+          async createSignedUrls(paths,expiresIn){
+            assert.deepEqual(paths,['user-1/recording-1.m4a']);
+            assert.equal(expiresIn,3600);
+            return {data:paths.map(path=>({path,signedUrl:`https://storage.example.com/${path}?token=test`})),error:null};
+          },
         };
       },
     },
@@ -292,7 +297,7 @@ async function testConfiguredQueueAndMigration(){
 
   const recordings=await context.OliveCloud.listRecordings();
   assert.equal(recordings[0].object_path,'user-1/recording-1.m4a');
-  assert.equal(Object.hasOwn(recordings[0],'playback_url'),false);
+  assert.equal(recordings[0].playback_url,'https://storage.example.com/user-1/recording-1.m4a?token=test');
 
   await elements.cloudGoogleLogin.listeners.click();
   assert.equal(oauthCalls[0].options.redirectTo,'http://127.0.0.1:8765/');

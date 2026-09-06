@@ -233,7 +233,10 @@
         if(recording) stopRecording();
       },{once:true}));
       setupLevel(ctx);
-      recorder.start(1000);
+      /* iPhone Safari의 MP4 MediaRecorder는 timeslice로 잘게 나눈 조각을
+         다시 합쳤을 때 긴 녹음이 재생 불가능해지는 경우가 있다.
+         최대 5분·96kbps면 메모리 부담이 작으므로 stop 때 한 파일로 받는다. */
+      recorder.start();
       recording=true; startPending=false; startedAt=performance.now();
       timerId=setInterval(updateTimer,200);
       setTabSounding('trainer',true,'recorder');
@@ -381,73 +384,85 @@
       }catch(error){ fail(error); }
     }));
   }
+  async function playDecodedBlob(playback,recordingBlob,row,token){
+    const [ctx,result]=await Promise.all([
+      playback.ready.catch(error=>{ throw playbackStageError('audio',error); }),
+      Promise.resolve(recordingBlob).catch(error=>{ throw playbackStageError('download',error); }),
+    ]);
+    if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+    let buffer;
+    try{ buffer=await decodeAudioBlob(ctx,result.blob); }
+    catch(error){ throw playbackStageError('decode',error); }
+    if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+    try{
+      const source=ctx.createBufferSource();
+      source.buffer=buffer;
+      source.connect(ctx.destination);
+      source.onended=()=>{
+        if(cloudSource!==source) return;
+        try{ source.disconnect(); }catch(e){}
+        cloudSource=null; cloudPlayingId='';
+        setTabSounding('trainer',false,'recording-playback');
+        renderList();
+      };
+      cloudSource=source;
+      source.start(0);
+      setTabSounding('trainer',true,'recording-playback');
+      setMessage(''); renderList();
+    }catch(error){ throw playbackStageError('audio',error); }
+  }
+  function handlePlaybackFailure(error,row,token){
+    if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+    console.warn('[O\'live recording playback]',error);
+    const stage=error&&error.oliveStage;
+    stopCloudPlayback();
+    setMessage(stage==='download'
+      ? (!navigator.onLine?'인터넷에 연결한 뒤 다시 재생해 주세요':'녹음 파일을 불러오지 못했습니다')
+      : stage==='decode'
+        ? '이 녹음 파일을 재생할 수 없습니다 · 다운로드로 확인해 주세요'
+        : '오디오 재생을 시작하지 못했습니다',true);
+  }
   function playRow(row){
     if(cloudPlayingId===row.id){ stopCloudPlayback(); return; }
     stopCloudPlayback();
     draftAudio.pause();
+    let playback;
+    try{ playback=beginPlaybackFromGesture(); }
+    catch(error){ setMessage('오디오 재생을 시작하지 못했습니다',true); return; }
+    // 네이티브 재생이 성공하면 Web Audio 준비 결과를 기다리지 않으므로
+    // 그 경로의 실패도 처리된 Promise로 남겨 콘솔 오류를 만들지 않는다.
+    playback.ready.catch(()=>{});
     const cached=cloudBlobs.get(row.id);
-    if(cached){
-      const token=++cloudPlayToken;
-      cloudPlayingId=row.id;
-      cloudFallbackAudio.src=cached.url;
-      const cache=recordingCache();
-      if(cache && currentUser) cache.get(currentUser.id,row).catch(()=>{});
+    const token=++cloudPlayToken;
+    setMessage('녹음을 불러오는 중입니다');
+    cloudPlayingId=row.id;
+    const recordingBlob=cached
+      ? Promise.resolve({blob:cached.blob,cached:true})
+      : findPlaybackBlob(row);
+    // 서명 주소로 바로 재생되는 동안에는 다운로드가 캐시를 채우는 역할만 한다.
+    // 실패해도 네이티브 재생을 방해하지 않고, 필요하면 아래 대체 경로가 다시 받는다.
+    recordingBlob.catch(error=>console.warn('[O\'live recording cache fill]',error));
+    const playbackUrl=cached ? cached.url : String(row.playback_url||'');
+    if(playbackUrl){
+      cloudFallbackAudio.src=playbackUrl;
       const playPromise=cloudFallbackAudio.play();
-      if(playPromise && typeof playPromise.then==='function') playPromise.then(()=>{
+      Promise.resolve(playPromise).then(()=>{
         if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
         setTabSounding('trainer',true,'recording-playback');
         setMessage(''); renderList();
       }).catch(error=>{
         if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-        console.warn('[O\'live cached recording playback]',error);
-        stopCloudPlayback(); setMessage('오디오 재생을 시작하지 못했습니다',true);
+        console.warn('[O\'live native recording playback]',error);
+        cloudFallbackAudio.pause();
+        cloudFallbackAudio.removeAttribute('src');
+        playDecodedBlob(playback,recordingBlob,row,token)
+          .catch(fallbackError=>handlePlaybackFailure(fallbackError,row,token));
       });
       renderList();
       return;
     }
-    let playback;
-    try{ playback=beginPlaybackFromGesture(); }
-    catch(error){ setMessage('오디오 재생을 시작하지 못했습니다',true); return; }
-    const token=++cloudPlayToken;
-    setMessage('녹음을 불러오는 중입니다');
-    cloudPlayingId=row.id;
-    let recordingBlob;
-    try{ recordingBlob=findPlaybackBlob(row); }
-    catch(error){ recordingBlob=Promise.reject(error); }
-    Promise.all([
-      playback.ready.catch(error=>{ throw playbackStageError('audio',error); }),
-      Promise.resolve(recordingBlob).catch(error=>{ throw playbackStageError('download',error); }),
-    ]).then(async([ctx,result])=>{
-      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-      let buffer;
-      try{ buffer=await decodeAudioBlob(ctx,result.blob); }
-      catch(error){ throw playbackStageError('decode',error); }
-      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-      try{
-        const source=ctx.createBufferSource();
-        source.buffer=buffer;
-        source.connect(ctx.destination);
-        source.onended=()=>{
-          if(cloudSource!==source) return;
-          try{ source.disconnect(); }catch(e){}
-          cloudSource=null; cloudPlayingId='';
-          setTabSounding('trainer',false,'recording-playback');
-          renderList();
-        };
-        cloudSource=source;
-        source.start(0);
-        setTabSounding('trainer',true,'recording-playback');
-        setMessage(''); renderList();
-      }catch(error){ throw playbackStageError('audio',error); }
-    }).catch(error=>{
-      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-      console.warn('[O\'live recording playback]',error);
-      const stage=error&&error.oliveStage;
-      stopCloudPlayback();
-      setMessage(stage==='download' ? (!navigator.onLine?'인터넷에 연결한 뒤 다시 재생해 주세요':'녹음 파일을 불러오지 못했습니다')
-        : stage==='decode' && cloudBlobs.has(row.id) ? '재생 준비가 끝났습니다 · 버튼을 다시 눌러주세요'
-        : '오디오 재생을 시작하지 못했습니다',true);
-    });
+    playDecodedBlob(playback,recordingBlob,row,token)
+      .catch(error=>handlePlaybackFailure(error,row,token));
     renderList();
   }
   function renderList(){

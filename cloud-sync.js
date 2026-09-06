@@ -501,7 +501,20 @@
       .order('recorded_at',{ascending:false})
       .limit(50);
     if(error) throw error;
-    return data||[];
+    const recordings=data||[];
+    if(!recordings.length) return recordings;
+    /* iPhone에서는 재생 버튼의 사용자 제스처 안에서 HTMLAudioElement.play()를
+       바로 호출할 수 있도록 목록을 불러올 때 비공개 재생 주소도 준비한다.
+       주소 발급이 실패해도 인증 다운로드 + Web Audio 경로는 계속 사용할 수 있다. */
+    try{
+      const {data:signedRows,error:signedError}=await client.storage.from('practice-recordings')
+        .createSignedUrls(recordings.map(row=>row.object_path),60*60);
+      if(signedError) return recordings;
+      return recordings.map((row,index)=>{
+        const signed=(signedRows||[]).find(item=>item&&item.path===row.object_path) || (signedRows||[])[index];
+        return {...row,playback_url:signed&&!signed.error&&signed.signedUrl||''};
+      });
+    }catch(error){ return recordings; }
   }
   async function uploadRecording(recording){
     await ensureRecordingAccess();

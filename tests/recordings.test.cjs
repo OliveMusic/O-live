@@ -31,12 +31,15 @@ assert.match(index,/\.record-draft-actions\{[^}]*grid-template-columns:repeat\(2
 assert.match(index,/\.record-row\{[\s\S]*?min-height:54px;[\s\S]*?grid-template-columns:44px/);
 assert.match(index,/\.record-row-play\{[\s\S]*?width:44px; height:44px;/);
 assert.match(index,/\.record-row-play::before\{[\s\S]*?width:34px; height:28px;/);
+assert.match(index,/\.record-menu-cancel\{[^}]*background:var\(--body-hi\)/);
 
 assert.match(recorder,/const MAX_DURATION_MS=5\*60\*1000/);
 assert.match(recorder,/const MAX_RECORDINGS=50/);
 assert.match(recorder,/audioBitsPerSecond:96000/);
 assert.match(recorder,/echoCancellation:false,noiseSuppression:false,autoGainControl:false/);
 assert.match(recorder,/MediaRecorder\.isTypeSupported/);
+assert.match(recorder,/recorder\.start\(\);/);
+assert.doesNotMatch(recorder,/recorder\.start\(1000\)/);
 assert.match(recorder,/registerTransport\(/);
 assert.match(recorder,/ensureRecordingCtx\(preservePlayback\)/);
 assert.doesNotMatch(recorder,/stopAllTransports\(\)/);
@@ -58,7 +61,7 @@ assert.match(cloud,/subscribeSession/);
 assert.match(cloud,/from\('practice-recordings'\)\.upload/);
 assert.match(cloud,/rpc\('reserve_practice_recording'/);
 assert.match(cloud,/rpc\('finalize_practice_recording'/);
-assert.doesNotMatch(cloud,/createSignedUrls/);
+assert.match(cloud,/createSignedUrls\(recordings\.map\(row=>row\.object_path\),60\*60\)/);
 assert.match(cloud,/storage\.from\('practice-recordings'\)\s*\.download/);
 assert.match(cloud,/await deleteAllRecordingObjects\(\)/);
 assert.match(cloud,/await clearRecordingAudioCache\(userId\)/);
@@ -72,15 +75,18 @@ assert.match(recorder,/findPlaybackBlob\(row\)/);
 assert.match(recorder,/await cacheRowBlob\(saved,saved\.blob\)/);
 assert.match(recorder,/await cache\.remove\(currentUser\.id,row\.id\)/);
 
-// iOS Safari에서 제스처로 컨텍스트를 먼저 연 뒤 인증 다운로드·디코딩·재생을 잇는다.
+// iOS Safari에서는 서명 주소를 네이티브 플레이어로 즉시 재생하고,
+// 실패할 때만 제스처에서 미리 연 Web Audio 디코딩 경로를 사용한다.
 const playRow=recorder.match(/function playRow\(row\)\{[\s\S]*?\n  \}/)?.[0]||'';
 assert.match(playRow,/beginPlaybackFromGesture\(\)/);
 assert.match(playRow,/findPlaybackBlob\(row\)/);
-assert.match(recorder,/const result=await window\.OliveCloud\.downloadRecording\(row\)/);
-assert.match(playRow,/decodeAudioBlob\(ctx,result\.blob\)/);
-assert.match(playRow,/ctx\.createBufferSource\(\)/);
+assert.match(playRow,/row\.playback_url/);
 assert.match(playRow,/cloudFallbackAudio\.play\(\)/);
-assert.match(recorder,/재생 준비가 끝났습니다 · 버튼을 다시 눌러주세요/);
+assert.match(playRow,/playDecodedBlob\(playback,recordingBlob,row,token\)/);
+assert.match(recorder,/const result=await window\.OliveCloud\.downloadRecording\(row\)/);
+assert.match(recorder,/decodeAudioBlob\(ctx,result\.blob\)/);
+assert.match(recorder,/ctx\.createBufferSource\(\)/);
+assert.match(recorder,/이 녹음 파일을 재생할 수 없습니다 · 다운로드로 확인해 주세요/);
 assert.doesNotMatch(recorder,/const cloudAudio=new Audio\(\)/);
 
 assert.match(migration,/create table if not exists public\.practice_recordings/);
