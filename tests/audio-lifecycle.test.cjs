@@ -56,7 +56,7 @@ sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
 vm.runInContext(
   html.slice(start,end)+
-  '\n;globalThis.audioRuntime={ensureCtx,resumeCtx,releaseCtx,getCtx,'+
+  '\n;globalThis.audioRuntime={ensureCtx,ensureRecordingCtx,ensurePlaybackCtx,resumeCtx,releaseCtx,getCtx,'+
   'getContext:()=>audioCtx,getMode:()=>__ctxMode};',
   sandbox
 );
@@ -69,6 +69,12 @@ vm.runInContext(
   assert.equal(runtime.getMode(),'ambient');
   assert.equal(sandbox.navigator.audioSession.type,'ambient');
   assert.equal(FakeAudioContext.instances.length,1);
+
+  const preserved=await runtime.ensureRecordingCtx(true);
+  assert.equal(preserved,first,'recording reuses an active backing-track context');
+  assert.equal(runtime.getMode(),'play-and-record');
+  sandbox.window.OliveRecorder={isRecording:()=>true};
+  assert.equal(await runtime.ensurePlaybackCtx(),first,'playback shares the recording context');
 
   first.state='suspended';
   const beforeResumeCalls=first.resumeCalls;

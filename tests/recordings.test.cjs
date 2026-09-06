@@ -3,6 +3,12 @@ const fs=require('node:fs');
 
 const index=fs.readFileSync('index.html','utf8');
 const recorder=fs.readFileSync('js/recorder.js','utf8');
+const audioRuntime=fs.readFileSync('js/audio-runtime.js','utf8');
+const core=fs.readFileSync('js/core.js','utf8');
+const appShell=fs.readFileSync('js/app-shell.js','utf8');
+const metronome=fs.readFileSync('js/metronome.js','utf8');
+const rhythm=fs.readFileSync('js/rhythm-trainer.js','utf8');
+const jam=fs.readFileSync('js/jam-session.js','utf8');
 const cloud=fs.readFileSync('cloud-sync.js','utf8');
 const migration=fs.readFileSync('supabase/006_recordings.sql','utf8');
 const edge=fs.readFileSync('supabase/functions/delete-account/index.ts','utf8');
@@ -20,6 +26,10 @@ assert.doesNotMatch(index,/id="pane-record"[\s\S]*?<h2>연주 녹음<\/h2>/);
 assert.match(index,/\.record-olive-static,\.record-olive\{[\s\S]*?width:76px; height:62\.5px;[\s\S]*?transform:rotate\(-11deg\)/);
 assert.match(index,/\.record-olive::after,\.record-olive-static::after\{[\s\S]*?left:calc\(50% \+ 15px\);[\s\S]*?width:23px; height:23px;/);
 assert.match(index,/\.record-row-play\{[\s\S]*?transform:rotate\(-11deg\)/);
+assert.match(index,/\.record-draft-actions\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+assert.match(index,/\.record-row\{[\s\S]*?min-height:54px;[\s\S]*?grid-template-columns:44px/);
+assert.match(index,/\.record-row-play\{[\s\S]*?width:44px; height:44px;/);
+assert.match(index,/\.record-row-play::before\{[\s\S]*?width:34px; height:28px;/);
 
 assert.match(recorder,/const MAX_DURATION_MS=5\*60\*1000/);
 assert.match(recorder,/const MAX_RECORDINGS=50/);
@@ -27,15 +37,32 @@ assert.match(recorder,/audioBitsPerSecond:96000/);
 assert.match(recorder,/echoCancellation:false,noiseSuppression:false,autoGainControl:false/);
 assert.match(recorder,/MediaRecorder\.isTypeSupported/);
 assert.match(recorder,/registerTransport\(/);
-assert.match(recorder,/stopForNavigation/);
+assert.match(recorder,/ensureRecordingCtx\(preservePlayback\)/);
+assert.doesNotMatch(recorder,/stopAllTransports\(\)/);
+assert.doesNotMatch(recorder,/stopForNavigation/);
+assert.match(recorder,/메트로놈·잼과 함께 사용할 수 있습니다 · 튜너 또는 앱을 벗어나면 중지됩니다/);
 assert.match(recorder,/window\.confirm\(`“\$\{row\.title\}” 녹음을 삭제할까요/);
+
+assert.match(audioRuntime,/function ensurePlaybackCtx\(\)/);
+assert.match(audioRuntime,/recording\?'play-and-record':'ambient'/);
+assert.match(audioRuntime,/if\(!anySounding\(\) && !recording\)[\s\S]*?setAudioSession\('ambient'\)/);
+for(const source of [metronome,rhythm,jam]) assert.match(source,/await ensurePlaybackCtx\(\)/);
+assert.doesNotMatch(core,/leavingTrainer|stopForNavigation/);
+assert.match(core,/enteringTuner[\s\S]*?stopAllTransports\(\)/);
+assert.doesNotMatch(appShell,/stopForNavigation/);
 
 assert.match(cloud,/subscribeSession/);
 assert.match(cloud,/from\('practice-recordings'\)\.upload/);
 assert.match(cloud,/rpc\('reserve_practice_recording'/);
 assert.match(cloud,/rpc\('finalize_practice_recording'/);
+assert.match(cloud,/createSignedUrls\(recordings\.map\(row=>row\.object_path\),60\*60\)/);
 assert.match(cloud,/storage\.from\('practice-recordings'\)\s*\.download/);
 assert.match(cloud,/await deleteAllRecordingObjects\(\)/);
+
+// iOS Safari가 사용자 탭을 잃지 않도록 재생 전에 비동기 다운로드를 두지 않는다.
+const playRow=recorder.match(/function playRow\(row\)\{[\s\S]*?\n  \}/)?.[0]||'';
+assert.match(playRow,/cloudAudio\.src=playbackUrl;[\s\S]*?cloudAudio\.play\(\)/);
+assert.doesNotMatch(playRow,/await\s+window|downloadRecording\(/);
 
 assert.match(migration,/create table if not exists public\.practice_recordings/);
 assert.match(migration,/status in \('pending','ready'\)/);

@@ -141,7 +141,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.0');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.1');
 }
 
 test.afterEach(async({page})=>{
@@ -167,7 +167,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=130');
+  expect(workerUrl).toContain('service-worker.js?v=131');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{

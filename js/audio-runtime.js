@@ -7,7 +7,7 @@ let __ctxReadyPromise = null;
 /* iOS는 오디오 세션에 '용도'를 붙인다.
    ambient : 다른 앱 소리와 섞인다. 음악을 틀어 놓고 메트로놈을 쓸 수 있다.
              잠금화면 위젯도 뜨지 않는다. 대신 무음 스위치를 따른다.
-   play-and-record : 마이크도 같이 쓴다. 튜너를 켤 때만 이쪽으로 바꾼다. */
+   play-and-record : 마이크도 같이 쓴다. 튜너나 녹음을 켤 때 이쪽으로 바꾼다. */
 function setAudioSession(mode){
   try{ if(navigator.audioSession) navigator.audioSession.type = mode; }catch(e){}
 }
@@ -91,6 +91,26 @@ function ensureCtx(mode='ambient', forceFresh=false){
   });
 }
 
+/* 녹음 중에는 같은 play-and-record 컨텍스트에서 반주도 재생한다.
+   컨텍스트를 갈아 끼우지 않아야 이미 울리는 메트로놈·잼이 끊기지 않는다. */
+function ensureRecordingCtx(preservePlayback=false){
+  const reusable=preservePlayback && audioCtx &&
+    audioCtx.state!=='closed' && audioCtx.state!=='interrupted';
+  if(!reusable) return ensureCtx('play-and-record',true);
+  setAudioSession('play-and-record');
+  __ctxMode='play-and-record';
+  const ctx=audioCtx;
+  return withTimeout(resumeCtx(ctx),1400).then(()=>{
+    if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
+    return ctx;
+  });
+}
+
+function ensurePlaybackCtx(){
+  const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  return ensureCtx(recording?'play-and-record':'ambient');
+}
+
 function getCtx(){
   if(!audioCtx || audioCtx.state==='closed' || audioCtx.state==='interrupted'){
     if(audioCtx) releaseCtx();
@@ -144,6 +164,11 @@ function setTabSounding(tab,on,source){
   const btn=document.querySelector('.tab-btn[data-tab="'+tab+'"]');
   if(btn) btn.classList.toggle('sounding',__sounding[tab].size>0);
   keepAwake(anySounding());
+  const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  if(!anySounding() && !recording){
+    setAudioSession('ambient');
+    if(audioCtx && audioCtx.state!=='closed') __ctxMode='ambient';
+  }
 }
 
 document.addEventListener('visibilitychange',()=>{

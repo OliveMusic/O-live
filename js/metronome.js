@@ -296,7 +296,7 @@
     metroStart.classList.add('starting');
     metroStart.setAttribute('aria-busy','true');
     try{
-      const ctx=await ensureCtx('ambient');
+      const ctx=await ensurePlaybackCtx();
       if(token!==startToken || !startPending){
         if(audioCtx===ctx && !anySounding()) releaseCtx();
         return;
@@ -369,4 +369,3 @@
   updateBpmUI();
   window.__metronome = { getBpm:()=>bpm };
 })();
-

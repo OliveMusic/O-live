@@ -491,7 +491,15 @@
       .order('recorded_at',{ascending:false})
       .limit(50);
     if(error) throw error;
-    return data||[];
+    const recordings=data||[];
+    if(!recordings.length) return recordings;
+    const {data:signedRows,error:signedError}=await client.storage.from('practice-recordings')
+      .createSignedUrls(recordings.map(row=>row.object_path),60*60);
+    if(signedError) throw signedError;
+    return recordings.map((row,index)=>{
+      const signed=(signedRows||[]).find(item=>item&&item.path===row.object_path) || (signedRows||[])[index];
+      return {...row,playback_url:signed&&!signed.error&&signed.signedUrl||''};
+    });
   }
   async function uploadRecording(recording){
     await ensureRecordingAccess();

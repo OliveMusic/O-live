@@ -53,7 +53,6 @@
   let draft=null;
   let draftUrl='';
   let cloudPlayingId='';
-  let cloudUrl='';
   let loadingList=false;
 
   function makeId(){
@@ -145,6 +144,8 @@
   function finishAudioSession(){
     stopTracks();
     setTabSounding('trainer',false,'recorder');
+    // 메트로놈이나 잼이 계속 울리는 동안에는 공유 컨텍스트를 닫지 않는다.
+    if(anySounding()) return;
     setAudioSession('ambient');
     releaseCtx();
   }
@@ -193,7 +194,8 @@
       setMessage('이 브라우저에서는 녹음을 사용할 수 없습니다',true); return;
     }
     if(draft) discardDraft();
-    stopAllTransports();
+    stopCloudPlayback();
+    const preservePlayback=anySounding();
     const token=++startToken;
     startPending=true;
     setMessage('');
@@ -202,13 +204,15 @@
     setButtonMode('starting');
     try{
       setAudioSession('play-and-record');
-      await ensureCtx('play-and-record',true);
+      let ctx=await ensureRecordingCtx(preservePlayback);
       if(token!==startToken || !startPending){ finishAudioSession(); return; }
       stream=await navigator.mediaDevices.getUserMedia({audio:{
         channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false,
       }});
       if(token!==startToken || !startPending){ finishAudioSession(); return; }
-      const ctx=await ensureCtx('play-and-record',true);
+      if(ctx!==audioCtx || ctx.state!=='running'){
+        ctx=await ensureRecordingCtx(preservePlayback && anySounding());
+      }
       if(token!==startToken || !startPending){ finishAudioSession(); return; }
       const mimeType=chooseMimeType();
       const options={audioBitsPerSecond:96000};
@@ -232,7 +236,7 @@
       setTabSounding('trainer',true,'recorder');
       recordState.textContent='녹음 중';
       recordStateDot.hidden=false;
-      recordHint.textContent='화면을 나가면 녹음이 중지됩니다';
+      recordHint.textContent='메트로놈·잼과 함께 사용할 수 있습니다 · 튜너 또는 앱을 벗어나면 중지됩니다';
       setButtonMode('recording');
     }catch(error){
       if(token!==startToken) return;
@@ -280,27 +284,34 @@
   function stopCloudPlayback(){
     cloudAudio.pause();
     cloudAudio.removeAttribute('src');
-    if(cloudUrl) URL.revokeObjectURL(cloudUrl);
-    cloudUrl=''; cloudPlayingId='';
+    cloudPlayingId='';
     setTabSounding('trainer',false,'recording-playback');
     renderList();
   }
-  async function playRow(row){
+  function playRow(row){
     if(cloudPlayingId===row.id && !cloudAudio.paused){ stopCloudPlayback(); return; }
     stopCloudPlayback();
     draftAudio.pause();
+    const playbackUrl=String(row.playback_url||'');
+    if(!playbackUrl){
+      setMessage('이 녹음의 재생 주소를 준비하지 못했습니다',true); return;
+    }
     setMessage('녹음을 불러오는 중입니다');
-    try{
-      const result=await window.OliveCloud.downloadRecording(row);
-      cloudUrl=URL.createObjectURL(result.blob);
-      cloudPlayingId=row.id;
-      cloudAudio.src=cloudUrl;
-      await cloudAudio.play();
+    cloudPlayingId=row.id;
+    cloudAudio.src=playbackUrl;
+    // iPhone Safari에서는 사용자 탭과 같은 호출 흐름에서 play()를 시작해야 한다.
+    // 비공개 파일 주소는 목록 로딩 때 미리 받아 두므로 네트워크 await가 앞에 끼지 않는다.
+    const playPromise=cloudAudio.play();
+    if(playPromise && typeof playPromise.then==='function') playPromise.then(()=>{
+      if(cloudPlayingId!==row.id) return;
       setTabSounding('trainer',true,'recording-playback');
       setMessage(''); renderList();
-    }catch(error){
+    }).catch(error=>{
+      if(cloudPlayingId!==row.id) return;
+      console.warn('[O\'live recording playback]',error);
       stopCloudPlayback(); setMessage('녹음을 재생하지 못했습니다',true);
-    }
+    });
+    renderList();
   }
   function renderList(){
     recordUsage.textContent=`${rows.length} / ${MAX_RECORDINGS}`;
@@ -450,7 +461,6 @@
   });
   window.OliveRecorder={
     isRecording:()=>recording || startPending,
-    stopForNavigation:()=>{ if(recording || startPending) stopRecording(); },
   };
   window.OliveCloud.subscribeSession(applySession);
   renderIdle(); renderList();

@@ -4,11 +4,7 @@
   if(!seg) return;
   seg.querySelectorAll('.seg-btn').forEach(b=>{
     b.addEventListener('click', ()=>{
-      const previous=seg.querySelector('.seg-btn.active');
       const m=b.dataset.mode;
-      if(previous && previous.dataset.mode==='record' && m!=='record' && window.OliveRecorder){
-        window.OliveRecorder.stopForNavigation();
-      }
       seg.querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active'));
       b.classList.add('active');
       document.querySelectorAll('.trainer-pane').forEach(p=>

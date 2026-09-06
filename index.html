@@ -1610,7 +1610,7 @@
     font:500 .75rem/1.4 inherit; outline:none;
   }
   .record-title:focus{ border-color:var(--signal); box-shadow:0 0 0 2px var(--signal-soft); }
-  .record-draft-actions{ display:grid; grid-template-columns:1fr 1.45fr; gap:7px; margin-top:8px; }
+  .record-draft-actions{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:8px; }
   .record-message{ min-height:19px; margin:12px 0 0; color:var(--signal); font-size:.6875rem; }
   .record-message.error{ color:var(--error); }
   .record-list-head{ margin-bottom:4px; }
@@ -1618,27 +1618,33 @@
   .record-list{ margin:0 -8px -8px; }
   .record-empty{ margin:0; padding:34px 12px; text-align:center; color:var(--ink-3); font-size:.7188rem; }
   .record-row{
-    min-height:66px; display:grid; grid-template-columns:52px minmax(0,1fr) auto 44px;
-    align-items:center; gap:8px; padding:7px 0 7px 8px; border-top:1px solid var(--line-soft);
+    min-height:54px; display:grid; grid-template-columns:44px minmax(0,1fr) auto 44px;
+    align-items:center; gap:6px; padding:5px 0 5px 4px; border-top:1px solid var(--line-soft);
   }
   .record-row-play{
-    position:relative; width:52px; height:44px; padding:0; border-radius:50%;
-    transform:rotate(-11deg); background:var(--key); border:1px solid var(--line); cursor:pointer;
-    transition:background .12s var(--ease-out),border-color .12s var(--ease-out),transform .12s var(--ease-out);
+    position:relative; width:44px; height:44px; padding:0; border:0; border-radius:50%;
+    transform:rotate(-11deg); background:transparent; cursor:pointer;
+    transition:transform .12s var(--ease-out);
+  }
+  .record-row-play::before{
+    content:''; position:absolute; left:50%; top:50%; width:34px; height:28px;
+    border-radius:50%; background:var(--key); border:1px solid var(--line);
+    transform:translate(-50%,-50%);
+    transition:background .12s var(--ease-out),border-color .12s var(--ease-out);
   }
   .record-row-play::after{
-    content:''; position:absolute; left:calc(50% + 10px); top:50%; width:17px; height:17px;
+    content:''; position:absolute; left:calc(50% + 7px); top:50%; width:12px; height:12px;
     border-radius:50%; background:var(--panel); transform:translate(-50%,-50%);
   }
   .record-row-play span{
-    position:absolute; z-index:2; left:calc(50% + 11px); top:50%; width:0; height:0;
-    border-left:6px solid var(--ink-2); border-top:4px solid transparent; border-bottom:4px solid transparent;
+    position:absolute; z-index:2; left:calc(50% + 7px); top:50%; width:0; height:0;
+    border-left:4px solid var(--ink-2); border-top:3px solid transparent; border-bottom:3px solid transparent;
     transform:translate(-50%,-50%) rotate(11deg);
   }
   .record-row-play:active{ transform:rotate(-11deg) scale(.92); }
-  .record-row-play.playing{ background:var(--signal); border-color:var(--signal); }
+  .record-row-play.playing::before{ background:var(--signal); border-color:var(--signal); }
   .record-row-play.playing span{
-    width:7px; height:8px; border:0; background:linear-gradient(90deg,var(--ink-2) 0 2px,transparent 2px 5px,var(--ink-2) 5px 7px);
+    width:5px; height:6px; border:0; background:linear-gradient(90deg,var(--ink-2) 0 1.5px,transparent 1.5px 3.5px,var(--ink-2) 3.5px 5px);
   }
   .record-row-copy{ min-width:0; display:flex; flex-direction:column; gap:4px; }
   .record-row-copy strong{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.75rem; font-weight:500; }
@@ -2246,20 +2252,20 @@
   </section>
 </div>
 
-<script src="app-version.js?v=130"></script>
+<script src="app-version.js?v=131"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=130"></script>
-<script src="js/audio-runtime.js?v=130"></script>
-<script src="js/core.js?v=130"></script>
-<script src="js/metronome.js?v=130"></script>
-<script src="js/tuner-engine.js?v=130"></script>
-<script src="js/tuner.js?v=130"></script>
-<script src="js/scales.js?v=130"></script>
-<script src="js/ear-trainer.js?v=130"></script>
-<script src="js/rhythm-trainer.js?v=130"></script>
-<script src="js/recorder.js?v=130"></script>
-<script src="js/jam-session.js?v=130"></script>
-<script src="js/app-shell.js?v=130"></script>
+<script src="cloud-sync.js?v=131"></script>
+<script src="js/audio-runtime.js?v=131"></script>
+<script src="js/core.js?v=131"></script>
+<script src="js/metronome.js?v=131"></script>
+<script src="js/tuner-engine.js?v=131"></script>
+<script src="js/tuner.js?v=131"></script>
+<script src="js/scales.js?v=131"></script>
+<script src="js/ear-trainer.js?v=131"></script>
+<script src="js/rhythm-trainer.js?v=131"></script>
+<script src="js/recorder.js?v=131"></script>
+<script src="js/jam-session.js?v=131"></script>
+<script src="js/app-shell.js?v=131"></script>
 </body>
 </html>

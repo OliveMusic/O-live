@@ -86,7 +86,7 @@ assert.doesNotMatch(index,/audioCtx\.resume\(\)\.catch\(\(\)=>\{\}\)/);
 assert.match(index,/visibilitychange[\s\S]*?stopAllTransports\(\);[\s\S]*?releaseCtx\(\);/);
 assert.match(index,/playClick\(time - metroCtx\.currentTime, level, metroCtx\)/);
 assert.match(index,/orbLabel\.textContent='시작 중'/);
-assert.equal((index.match(/const ctx=await ensureCtx\('ambient'\)/g)||[]).length,3);
+assert.equal((index.match(/const ctx=await ensurePlaybackCtx\(\)/g)||[]).length,3);
 assert.match(index,/let playing=false, startPending=false, startToken=0, rhythmCtx=null/);
 assert.match(index,/let playing = false, startPending = false, startToken = 0, jamCtx = null/);
 assert.match(index,/let listening=false, micStarting=false, micStartToken=0/);

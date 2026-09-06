@@ -631,7 +631,7 @@
     jamStart.setAttribute('aria-label','시작 중');
     jamStart.setAttribute('aria-busy','true');
     try{
-      const ctx=await ensureCtx('ambient');
+      const ctx=await ensurePlaybackCtx();
       if(token!==startToken || !startPending){
         if(audioCtx===ctx && !anySounding()) releaseCtx();
         return;
@@ -712,4 +712,3 @@
     }
   );
 })();
-
