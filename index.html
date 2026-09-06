@@ -1702,20 +1702,19 @@
     transition:transform .22s var(--ease-out);
   }
   .record-menu-backdrop.open .record-menu-wrap{ transform:translateY(0); }
-  .record-menu-sheet,.record-menu-cancel{
+  .record-menu-sheet{
     overflow:hidden; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--body-hi);
   }
   .record-menu-title{
     display:block; padding:14px 16px 10px; color:var(--ink-3); font-size:.6875rem;
     font-weight:500; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
-  .record-menu-sheet button,.record-menu-cancel{
+  .record-menu-sheet button{
     width:100%; min-height:48px; border:0; border-top:1px solid var(--line-soft);
     background:transparent; color:var(--ink); font:500 .7812rem/1 inherit; cursor:pointer;
   }
-  .record-menu-sheet button:active,.record-menu-cancel:active{ background:var(--key-press); }
+  .record-menu-sheet button:active{ background:var(--key-press); }
   .record-menu-sheet .danger{ color:var(--error); }
-  .record-menu-cancel{ margin-top:8px; border:1px solid var(--line); background:var(--body-hi); }
 
   @media (prefers-reduced-motion:reduce){
     .record-menu-backdrop,.record-menu-wrap{ transition:opacity .18s ease; transform:none; }
@@ -2225,7 +2224,6 @@
       <button id="recordMenuDownload" type="button">다운로드</button>
       <button class="danger" id="recordMenuDelete" type="button">삭제</button>
     </section>
-    <button class="record-menu-cancel" id="recordMenuCancel" type="button">취소</button>
   </div>
 </div>
 
@@ -2286,21 +2284,21 @@
   </section>
 </div>
 
-<script src="app-version.js?v=140"></script>
+<script src="app-version.js?v=142"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=140"></script>
-<script src="js/audio-runtime.js?v=140"></script>
-<script src="js/core.js?v=140"></script>
-<script src="js/metronome.js?v=140"></script>
-<script src="js/tuner-engine.js?v=140"></script>
-<script src="js/tuner.js?v=140"></script>
-<script src="js/scales.js?v=140"></script>
-<script src="js/ear-trainer.js?v=140"></script>
-<script src="js/rhythm-trainer.js?v=140"></script>
-<script src="js/recording-cache.js?v=140"></script>
-<script src="js/recorder.js?v=140"></script>
-<script src="js/jam-session.js?v=140"></script>
-<script src="js/app-shell.js?v=140"></script>
+<script src="cloud-sync.js?v=142"></script>
+<script src="js/audio-runtime.js?v=142"></script>
+<script src="js/core.js?v=142"></script>
+<script src="js/metronome.js?v=142"></script>
+<script src="js/tuner-engine.js?v=142"></script>
+<script src="js/tuner.js?v=142"></script>
+<script src="js/scales.js?v=142"></script>
+<script src="js/ear-trainer.js?v=142"></script>
+<script src="js/rhythm-trainer.js?v=142"></script>
+<script src="js/recording-cache.js?v=142"></script>
+<script src="js/recorder.js?v=142"></script>
+<script src="js/jam-session.js?v=142"></script>
+<script src="js/app-shell.js?v=142"></script>
 </body>
 </html>

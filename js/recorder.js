@@ -35,7 +35,6 @@
   const menuRename=document.getElementById('recordMenuRename');
   const menuDownload=document.getElementById('recordMenuDownload');
   const menuDelete=document.getElementById('recordMenuDelete');
-  const menuCancel=document.getElementById('recordMenuCancel');
   const app=document.getElementById('app');
   if(!recordToggle || !window.OliveCloud) return;
 
@@ -1148,7 +1147,6 @@
   menuRename.addEventListener('click',renameSelected);
   menuDownload.addEventListener('click',downloadSelected);
   menuDelete.addEventListener('click',deleteSelected);
-  menuCancel.addEventListener('click',closeMenu);
   draftAudio.addEventListener('play',()=>{ recordState.textContent='재생 중'; setButtonMode('preview'); setTabSounding('trainer',true,'recording-preview'); });
   draftAudio.addEventListener('pause',()=>{ if(draft){ recordState.textContent='녹음 확인'; setButtonMode('preview'); } setTabSounding('trainer',false,'recording-preview'); });
   draftAudio.addEventListener('ended',()=>{ draftStartedOffset=0; recordState.textContent='녹음 확인'; setButtonMode('preview'); setTabSounding('trainer',false,'recording-preview'); });
@@ -1159,8 +1157,16 @@
       pauseDraftPlayback(false); stopCloudPlayback();
     },
   });
+  function stopPlaybackForOtherTool(){
+    pauseDraftPlayback(false);
+    if(cloudPlayingId){
+      playbackPositions.set(cloudPlayingId,currentCloudPosition());
+    }
+    if(cloudPlayingId || cloudMediaId) stopCloudPlayback(false);
+  }
   window.OliveRecorder={
     isRecording:()=>recording || startPending,
+    stopPlayback:stopPlaybackForOtherTool,
   };
   window.OliveCloud.subscribeSession(applySession);
   renderIdle(); renderList();

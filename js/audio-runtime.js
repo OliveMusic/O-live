@@ -108,6 +108,17 @@ function ensureRecordingCtx(preservePlayback=false){
 
 function ensurePlaybackCtx(){
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  // 녹음 파일 재생은 iPhone의 playback 세션을 사용한다. 메트로놈·잼처럼
+  // ambient 세션으로 돌아가는 도구가 시작되면 파일 재생 상태도 먼저 정리해야
+  // 닫힌 오디오 연결 위에 재생 버튼만 남지 않는다. 실제 녹음은 건드리지 않는다.
+  if(!recording && __ctxMode==='playback' && window.OliveRecorder &&
+     typeof window.OliveRecorder.stopPlayback==='function'){
+    window.OliveRecorder.stopPlayback();
+    if(audioCtx && audioCtx.state!=='closed'){
+      setAudioSession('ambient');
+      __ctxMode='ambient';
+    }
+  }
   return ensureCtx(recording?'play-and-record':'ambient');
 }
 

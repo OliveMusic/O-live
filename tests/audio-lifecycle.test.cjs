@@ -95,6 +95,14 @@ vm.runInContext(
   await Promise.all([runtime.resumeCtx(first),runtime.resumeCtx(first)]);
   assert.equal(first.resumeCalls,beforeResumeCalls+1,'parallel resume calls are deduplicated');
 
+  let recorderStopPlaybackCalls=0;
+  sandbox.window.OliveRecorder={
+    isRecording:()=>false,
+    stopPlayback:()=>{ recorderStopPlaybackCalls++; },
+  };
+  await runtime.ensurePlaybackCtx();
+  assert.equal(recorderStopPlaybackCalls,1,'ambient tools stop stale recording playback state');
+
   const fresh=await runtime.ensureCtx('play-and-record',true);
   assert.notEqual(fresh,first);
   assert.equal(first.closeCalls,1);

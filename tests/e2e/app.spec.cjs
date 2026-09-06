@@ -148,8 +148,22 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
         }
         createGain(){
           const node=new FakeNode();
-          node.gain={value:1};
+          node.gain={
+            value:1,
+            setValueAtTime(value){ this.value=value; },
+            exponentialRampToValueAtTime(value){ this.value=value; },
+            setTargetAtTime(value){ this.value=value; },
+            cancelScheduledValues(){},
+          };
           harness.gainNodes.push(node);
+          return node;
+        }
+        createOscillator(){
+          const node=new FakeNode();
+          node.type='sine';
+          node.frequency={value:0};
+          node.start=()=>{};
+          node.stop=()=>{};
           return node;
         }
         createBufferSource(){
@@ -243,7 +257,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.10');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.12');
 }
 
 test.afterEach(async({page})=>{
@@ -269,7 +283,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=140');
+  expect(workerUrl).toContain('service-worker.js?v=142');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -296,19 +310,6 @@ test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 �
 
   await page.locator('#recordConnect').click();
   await expect(page.locator('#cloudAuthSheet')).toBeVisible();
-});
-
-test('녹음 더보기 메뉴의 취소 버튼이 불투명한 패널 배경을 유지한다',async({page})=>{
-  await preparePage(page);
-  await page.locator('#recordMenuBackdrop').evaluate(element=>{
-    element.hidden=false;
-    element.classList.add('open');
-  });
-  const background=await page.locator('#recordMenuCancel').evaluate(
-    element=>getComputedStyle(element).backgroundColor,
-  );
-  expect(background).not.toBe('rgba(0, 0, 0, 0)');
-  expect(background).not.toBe('transparent');
 });
 
 test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이 나타난다',async({page})=>{
@@ -351,7 +352,38 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
 
   await page.locator('.record-row-more').click();
   await expect(page.locator('#recordMenuBackdrop')).toBeVisible();
+  await expect(page.locator('#recordMenuCancel')).toHaveCount(0);
   await expect(page.locator('.record-row-open')).toHaveAttribute('aria-expanded','true');
+  await page.locator('#recordMenuBackdrop').click({position:{x:4,y:4}});
+  await expect(page.locator('#recordMenuBackdrop')).toBeHidden();
+});
+
+test('녹음 재생 중 메트로놈을 시작하면 녹음 버튼도 정지 상태로 돌아간다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    microphone:'playback',
+    recordings:[{
+      id:'recording-transition',title:'무제',
+      object_path:'recording-browser-user/recording-transition.m4a',
+      duration_ms:69000,byte_size:1000,mime_type:'audio/mp4',waveform:[30,55,75,40],
+      playback_gain:3.25,
+      recorded_at:'2026-09-06T09:00:00.000Z',created_at:'2026-09-06T09:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await page.locator('.record-row-open').click();
+  const recordingPlay=page.locator('.record-player-play');
+  await recordingPlay.click();
+  await expect(recordingPlay).toHaveClass(/playing/);
+  await page.evaluate(()=>window.__resolveRecordingDownload());
+
+  await page.locator('.tab-btn[data-tab="metronome"]').click();
+  await page.locator('#metroStart').click();
+  await expect(page.locator('#metroStart')).toHaveClass(/running/);
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await expect(recordingPlay).not.toHaveClass(/playing/);
+  await expect(recordingPlay).toHaveAttribute('aria-label','무제 재생');
 });
 
 test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다',async({page})=>{
@@ -383,7 +415,7 @@ test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',as
       object_path:'cache-user/cached-recording.webm',
     };
     await window.OliveRecordingCache.put('cache-user',row,blob);
-    const cached=await window.OliveRecordingCache.get('cache-user',row);
+    const cached=await window.OliveRecordingCache.get('cache-user',row,{touch:false});
     return cached && cached.size;
   });
   expect(beforeReload).toBeGreaterThan(0);
@@ -395,7 +427,7 @@ test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',as
       id:'cached-recording',byte_size:size,mime_type:'audio/webm',
       object_path:'cache-user/cached-recording.webm',
     };
-    const cached=await window.OliveRecordingCache.get('cache-user',row);
+    const cached=await window.OliveRecordingCache.get('cache-user',row,{touch:false});
     await window.OliveRecordingCache.clearUser('cache-user');
     return cached && cached.size;
   });

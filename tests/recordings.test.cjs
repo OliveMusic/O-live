@@ -25,6 +25,7 @@ assert.match(index,/id="recordUsage">0 \/ 50</);
 assert.match(index,/id="recordMenuRename"[^>]*>이름 변경</);
 assert.match(index,/id="recordMenuDownload"[^>]*>다운로드</);
 assert.match(index,/id="recordMenuDelete"[^>]*>삭제</);
+assert.doesNotMatch(index,/id="recordMenuCancel"/);
 assert.doesNotMatch(index,/id="pane-record"[\s\S]*?<h2>연주 녹음<\/h2>/);
 
 // 튜너·청음과 같은 올리브 기울기, 비율, 씨 위치를 사용한다.
@@ -38,7 +39,6 @@ assert.match(index,/\.record-player-play::before\{[\s\S]*?width:34px; height:28p
 assert.match(index,/\.record-player\{[\s\S]*?grid-template-columns:44px minmax\(0,1fr\)/);
 assert.match(index,/\.record-waveform\{[\s\S]*?height:44px/);
 assert.match(index,/\.record-waveform-svg\.played\{[\s\S]*?clip-path:inset/);
-assert.match(index,/\.record-menu-cancel\{[^}]*background:var\(--body-hi\)/);
 
 assert.match(recorder,/const MAX_DURATION_MS=5\*60\*1000/);
 assert.match(recorder,/const MAX_RECORDINGS=50/);
@@ -113,6 +113,7 @@ assert.match(recorder,/playbackGain:playbackGainForRecording\(waveformLevels,rec
 assert.match(recorder,/gain\.gain\.value=rowPlaybackGain\(row\)/);
 assert.match(recorder,/gain\.gain\.value=rowPlaybackGain\(draft\)/);
 assert.match(recorder,/ctx\.createMediaElementSource\(cloudFallbackAudio\)/);
+assert.match(recorder,/stopPlayback:stopPlaybackForOtherTool/);
 assert.match(recorder,/saveRecordingWaveform\(row\.id,values\)/);
 assert.match(cloud,/p_waveform:Array\.isArray/);
 assert.match(cloud,/p_recorded_at:String\(recording&&recording\.recordedAt/);
