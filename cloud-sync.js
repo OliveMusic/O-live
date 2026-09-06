@@ -530,6 +530,7 @@
       p_byte_size:Number(recording&&recording.blob&&recording.blob.size)||0,
       p_mime_type:mimeType,
       p_waveform:Array.isArray(recording&&recording.waveform)?recording.waveform:[],
+      p_recorded_at:String(recording&&recording.recordedAt||new Date().toISOString()),
     });
     if(reserveError) throw reserveError;
     let uploaded=false;

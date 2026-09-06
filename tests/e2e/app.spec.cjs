@@ -26,7 +26,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           onAuthStateChange(){ return {data:{subscription:{unsubscribe(){}}}}; },
           async getSession(){ return {data:{session:{user}},error:null}; },
         },
-        async rpc(name){ return {data:name==='olive_schema_version'?7:true,error:null}; },
+        async rpc(name){ return {data:name==='olive_schema_version'?8:true,error:null}; },
         from(table){
           if(table==='practice_recordings') return {
             select(){ return {eq(){ return {order(){ return {async limit(){ return {data:recordingRows,error:null}; }}; }}; }}; },
@@ -164,8 +164,9 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
         };
         return {getTracks:()=>[track],getAudioTracks:()=>[track]};
       };
-      const getUserMedia=async()=>{
+      const getUserMedia=async constraints=>{
         harness.requests++;
+        harness.lastConstraints=constraints;
         if(micMode==='denied'){
           const error=new Error('permission denied');
           error.name='NotAllowedError';
@@ -199,7 +200,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.6');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.7');
 }
 
 test.afterEach(async({page})=>{
@@ -225,7 +226,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=136');
+  expect(workerUrl).toContain('service-worker.js?v=137');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -286,6 +287,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-player-play')).toBeVisible();
   await expect(page.locator('.record-waveform[role="slider"]')).toBeVisible();
   await expect(page.locator('.record-waveform-svg.base path')).toHaveAttribute('d',/M/);
+  await expect(page.locator('.record-row-copy small')).toHaveText(/2026\. 09\. 06\. \d{2}:\d{2}/);
 
   const box=await page.locator('.record-waveform').boundingBox();
   expect(box).toBeTruthy();
@@ -307,6 +309,9 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
   await page.locator('#recordToggle').click();
   await expect(page.locator('#recordToggle')).toHaveClass(/on/);
+  expect(await page.evaluate(()=>window.__micHarness.lastConstraints.audio)).toMatchObject({
+    echoCancellation:false,noiseSuppression:false,autoGainControl:true,
+  });
   await expect.poll(()=>page.locator('#recordLevelFill').evaluate(element=>{
     const transform=getComputedStyle(element).transform;
     return transform==='none'?0:new DOMMatrix(transform).a;
@@ -579,8 +584,8 @@ test('클라우드 스키마가 오래되면 저장 대신 구체적인 업데�
   await preparePage(page,{cloudClient:true});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(page.locator('#earCloudTitle')).toHaveText('클라우드 업데이트 필요');
-  await expect(page.locator('#earCloudStatus')).toContainText('DB-007');
+  await expect(page.locator('#earCloudStatus')).toContainText('DB-008');
   await page.locator('#earCloudAction').evaluate(element=>element.click());
   await page.locator('#cloudSyncNow').click();
-  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-007');
+  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-008');
 });

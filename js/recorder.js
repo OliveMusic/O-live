@@ -47,6 +47,7 @@
   let startPending=false;
   let startToken=0;
   let startedAt=0;
+  let recordedAt='';
   let timerId=0;
   let levelFrame=0;
   let levelAnalyser=null;
@@ -89,7 +90,7 @@
   function formatDate(value){
     const date=new Date(value);
     if(Number.isNaN(date.getTime())) return '';
-    return `${date.getFullYear()}. ${pad(date.getMonth()+1)}. ${pad(date.getDate())}`;
+    return `${date.getFullYear()}. ${pad(date.getMonth()+1)}. ${pad(date.getDate())}. ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
   function clamp(value,min,max){ return Math.min(max,Math.max(min,value)); }
   function rowDurationSeconds(row){ return Math.max(0,Number(row&&row.duration_ms)||0)/1000; }
@@ -122,8 +123,7 @@
     return clamp(Math.pow(normalized,.78),.018,1);
   }
   function defaultTitle(){
-    const date=new Date();
-    return `${date.getMonth()+1}월 ${date.getDate()}일 녹음`;
+    return '무제';
   }
   function safeFileName(title,extension){
     const clean=String(title||'O-live 녹음').replace(/[\\/:*?"<>|]/g,' ').trim().slice(0,60);
@@ -268,7 +268,7 @@
       let ctx=await ensureRecordingCtx(preservePlayback);
       if(token!==startToken || !startPending){ finishAudioSession(); return; }
       stream=await navigator.mediaDevices.getUserMedia({audio:{
-        channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false,
+        channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:true,
       }});
       if(token!==startToken || !startPending){ finishAudioSession(); return; }
       if(ctx!==audioCtx || ctx.state!=='running'){
@@ -297,7 +297,7 @@
          다시 합쳤을 때 긴 녹음이 재생 불가능해지는 경우가 있다.
          최대 5분·96kbps면 메모리 부담이 작으므로 stop 때 한 파일로 받는다. */
       recorder.start();
-      recording=true; startPending=false; startedAt=performance.now();
+      recording=true; startPending=false; startedAt=performance.now(); recordedAt=new Date().toISOString();
       timerId=setInterval(updateTimer,200);
       setTabSounding('trainer',true,'recorder');
       recordState.textContent='녹음 중';
@@ -337,6 +337,7 @@
     }
     draft={
       blob,durationMs,mimeType:type,title:defaultTitle(),extension:extensionFor(type),
+      recordedAt:recordedAt||new Date().toISOString(),
       waveform:compactWaveform(waveformLevels,WAVEFORM_POINTS),
     };
     waveformLevels=[];
