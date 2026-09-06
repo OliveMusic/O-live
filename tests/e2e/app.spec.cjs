@@ -215,7 +215,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.8');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.9');
 }
 
 test.afterEach(async({page})=>{
@@ -241,7 +241,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=138');
+  expect(workerUrl).toContain('service-worker.js?v=139');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -325,14 +325,17 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
   await page.locator('#recordToggle').click();
   await expect(page.locator('#recordToggle')).toHaveClass(/on/);
   expect(await page.evaluate(()=>window.__micHarness.lastConstraints.audio)).toMatchObject({
-    echoCancellation:false,noiseSuppression:false,autoGainControl:true,
+    echoCancellation:false,noiseSuppression:false,autoGainControl:false,
   });
   expect(await page.evaluate(()=>({
     processed:window.__micHarness.recorderStream===window.__micHarness.processedStream,
-    gain:window.__micHarness.gainNodes.some(node=>node.gain.value===2),
+    outputGain:window.__micHarness.gainNodes.some(node=>node.gain.value===1.4),
     threshold:window.__micHarness.compressor.threshold.value,
     ratio:window.__micHarness.compressor.ratio.value,
-  }))).toEqual({processed:true,gain:true,threshold:-8,ratio:4});
+  }))).toEqual({processed:true,outputGain:true,threshold:-14,ratio:4});
+  await expect.poll(()=>page.evaluate(()=>(
+    window.__micHarness.gainNodes.some(node=>node.gain.value>=7.9)
+  ))).toBeTruthy();
   await expect.poll(()=>page.locator('#recordLevelFill').evaluate(element=>{
     const transform=getComputedStyle(element).transform;
     return transform==='none'?0:new DOMMatrix(transform).a;

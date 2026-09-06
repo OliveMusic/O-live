@@ -7,7 +7,10 @@
   const MAX_RECORDINGS=50;
   const WAVEFORM_POINTS=160;
   const WAVEFORM_MAX_POINTS=240;
-  const CAPTURE_GAIN=2;
+  const CAPTURE_TARGET_RMS=.1;
+  const CAPTURE_MAX_GAIN=8;
+  const CAPTURE_NOISE_GATE=.0007;
+  const CAPTURE_OUTPUT_GAIN=1.4;
   const recordGuest=document.getElementById('recordGuest');
   const recordWorkspace=document.getElementById('recordWorkspace');
   const recordListCard=document.getElementById('recordListCard');
@@ -55,8 +58,13 @@
   let levelSource=null;
   let levelSink=null;
   let captureGain=null;
+  let captureInputAnalyser=null;
   let captureCompressor=null;
+  let captureOutputGain=null;
   let captureDestination=null;
+  let captureInputSamples=null;
+  let captureEnvelope=0;
+  let captureGainTarget=1;
   let levelSamples=null;
   let waveformLevels=[];
   let lastWaveformCaptureAt=0;
@@ -189,11 +197,14 @@
     }
     try{ if(levelSource) levelSource.disconnect(); }catch(e){}
     try{ if(captureGain) captureGain.disconnect(); }catch(e){}
+    try{ if(captureInputAnalyser) captureInputAnalyser.disconnect(); }catch(e){}
     try{ if(captureCompressor) captureCompressor.disconnect(); }catch(e){}
+    try{ if(captureOutputGain) captureOutputGain.disconnect(); }catch(e){}
     try{ if(captureDestination) captureDestination.disconnect(); }catch(e){}
     try{ if(levelSink) levelSink.disconnect(); }catch(e){}
     levelSource=levelAnalyser=levelSink=levelSamples=null;
-    captureGain=captureCompressor=captureDestination=null;
+    captureGain=captureInputAnalyser=captureCompressor=captureOutputGain=captureDestination=null;
+    captureInputSamples=null; captureEnvelope=0; captureGainTarget=1;
     cancelAnimationFrame(levelFrame); levelFrame=0;
     recordLevel.style.transform='scaleX(0)';
   }
@@ -219,24 +230,54 @@
     draftUrl=''; draft=null;
     renderIdle();
   }
-  function drawLevel(now){
-    if(!recording || !levelAnalyser) return;
-    const data=levelSamples&&levelSamples.length===levelAnalyser.fftSize
-      ? levelSamples
-      : (levelSamples=new Float32Array(levelAnalyser.fftSize));
-    if(typeof levelAnalyser.getFloatTimeDomainData==='function'){
-      levelAnalyser.getFloatTimeDomainData(data);
+  function fillAnalyserSamples(analyser,samples){
+    const data=samples&&samples.length===analyser.fftSize
+      ? samples
+      : new Float32Array(analyser.fftSize);
+    if(typeof analyser.getFloatTimeDomainData==='function'){
+      analyser.getFloatTimeDomainData(data);
     }else{
-      const bytes=new Uint8Array(levelAnalyser.fftSize);
-      levelAnalyser.getByteTimeDomainData(bytes);
+      const bytes=new Uint8Array(analyser.fftSize);
+      analyser.getByteTimeDomainData(bytes);
       for(let index=0;index<bytes.length;index++) data[index]=(bytes[index]-128)/128;
     }
+    return data;
+  }
+  function samplesRms(samples){
     let sum=0;
-    for(let i=0;i<data.length;i++){
-      const sample=data[i];
-      sum+=sample*sample;
+    for(let index=0;index<samples.length;index++) sum+=samples[index]*samples[index];
+    return Math.sqrt(sum/samples.length);
+  }
+  function updateCaptureNormalization(inputRms){
+    if(!captureGain) return;
+    const param=captureGain.gain;
+    let target=1;
+    let timeConstant=.16;
+    if(inputRms>=CAPTURE_NOISE_GATE){
+      captureEnvelope=Math.max(inputRms,captureEnvelope*.96);
+      target=clamp(CAPTURE_TARGET_RMS/captureEnvelope,1,CAPTURE_MAX_GAIN);
+      timeConstant=target<(Number(param.value)||1) ? .008 : .025;
+    }else{
+      captureEnvelope*=.92;
     }
-    const rms=Math.sqrt(sum/data.length);
+    if(Math.abs(target-captureGainTarget)<.08) return;
+    captureGainTarget=target;
+    if(typeof param.setTargetAtTime==='function'){
+      const now=audioCtx&&audioCtx.currentTime||0;
+      try{ param.cancelScheduledValues(now); }catch(error){}
+      param.setTargetAtTime(target,now,timeConstant);
+    }else{
+      param.value=target;
+    }
+  }
+  function drawLevel(now){
+    if(!recording || !levelAnalyser) return;
+    if(captureInputAnalyser){
+      captureInputSamples=fillAnalyserSamples(captureInputAnalyser,captureInputSamples);
+      updateCaptureNormalization(samplesRms(captureInputSamples));
+    }
+    levelSamples=fillAnalyserSamples(levelAnalyser,levelSamples);
+    const rms=samplesRms(levelSamples);
     if(!lastWaveformCaptureAt || now-lastWaveformCaptureAt>=40){
       waveformLevels.push(rms);
       lastWaveformCaptureAt=now;
@@ -268,19 +309,25 @@
       setupLevel(ctx,levelSource);
       return stream;
     }
+    captureInputAnalyser=ctx.createAnalyser();
+    captureInputAnalyser.fftSize=512;
     captureGain=ctx.createGain();
-    captureGain.gain.value=CAPTURE_GAIN;
+    captureGain.gain.value=1;
     captureCompressor=ctx.createDynamicsCompressor();
-    captureCompressor.threshold.value=-8;
-    captureCompressor.knee.value=8;
+    captureCompressor.threshold.value=-14;
+    captureCompressor.knee.value=12;
     captureCompressor.ratio.value=4;
-    captureCompressor.attack.value=.005;
-    captureCompressor.release.value=.18;
+    captureCompressor.attack.value=.003;
+    captureCompressor.release.value=.2;
+    captureOutputGain=ctx.createGain();
+    captureOutputGain.gain.value=CAPTURE_OUTPUT_GAIN;
     captureDestination=ctx.createMediaStreamDestination();
-    levelSource.connect(captureGain);
+    levelSource.connect(captureInputAnalyser);
+    captureInputAnalyser.connect(captureGain);
     captureGain.connect(captureCompressor);
-    captureCompressor.connect(captureDestination);
-    setupLevel(ctx,captureCompressor);
+    captureCompressor.connect(captureOutputGain);
+    captureOutputGain.connect(captureDestination);
+    setupLevel(ctx,captureOutputGain);
     return captureDestination.stream;
   }
   async function startRecording(){
@@ -302,7 +349,7 @@
       let ctx=await ensureRecordingCtx(preservePlayback);
       if(token!==startToken || !startPending){ finishAudioSession(); return; }
       stream=await navigator.mediaDevices.getUserMedia({audio:{
-        channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:true,
+        channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false,
       }});
       if(token!==startToken || !startPending){ finishAudioSession(); return; }
       if(ctx!==audioCtx || ctx.state!=='running'){
