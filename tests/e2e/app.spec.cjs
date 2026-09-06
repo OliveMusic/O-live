@@ -105,6 +105,14 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           node.fftSize=4096;
           node.smoothingTimeConstant=0;
           node.getFloatTimeDomainData=array=>{
+            if(micMode==='meter-signal'){
+              for(let i=0;i<array.length;i++){
+                const phase=2*Math.PI*220*(analyserSampleCursor+i)/48000;
+                array[i]=Math.sin(phase)*.003;
+              }
+              analyserSampleCursor+=array.length;
+              return;
+            }
             if(micMode!=='weak-signal' && micMode!=='scope-error' && micMode!=='fan-tone'){
               array.fill(0);
               return;
@@ -173,6 +181,15 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
       };
       window.AudioContext=FakeAudioContext;
       window.webkitAudioContext=FakeAudioContext;
+      if(micMode==='meter-signal'){
+        class FakeMediaRecorder extends EventTarget{
+          static isTypeSupported(){ return true; }
+          constructor(){ super(); this.mimeType='audio/mp4'; }
+          start(){}
+          stop(){ this.dispatchEvent(new Event('stop')); }
+        }
+        window.MediaRecorder=FakeMediaRecorder;
+      }
       window.__micHarness=harness;
       Object.defineProperty(navigator,'mediaDevices',{
         configurable:true,
@@ -182,7 +199,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.5');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.6');
 }
 
 test.afterEach(async({page})=>{
@@ -208,7 +225,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=135');
+  expect(workerUrl).toContain('service-worker.js?v=136');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -282,6 +299,19 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await page.locator('.record-row-more').click();
   await expect(page.locator('#recordMenuBackdrop')).toBeVisible();
   await expect(page.locator('.record-row-open')).toHaveAttribute('aria-expanded','true');
+});
+
+test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal'});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await page.locator('#recordToggle').click();
+  await expect(page.locator('#recordToggle')).toHaveClass(/on/);
+  await expect.poll(()=>page.locator('#recordLevelFill').evaluate(element=>{
+    const transform=getComputedStyle(element).transform;
+    return transform==='none'?0:new DOMMatrix(transform).a;
+  })).toBeGreaterThan(.18);
+  await page.locator('#recordToggle').click();
 });
 
 test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',async({page})=>{

@@ -52,6 +52,7 @@
   let levelAnalyser=null;
   let levelSource=null;
   let levelSink=null;
+  let levelSamples=null;
   let waveformLevels=[];
   let lastWaveformCaptureAt=0;
   let draft=null;
@@ -109,6 +110,16 @@
     }
     const ceiling=Math.max(.002,...peaks);
     return peaks.map(value=>Math.round(clamp(Math.sqrt(value/ceiling)*100,0,100)));
+  }
+  function meterLevelForRms(rms){
+    const input=Math.max(0,Number(rms)||0);
+    // 실제 녹음에는 영향을 주지 않고 표시만 dB 눈금으로 펼친다.
+    // -60dB 부근의 약한 연주부터 반응하고 -12dB에서 가득 차며,
+    // 마이크 바닥 소음 수준은 기존처럼 짧게 유지한다.
+    if(input<.0006) return .018;
+    const decibels=20*Math.log10(input);
+    const normalized=clamp((decibels+60)/48,0,1);
+    return clamp(Math.pow(normalized,.78),.018,1);
   }
   function defaultTitle(){
     const date=new Date();
@@ -175,7 +186,7 @@
     }
     try{ if(levelSource) levelSource.disconnect(); }catch(e){}
     try{ if(levelSink) levelSink.disconnect(); }catch(e){}
-    levelSource=levelAnalyser=levelSink=null;
+    levelSource=levelAnalyser=levelSink=levelSamples=null;
     cancelAnimationFrame(levelFrame); levelFrame=0;
     recordLevel.style.transform='scaleX(0)';
   }
@@ -196,11 +207,19 @@
   }
   function drawLevel(now){
     if(!recording || !levelAnalyser) return;
-    const data=new Uint8Array(levelAnalyser.fftSize);
-    levelAnalyser.getByteTimeDomainData(data);
+    const data=levelSamples&&levelSamples.length===levelAnalyser.fftSize
+      ? levelSamples
+      : (levelSamples=new Float32Array(levelAnalyser.fftSize));
+    if(typeof levelAnalyser.getFloatTimeDomainData==='function'){
+      levelAnalyser.getFloatTimeDomainData(data);
+    }else{
+      const bytes=new Uint8Array(levelAnalyser.fftSize);
+      levelAnalyser.getByteTimeDomainData(bytes);
+      for(let index=0;index<bytes.length;index++) data[index]=(bytes[index]-128)/128;
+    }
     let sum=0;
     for(let i=0;i<data.length;i++){
-      const sample=(data[i]-128)/128;
+      const sample=data[i];
       sum+=sample*sample;
     }
     const rms=Math.sqrt(sum/data.length);
@@ -208,7 +227,7 @@
       waveformLevels.push(rms);
       lastWaveformCaptureAt=now;
     }
-    recordLevel.style.transform=`scaleX(${Math.min(1,Math.max(.018,rms*7)).toFixed(3)})`;
+    recordLevel.style.transform=`scaleX(${meterLevelForRms(rms).toFixed(3)})`;
     levelFrame=requestAnimationFrame(drawLevel);
   }
   function updateTimer(){
