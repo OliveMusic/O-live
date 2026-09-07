@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=168';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=169';
   const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
@@ -158,6 +158,9 @@
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-transport:pause');
       pauseCloudPlayback(true);
     });
+    // 화면이 잠겨 requestAnimationFrame이 쉬는 동안에도 네이티브 운반자의
+    // 시간 이벤트가 오면 실제 파일 위치를 잠금화면에 다시 알려 준다.
+    audio.addEventListener('timeupdate',()=>refreshCloudMediaSessionPosition(750));
     audio.addEventListener('error',()=>{
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-transport:error',{
         code:audio.error&&audio.error.code||null,
@@ -208,11 +211,7 @@
       updateCloudMediaSessionPosition(row);
     });
     audio.addEventListener('timeupdate',()=>{
-      if(!cloudMediaUsesPersistentNative || !cloudPlayingId) return;
-      const now=performance.now();
-      if(now-cloudMediaPositionUpdatedAt<900) return;
-      cloudMediaPositionUpdatedAt=now;
-      updateCloudMediaSessionPosition();
+      if(cloudMediaUsesPersistentNative) refreshCloudMediaSessionPosition(900);
     });
     audio.addEventListener('pause',()=>{
       if(cloudMediaUsesPersistentNative && !cloudNativeInternalPause &&
@@ -422,6 +421,15 @@
       });
     }catch(error){}
   }
+  function refreshCloudMediaSessionPosition(minInterval=750){
+    if(!cloudMediaSessionActive || !cloudMediaId) return;
+    const now=performance.now();
+    if(now-cloudMediaPositionUpdatedAt<minInterval) return;
+    const row=rows.find(item=>item.id===cloudMediaId);
+    if(!row) return;
+    cloudMediaPositionUpdatedAt=now;
+    updateCloudMediaSessionPosition(row,currentCloudPosition());
+  }
   function updateCloudMediaSessionState(row){
     try{
       if(!navigator.mediaSession) return;
@@ -488,6 +496,47 @@
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:play');
     }).catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token));
   }
+  function setCloudMediaAction(action,handler){
+    try{
+      navigator.mediaSession.setActionHandler(action,handler);
+      return true;
+    }catch(error){
+      if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media-action:failed',{
+        action,error:String(error&&error.name||error&&error.message||error).slice(0,80),
+      });
+      return false;
+    }
+  }
+  function installCloudMediaActions(actionMode){
+    const play=setCloudMediaAction('play',()=>resumeCloudPlaybackFromMediaSession());
+    let pause=true;
+    if(actionMode==='stream'){
+      // 실제 운반자 요소가 먼저 멈추게 두면 잠금화면 버튼의 반응이 가장 빠르다.
+      setCloudMediaAction('pause',null);
+      setCloudMediaAction('stop',null);
+    }else{
+      pause=setCloudMediaAction('pause',()=>{
+        if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:pause');
+        pauseCloudPlayback();
+      });
+      setCloudMediaAction('stop',()=>stopCloudPlayback());
+    }
+    const backward=setCloudMediaAction('seekbackward',details=>{
+      const amount=Number(details&&details.seekOffset)||10;
+      seekCloudPlaybackBy(-amount);
+    });
+    const forward=setCloudMediaAction('seekforward',details=>{
+      const amount=Number(details&&details.seekOffset)||10;
+      seekCloudPlaybackBy(amount);
+    });
+    for(const action of ['previoustrack','nexttrack']) setCloudMediaAction(action,null);
+    const installed=play && pause && backward && forward;
+    if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark(
+      installed?'recording-media-actions:installed':'recording-media-actions:retry',
+      {actionMode}
+    );
+    return installed;
+  }
   function configureCloudMediaSession(row){
     try{
       if(!navigator.mediaSession || !row ||
@@ -497,7 +546,6 @@
       const actionMode=cloudTransportDestination?'stream':'callbacks';
       const installActions=!cloudMediaSessionActive || cloudMediaSessionActionMode!==actionMode;
       cloudMediaSessionActive=true;
-      cloudMediaSessionActionMode=actionMode;
       setAudioSession('playback');
       if(typeof MediaMetadata==='function'){
         navigator.mediaSession.metadata=new MediaMetadata({
@@ -505,30 +553,7 @@
         });
       }
       if(installActions && typeof navigator.mediaSession.setActionHandler==='function'){
-        navigator.mediaSession.setActionHandler('play',()=>resumeCloudPlaybackFromMediaSession());
-        if(actionMode==='stream'){
-          // iOS가 실제 운반자 요소를 먼저 멈추게 두면 잠금화면 버튼의 반응이
-          // 가장 빠르고 안정적이다. pause 이벤트가 앱의 상태까지 이어서 멈춘다.
-          navigator.mediaSession.setActionHandler('pause',null);
-          navigator.mediaSession.setActionHandler('stop',null);
-        }else{
-          navigator.mediaSession.setActionHandler('pause',()=>{
-            if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:pause');
-            pauseCloudPlayback();
-          });
-          navigator.mediaSession.setActionHandler('stop',()=>stopCloudPlayback());
-        }
-        navigator.mediaSession.setActionHandler('seekbackward',details=>{
-          const amount=Number(details&&details.seekOffset)||10;
-          seekCloudPlaybackBy(-amount);
-        });
-        navigator.mediaSession.setActionHandler('seekforward',details=>{
-          const amount=Number(details&&details.seekOffset)||10;
-          seekCloudPlaybackBy(amount);
-        });
-        for(const action of ['previoustrack','nexttrack']){
-          try{ navigator.mediaSession.setActionHandler(action,null); }catch(error){}
-        }
+        cloudMediaSessionActionMode=installCloudMediaActions(actionMode)?actionMode:'';
       }
       updateCloudMediaSessionState(row);
     }catch(error){}
@@ -1099,6 +1124,7 @@
   }
   function startCloudProgress(){
     stopCloudProgress();
+    cloudMediaPositionUpdatedAt=0;
     const tick=()=>{
       if(!cloudPlayingId) return;
       let position=currentCloudPosition();
@@ -1110,6 +1136,9 @@
       }
       playbackPositions.set(cloudPlayingId,position);
       if(scrubbingRecordingId!==cloudPlayingId) updatePlayerProgress(cloudPlayingId,position);
+      // 잠금화면이 듣는 운반자 요소는 MediaStream이라 자체 재생 길이가 없다.
+      // 실제 파일의 위치를 주기적으로 알려 주어 10초 이동 가능한 미디어로 유지한다.
+      if(row) refreshCloudMediaSessionPosition(750);
       cloudProgressFrame=requestAnimationFrame(tick);
     };
     cloudProgressFrame=requestAnimationFrame(tick);
@@ -2254,6 +2283,10 @@
     keepWhenHidden:true,
   });
   document.addEventListener('visibilitychange',()=>{
+    if(cloudMediaSessionActive && cloudMediaId){
+      cloudMediaPositionUpdatedAt=0;
+      refreshCloudMediaSessionPosition(0);
+    }
     if(recording && document.visibilityState==='hidden') recordingInterruptedWhileHidden=true;
   });
   function stopPlaybackForOtherTool(){

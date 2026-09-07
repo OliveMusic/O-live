@@ -4,6 +4,7 @@ const pageErrors=new WeakMap();
 
 async function preparePage(page,{
   cloudClient=false,preferences=null,microphone='native',recordings=[],cloudUploadError='',
+  mediaActionFailOnce='',
 }={}){
   const errors=[];
   pageErrors.set(page,errors);
@@ -13,7 +14,9 @@ async function preparePage(page,{
     contentType:'application/javascript',
     body:'',
   }));
-  await page.addInitScript(({withCloud,storedPreferences,micMode,recordingRows,recordingUploadError})=>{
+  await page.addInitScript(({
+    withCloud,storedPreferences,micMode,recordingRows,recordingUploadError,failMediaActionOnce,
+  })=>{
     sessionStorage.setItem('olive-startup-state-v2','shown');
     const audioSession={type:'auto'};
     try{ Object.defineProperty(navigator,'audioSession',{configurable:true,value:audioSession}); }
@@ -22,11 +25,16 @@ async function preparePage(page,{
     const mediaActions={};
     const mediaActionRegistrations={};
     const mediaActionClearances={};
+    let pendingMediaActionFailure=String(failMediaActionOnce||'');
     const mediaSession={
       metadata:null,
       playbackState:'none',
       positionState:null,
       setActionHandler(action,handler){
+        if(handler && action===pendingMediaActionFailure){
+          pendingMediaActionFailure='';
+          throw new Error('simulated transient Media Session failure');
+        }
         if(handler){
           mediaActions[action]=handler;
           mediaActionRegistrations[action]=(mediaActionRegistrations[action]||0)+1;
@@ -362,10 +370,11 @@ async function preparePage(page,{
   },{
     withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,
     recordingRows:recordings,recordingUploadError:cloudUploadError,
+    failMediaActionOnce:mediaActionFailOnce,
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.38');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.39');
 }
 
 test.afterEach(async({page})=>{
@@ -391,7 +400,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=168');
+  expect(workerUrl).toContain('service-worker.js?v=169');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -408,7 +417,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.38',build:168});
+  expect(payload.release).toEqual({version:'1.3.39',build:169});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -443,6 +452,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await preparePage(page,{
     cloudClient:'recordings',
     microphone:'playback',
+    mediaActionFailOnce:'seekbackward',
     recordings:[{
       id:'recording-1',title:'9월 6일 녹음',object_path:'recording-browser-user/recording-1.m4a',
       duration_ms:69000,byte_size:1000,mime_type:'audio/mp4',waveform,
@@ -488,6 +498,10 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     backward:typeof window.__testMediaActions.seekbackward,
     forward:typeof window.__testMediaActions.seekforward,
   }))).toEqual({play:'function',pause:'undefined',backward:'function',forward:'function'});
+  expect(await page.evaluate(()=>window.OliveAudioDiagnostics.read()
+    .map(entry=>entry.event))).toEqual(expect.arrayContaining([
+    'recording-media-actions:retry','recording-media-actions:installed',
+  ]));
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/5[01-3]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('00:51');
   const playCallsBeforeSeek=await page.evaluate(()=>window.__mediaPlayCalls||0);
@@ -515,6 +529,10 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-player-tool.repeat')).toBeEnabled();
   await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
   expect(await page.evaluate(()=>window.__lastRecordingContentMedia.loop)).toBeTruthy();
+  await page.evaluate(()=>{ window.__lastRecordingContentMedia.currentTime=23; });
+  await expect.poll(()=>page.evaluate(()=>(
+    window.__testMediaSession.positionState&&window.__testMediaSession.positionState.position
+  ))).toBeGreaterThan(22);
 
   await page.locator('.record-rate-control input[type="range"]').fill('0.75');
   await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('0.75');
@@ -526,7 +544,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=168',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=169',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -704,7 +722,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=168');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=169');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
