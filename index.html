@@ -1619,6 +1619,15 @@
   .record-draft-actions{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:8px; }
   .record-message{ min-height:19px; margin:12px 0 0; color:var(--signal); font-size:.6875rem; }
   .record-message.error{ color:var(--error); }
+  #recordListCard{ position:relative; }
+  #recordListCard::after{
+    content:'오디오 파일을 놓아 업로드'; position:absolute; z-index:12; inset:8px;
+    display:grid; place-items:center; border:1px dashed var(--signal); border-radius:calc(var(--r-lg) - 4px);
+    background:color-mix(in srgb,var(--panel) 94%,transparent); color:var(--signal);
+    font-size:.7188rem; font-weight:600; letter-spacing:.01em;
+    opacity:0; visibility:hidden; pointer-events:none;
+  }
+  #recordListCard.record-drop-active::after{ opacity:1; visibility:visible; }
   .record-list-head{ margin-bottom:12px; }
   .record-list-actions{ display:flex; align-items:center; gap:8px; }
   .record-upload{
@@ -1715,7 +1724,8 @@
   }
   .record-loop-marker::before{
     content:attr(data-label); position:absolute; left:50%; top:-18px; transform:translateX(-50%);
-    min-width:12px; color:var(--signal); font:650 .5rem/1 inherit; text-align:center;
+    min-width:12px; color:var(--signal); font-size:.6875rem; font-weight:650;
+    line-height:1; font-family:inherit; text-align:center;
   }
   .record-loop-marker.start{ left:var(--loop-start); }
   .record-loop-marker.end{ left:var(--loop-end); }
@@ -1753,12 +1763,14 @@
     height:2px; border-radius:2px; background:var(--line);
   }
   .record-rate-control input[type="range"]::-webkit-slider-thumb{
-    width:14px; height:14px; margin-top:-6px; border:0; border-radius:50%;
-    appearance:none; -webkit-appearance:none; background:var(--signal); box-shadow:0 0 0 3px var(--signal-soft);
+    width:23px; height:19px; margin-top:-8.5px; border:0; border-radius:0;
+    appearance:none; -webkit-appearance:none;
+    background:var(--olive-thumb) center/100% 100% no-repeat; box-shadow:none;
   }
   .record-rate-control input[type="range"]::-moz-range-track{ height:2px; border:0; border-radius:2px; background:var(--line); }
   .record-rate-control input[type="range"]::-moz-range-thumb{
-    width:14px; height:14px; border:0; border-radius:50%; background:var(--signal); box-shadow:0 0 0 3px var(--signal-soft);
+    width:23px; height:19px; border:0; border-radius:0;
+    background:var(--olive-thumb) center/100% 100% no-repeat; box-shadow:none;
   }
   .record-rate-value{
     color:var(--ink-2); font:650 .5938rem/1 inherit; font-variant-numeric:tabular-nums; text-align:right;
@@ -2214,7 +2226,7 @@
           <div class="row record-list-head">
             <h2 style="margin:0;">내 녹음</h2>
             <div class="record-list-actions">
-              <input id="recordUploadInput" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.webm,.flac" hidden>
+              <input id="recordUploadInput" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.webm,.flac,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/flac" hidden>
               <button class="record-upload" id="recordUpload" type="button">업로드</button>
               <span class="record-usage" id="recordUsage">0 / 50</span>
             </div>
@@ -2367,21 +2379,21 @@
   </section>
 </div>
 
-<script src="app-version.js?v=169"></script>
+<script src="app-version.js?v=170"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=169"></script>
-<script src="js/audio-runtime.js?v=169"></script>
-<script src="js/core.js?v=169"></script>
-<script src="js/metronome.js?v=169"></script>
-<script src="js/tuner-engine.js?v=169"></script>
-<script src="js/tuner.js?v=169"></script>
-<script src="js/scales.js?v=169"></script>
-<script src="js/ear-trainer.js?v=169"></script>
-<script src="js/rhythm-trainer.js?v=169"></script>
-<script src="js/recording-cache.js?v=169"></script>
-<script src="js/recorder.js?v=169"></script>
-<script src="js/jam-session.js?v=169"></script>
-<script src="js/app-shell.js?v=169"></script>
+<script src="cloud-sync.js?v=170"></script>
+<script src="js/audio-runtime.js?v=170"></script>
+<script src="js/core.js?v=170"></script>
+<script src="js/metronome.js?v=170"></script>
+<script src="js/tuner-engine.js?v=170"></script>
+<script src="js/tuner.js?v=170"></script>
+<script src="js/scales.js?v=170"></script>
+<script src="js/ear-trainer.js?v=170"></script>
+<script src="js/rhythm-trainer.js?v=170"></script>
+<script src="js/recording-cache.js?v=170"></script>
+<script src="js/recorder.js?v=170"></script>
+<script src="js/jam-session.js?v=170"></script>
+<script src="js/app-shell.js?v=170"></script>
 </body>
 </html>

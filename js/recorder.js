@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=169';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=170';
   const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
@@ -125,6 +125,7 @@
   const loopRegions=new Map();
   const cloudStretchModulePromises=new WeakMap();
   let loadingList=false;
+  let recordDragDepth=0;
 
   function makeCloudFallbackAudio(){
     const audio=new Audio();
@@ -2150,6 +2151,46 @@
       recordUploadInput.value='';
     }
   }
+  function recordDragHasFiles(event){
+    const transfer=event&&event.dataTransfer;
+    if(!transfer) return false;
+    const types=Array.from(transfer.types||[]);
+    if(types.includes('Files')) return true;
+    return Array.from(transfer.items||[]).some(item=>item&&item.kind==='file');
+  }
+  function setRecordDropActive(active){
+    recordListCard.classList.toggle('record-drop-active',Boolean(active));
+  }
+  function resetRecordDrop(){
+    recordDragDepth=0;
+    setRecordDropActive(false);
+  }
+  function handleRecordDragEnter(event){
+    if(!currentUser || recordUpload.disabled || !recordDragHasFiles(event)) return;
+    event.preventDefault();
+    recordDragDepth++;
+    setRecordDropActive(true);
+  }
+  function handleRecordDragOver(event){
+    if(!currentUser || recordUpload.disabled || !recordDragHasFiles(event)) return;
+    event.preventDefault();
+    if(event.dataTransfer) event.dataTransfer.dropEffect='copy';
+    setRecordDropActive(true);
+  }
+  function handleRecordDragLeave(event){
+    if(!recordDragDepth) return;
+    recordDragDepth=Math.max(0,recordDragDepth-1);
+    if(!recordDragDepth) setRecordDropActive(false);
+  }
+  function handleRecordDrop(event){
+    if(!recordDragHasFiles(event)) return;
+    event.preventDefault();
+    const files=Array.from(event.dataTransfer&&event.dataTransfer.files||[]);
+    resetRecordDrop();
+    if(!currentUser || recordUpload.disabled || !files.length) return;
+    const file=files.find(item=>uploadMimeType(item))||files[0];
+    uploadExternalFile(file);
+  }
   async function saveDraft(){
     if(!draft || recordSave.disabled) return;
     const title=recordTitle.value.trim();
@@ -2242,7 +2283,7 @@
     recordWorkspace.hidden=!currentUser;
     recordListCard.hidden=!currentUser;
     if(currentUser) loadRecordings();
-    else{ rows=[]; renderList(); renderIdle(); }
+    else{ resetRecordDrop(); rows=[]; renderList(); renderIdle(); }
   }
 
   recordConnect.addEventListener('click',()=>window.OliveCloud.openAccount());
@@ -2260,6 +2301,12 @@
     const file=recordUploadInput.files&&recordUploadInput.files[0];
     if(file) uploadExternalFile(file);
   });
+  recordListCard.addEventListener('dragenter',handleRecordDragEnter);
+  recordListCard.addEventListener('dragover',handleRecordDragOver);
+  recordListCard.addEventListener('dragleave',handleRecordDragLeave);
+  recordListCard.addEventListener('drop',handleRecordDrop);
+  document.addEventListener('dragend',resetRecordDrop);
+  document.addEventListener('drop',resetRecordDrop);
   menuBackdrop.addEventListener('click',event=>{ if(event.target===menuBackdrop) closeMenu(); });
   menuBackdrop.addEventListener('keydown',event=>{ if(event.key==='Escape'){ event.preventDefault(); closeMenu(); } });
   menuRename.addEventListener('click',renameSelected);

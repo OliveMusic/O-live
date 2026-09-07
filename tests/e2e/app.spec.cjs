@@ -374,7 +374,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.39');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.40');
 }
 
 test.afterEach(async({page})=>{
@@ -400,7 +400,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=169');
+  expect(workerUrl).toContain('service-worker.js?v=170');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -417,7 +417,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.39',build:169});
+  expect(payload.release).toEqual({version:'1.3.40',build:170});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -516,6 +516,12 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await page.locator('.record-player-tool.point').nth(1).click();
   await expect(page.locator('.record-waveform')).toHaveClass(/has-loop-start/);
   await expect(page.locator('.record-waveform')).toHaveClass(/has-loop-end/);
+  const loopLabelSizes=await page.evaluate(()=>({
+    marker:parseFloat(getComputedStyle(document.querySelector('.record-loop-marker.start'),'::before').fontSize),
+    button:parseFloat(getComputedStyle(document.querySelector('.record-player-tool.point')).fontSize),
+  }));
+  expect(loopLabelSizes.marker).toBeLessThanOrEqual(loopLabelSizes.button);
+  expect(loopLabelSizes.button-loopLabelSizes.marker).toBeLessThan(3);
   await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
   await expect(page.locator('.record-player-tool.repeat')).toHaveAttribute('aria-pressed','true');
   await page.evaluate(()=>{ window.__lastRecordingContentMedia.currentTime=35; });
@@ -544,7 +550,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=169',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=170',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -722,7 +728,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=169');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=170');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -781,6 +787,36 @@ test('내 녹음 재생은 녹음 시작 시 정지되고 잠금화면에서도 
   await page.locator('.tab-btn[data-tab="tuner"]').click();
   await expect(recorder).not.toHaveClass(/on/);
   await expect(backingPlay).not.toHaveClass(/playing/);
+});
+
+test('데스크톱에서는 오디오 파일을 내 녹음 카드에 놓아 업로드한다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings',microphone:'controls'});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+
+  const accept=await page.locator('#recordUploadInput').getAttribute('accept');
+  expect(accept).toContain('.mp3');
+  expect(accept).not.toContain('audio/*');
+  await page.evaluate(()=>{
+    const file=new File([new Uint8Array([1,2,3,4])],'드롭 반주.mp3',{type:'audio/mpeg'});
+    window.__recordingDropTransfer={
+      types:['Files'],items:[{kind:'file'}],files:[file],dropEffect:'none',
+    };
+    const event=new Event('dragenter',{bubbles:true,cancelable:true});
+    Object.defineProperty(event,'dataTransfer',{value:window.__recordingDropTransfer});
+    document.getElementById('recordListCard').dispatchEvent(event);
+  });
+  await expect(page.locator('#recordListCard')).toHaveClass(/record-drop-active/);
+  await page.evaluate(()=>{
+    const event=new Event('drop',{bubbles:true,cancelable:true});
+    Object.defineProperty(event,'dataTransfer',{value:window.__recordingDropTransfer});
+    document.getElementById('recordListCard').dispatchEvent(event);
+  });
+  await expect(page.locator('#recordListCard')).not.toHaveClass(/record-drop-active/);
+  await expect(page.locator('.record-row-copy strong')).toHaveText('드롭 반주');
+  expect(await page.evaluate(()=>window.__uploadedRecording)).toMatchObject({
+    type:'audio/mpeg',options:{contentType:'audio/mpeg'},
+  });
 });
 
 test('MP3 메타데이터 판독이 실패하면 오디오 디코더로 길이를 다시 확인한다',async({page})=>{
