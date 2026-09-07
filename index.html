@@ -1613,14 +1613,14 @@
   .record-draft-actions{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:8px; }
   .record-message{ min-height:19px; margin:12px 0 0; color:var(--signal); font-size:.6875rem; }
   .record-message.error{ color:var(--error); }
-  .record-list-head{ margin-bottom:4px; }
+  .record-list-head{ margin-bottom:12px; }
   .record-list-actions{ display:flex; align-items:center; gap:8px; }
   .record-upload{
-    min-width:58px; min-height:40px; padding:0 11px; border:1px solid var(--line);
-    border-radius:var(--r-pill); background:transparent; color:var(--ink-2);
+    min-width:58px; min-height:40px; padding:0 11px; border:1px solid var(--signal);
+    border-radius:var(--r-pill); background:var(--signal); color:var(--on-signal);
     font:500 .6875rem/1 inherit; cursor:pointer;
   }
-  .record-upload:active{ background:var(--key-press); }
+  .record-upload:active{ background:var(--signal-press); border-color:var(--signal-press); }
   .record-upload:disabled{ opacity:.45; cursor:default; }
   .record-usage{ color:var(--ink-3); font-size:.6875rem; font-variant-numeric:tabular-nums; }
   .record-list{ margin:0 -8px -8px; }
@@ -2296,21 +2296,21 @@
   </section>
 </div>
 
-<script src="app-version.js?v=153"></script>
+<script src="app-version.js?v=154"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=153"></script>
-<script src="js/audio-runtime.js?v=153"></script>
-<script src="js/core.js?v=153"></script>
-<script src="js/metronome.js?v=153"></script>
-<script src="js/tuner-engine.js?v=153"></script>
-<script src="js/tuner.js?v=153"></script>
-<script src="js/scales.js?v=153"></script>
-<script src="js/ear-trainer.js?v=153"></script>
-<script src="js/rhythm-trainer.js?v=153"></script>
-<script src="js/recording-cache.js?v=153"></script>
-<script src="js/recorder.js?v=153"></script>
-<script src="js/jam-session.js?v=153"></script>
-<script src="js/app-shell.js?v=153"></script>
+<script src="cloud-sync.js?v=154"></script>
+<script src="js/audio-runtime.js?v=154"></script>
+<script src="js/core.js?v=154"></script>
+<script src="js/metronome.js?v=154"></script>
+<script src="js/tuner-engine.js?v=154"></script>
+<script src="js/tuner.js?v=154"></script>
+<script src="js/scales.js?v=154"></script>
+<script src="js/ear-trainer.js?v=154"></script>
+<script src="js/rhythm-trainer.js?v=154"></script>
+<script src="js/recording-cache.js?v=154"></script>
+<script src="js/recorder.js?v=154"></script>
+<script src="js/jam-session.js?v=154"></script>
+<script src="js/app-shell.js?v=154"></script>
 </body>
 </html>

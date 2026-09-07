@@ -19,6 +19,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
     window.__testAudioSession=audioSession;
     const mediaActions={};
     const mediaActionRegistrations={};
+    const mediaActionClearances={};
     const mediaSession={
       metadata:null,
       playbackState:'none',
@@ -27,13 +28,17 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           mediaActions[action]=handler;
           mediaActionRegistrations[action]=(mediaActionRegistrations[action]||0)+1;
         }
-        else delete mediaActions[action];
+        else{
+          delete mediaActions[action];
+          mediaActionClearances[action]=(mediaActionClearances[action]||0)+1;
+        }
       },
     };
     try{ Object.defineProperty(navigator,'mediaSession',{configurable:true,value:mediaSession}); }
     catch(error){}
     window.__testMediaActions=mediaActions;
     window.__testMediaActionRegistrations=mediaActionRegistrations;
+    window.__testMediaActionClearances=mediaActionClearances;
     window.__testMediaSession=mediaSession;
     if(storedPreferences){
       localStorage.setItem('olive-preferences-v1',JSON.stringify(storedPreferences));
@@ -305,7 +310,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.23');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.24');
 }
 
 test.afterEach(async({page})=>{
@@ -331,7 +336,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=153');
+  expect(workerUrl).toContain('service-worker.js?v=154');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -750,12 +755,19 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
         typeof window.__testMediaActions.seekforward==='function';
       return nativePlay();
     };
-    delete window.__testMediaActions.seekforward;
     audio.pause();
   });
   await expect(metro).toHaveClass(/media-paused/);
-  // iOS가 pause→play 전환 중 사이드 명령을 놓친 상태를 재현한다. 재생을
-  // 시작하기 전에 핸들러가 복구되어야 새 원격 제어 세션에도 포함된다.
+  await expect.poll(()=>page.evaluate(()=>([
+    typeof window.__testMediaActions.seekbackward,
+    typeof window.__testMediaActions.seekforward,
+  ]))).toEqual(['undefined','undefined']);
+  await expect.poll(()=>page.evaluate(()=>([
+    window.__testMediaActionClearances.seekbackward||0,
+    window.__testMediaActionClearances.seekforward||0,
+  ]))).toEqual([1,1]);
+  // pause와 play 사이에서 지원 명령 목록이 실제로 바뀌어야 iOS가 새 원격
+  // 제어 세션으로 인식한다. 재생 전에 두 핸들러가 모두 돌아와야 한다.
   await page.evaluate(()=>window.__testMediaActions.play());
   await expect(metro).toHaveClass(/running/);
   await expect.poll(()=>page.evaluate(()=>window.__testSeekReadyWhenResumePlay)).toBe(true);

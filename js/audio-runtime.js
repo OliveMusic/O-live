@@ -146,6 +146,19 @@ function configureBackgroundMediaSession(label,usesStream=__backgroundUsesStream
   }catch(e){}
 }
 
+/* iOS는 실제 <audio>가 멈춘 뒤에도 이전 seek 명령을 잠금화면에 남겨 두지만,
+   그 버튼을 새 재생 세션으로 전달하지 않는 경우가 있다. 일시정지 상태에서
+   명령을 먼저 제거해 두면 다음 play 콜백의 등록을 새 상태 변경으로 인식한다. */
+function clearBackgroundTempoActions(){
+  try{
+    if(!navigator.mediaSession ||
+       typeof navigator.mediaSession.setActionHandler!=='function') return;
+    for(const action of ['seekbackward','seekforward']){
+      try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
+    }
+  }catch(e){}
+}
+
 async function startBackgroundMedia(label,preparedCtx){
   if(typeof Audio!=='function' || typeof URL==='undefined' || typeof Blob==='undefined') return;
   if(!__backgroundAudio){
@@ -221,6 +234,7 @@ function pauseBackgroundPlayback(){
     __stoppingBackgroundMedia=false;
   }
   try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+  clearBackgroundTempoActions();
   if(!__backgroundUsesStream && audioCtx && audioCtx.state==='running'){
     const ctx=audioCtx;
     try{

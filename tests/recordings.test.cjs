@@ -31,6 +31,8 @@ assert.doesNotMatch(index,/id="pane-record"[\s\S]*?<h2>연주 녹음<\/h2>/);
 assert.match(index,/id="recordUploadInput"[^>]*accept="audio\/\*/);
 assert.match(index,/id="recordUpload"[^>]*>업로드</);
 assert.doesNotMatch(index,/반주 불러오기/);
+assert.match(index,/\.record-list-head\{ margin-bottom:12px; \}/);
+assert.match(index,/\.record-upload\{[\s\S]*?background:var\(--signal\); color:var\(--on-signal\)/);
 
 // 튜너·청음과 같은 올리브 기울기, 비율, 씨 위치를 사용한다.
 assert.match(index,/\.record-olive-static,\.record-olive\{[\s\S]*?width:76px; height:62\.5px;[\s\S]*?transform:rotate\(-11deg\)/);
@@ -90,6 +92,8 @@ assert.match(audioRuntime,/recording\?'play-and-record':background\?'playback':'
 assert.match(audioRuntime,/function ensureBackgroundPlaybackCtx\(label\)/);
 assert.match(audioRuntime,/function ensureBackgroundPlaybackCtx\(label\)\{[\s\S]*?stopCompetingBackgroundTransports\(label\)/);
 assert.match(audioRuntime,/function resumeBackgroundPlayback\(\)[\s\S]*?await withTimeout\(resumeReady,4500\)[\s\S]*?setBackgroundTransportsPaused\(false\)/);
+assert.match(audioRuntime,/function clearBackgroundTempoActions\(\)[\s\S]*?\['seekbackward','seekforward'\]/);
+assert.match(audioRuntime,/function pauseBackgroundPlayback\(\)[\s\S]*?playbackState='paused'[\s\S]*?clearBackgroundTempoActions\(\)/);
 assert.match(audioRuntime,/navigator\.audioSession\.type = mode/);
 assert.match(audioRuntime,/function startBackgroundMedia\(label,preparedCtx\)/);
 assert.match(audioRuntime,/function beginPlaybackFromGesture\(\)/);
