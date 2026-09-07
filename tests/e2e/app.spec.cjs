@@ -313,7 +313,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.26');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.27');
 }
 
 test.afterEach(async({page})=>{
@@ -339,7 +339,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=156');
+  expect(workerUrl).toContain('service-worker.js?v=157');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -356,7 +356,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.26',build:156});
+  expect(payload.release).toEqual({version:'1.3.27',build:157});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -770,12 +770,7 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
     window.__testMediaActionRegistrations.seekforward
   ));
   await backgroundAudio.evaluate(audio=>{
-    const nativePlay=audio.play.bind(audio);
-    audio.play=()=>{
-      window.__testSeekReadyWhenResumePlay=
-        typeof window.__testMediaActions.seekforward==='function';
-      return nativePlay();
-    };
+    window.__testBackgroundAudioBeforeResume=audio;
     audio.pause();
   });
   await expect(metro).toHaveClass(/media-paused/);
@@ -787,21 +782,25 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
     window.__testMediaActionClearances.seekbackward||0,
     window.__testMediaActionClearances.seekforward||0,
   ]))).toEqual([0,0]);
-  // iOS는 백그라운드의 pause→play 전환 중 액션 맵을 바꾸면 화면의 버튼과
-  // 실제 명령 대상을 서로 다르게 유지할 수 있다. 한 세션에서는 맵을 고정한다.
+  // 실제 iPhone에서는 pause→play 뒤 원형 버튼의 명령이 휴면 플레이어에 남는다.
+  // 같은 오디오 스트림을 새 미디어 요소에 연결해 플랫폼의 활성 세션을 갱신한다.
   await page.evaluate(()=>window.__testMediaActions.play());
   await expect(metro).toHaveClass(/running/);
-  await expect.poll(()=>page.evaluate(()=>window.__testSeekReadyWhenResumePlay)).toBe(true);
+  await expect.poll(()=>page.evaluate(()=>(
+    __backgroundAudio!==window.__testBackgroundAudioBeforeResume
+  ))).toBe(true);
+  await expect(backgroundAudio).toHaveCount(1);
   await expect.poll(()=>page.evaluate(()=>(
     window.__testMediaActionRegistrations.seekforward
-  ))).toBe(registrationsBeforeResume);
+  ))).toBe(registrationsBeforeResume+1);
   await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.seekforward))
     .toBe('function');
   await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
   await expect(page.locator('#bpmNum')).toHaveText('115');
   const resumedTempoTrace=await page.evaluate(()=>window.OliveAudioDiagnostics.read());
   expect(resumedTempoTrace.map(entry=>entry.event)).toEqual(expect.arrayContaining([
-    'media-action:play','transport:resume-ready','media-action:seekforward','tempo:applied',
+    'media-action:play','media-element:replaced','transport:resume-ready',
+    'media-action:seekforward','tempo:applied',
   ]));
   expect(resumedTempoTrace.filter(entry=>entry.event==='tempo:applied').at(-1).after).toBe(115);
 
