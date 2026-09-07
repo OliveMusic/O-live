@@ -229,6 +229,25 @@
     jamBpm = Math.max(40, Math.min(220, Math.round(v)));
     jamBpmVal.textContent = jamBpm;
     window.OlivePreferences.changed();
+    updateBackgroundMediaMetadata();
+    return jamBpm;
+  }
+
+  function adjustJamTempo(delta){
+    setJamBpm(jamBpm+delta);
+    const ctx=jamCtx;
+    if(!playing || isBackgroundMediaPaused() || !ctx || ctx!==audioCtx ||
+       ctx.state!=='running') return jamBpm;
+    const now=ctx.currentTime;
+    const next=scheduledMarks.find(mark=>mark.time>=now+0.02);
+    clearTimeout(timerID);
+    releaseJamOutputs();
+    createJamOutputs(ctx);
+    stepCursor=next ? next.step : stepCursor;
+    scheduledMarks=[];
+    nextStepTime=now+0.05;
+    scheduler();
+    return jamBpm;
   }
   bindTempoKeys(jamMinus, jamPlus, ()=>jamBpm, setJamBpm);
   bindTapTempo(jamTap, setJamBpm);
@@ -561,7 +580,7 @@
         }
       });
     }
-    scheduledMarks.push({time:when, barIdx:cell.barIdx});
+    scheduledMarks.push({time:when, barIdx:cell.barIdx, step});
   }
 
   function scheduler(){
@@ -742,6 +761,8 @@
     stop,
     setPaused:setMediaPaused,
     setContext:ctx=>{ jamCtx=ctx; },
+    getTempo:()=>jamBpm,
+    adjustTempo:adjustJamTempo,
     background:true,
     label:'잼 세션',
   });

@@ -275,7 +275,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.19');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.20');
 }
 
 test.afterEach(async({page})=>{
@@ -301,7 +301,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=149');
+  expect(workerUrl).toContain('service-worker.js?v=150');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -630,6 +630,49 @@ test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다
   await expect(metro).not.toHaveClass(/running|starting|media-paused/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).not.toHaveClass(/sounding/);
   await setVisibility('visible');
+});
+
+test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async({page})=>{
+  const progression=[1,5,6,4].map(deg=>({deg,beats:1,sev:false,fam:null}));
+  await preparePage(page,{microphone:'controls',preferences:{
+    data:{jam:{
+      root:0,mode:'major',preset:'custom',bpm:90,seventh:false,style:'rock',
+      tracks:{drum:false,bass:false,chord:false,click:false},progression,
+    }},
+    updatedAt:'2026-09-07T00:00:00.000Z',
+  }});
+
+  const metro=page.locator('#metroStart');
+  await metro.click();
+  await expect(metro).toHaveClass(/running/);
+  await expect.poll(()=>page.evaluate(()=>([
+    typeof window.__testMediaActions.seekbackward,
+    typeof window.__testMediaActions.seekforward,
+    typeof window.__testMediaActions.previoustrack,
+    typeof window.__testMediaActions.nexttrack,
+  ]))).toEqual(['function','function','undefined','undefined']);
+  await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.metadata&&
+    window.__testMediaSession.metadata.title)).toBe('메트로놈 · 90 BPM');
+
+  await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
+  await expect(page.locator('#bpmNum')).toHaveText('100');
+  await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.metadata.title))
+    .toBe('메트로놈 · 100 BPM');
+  await page.evaluate(()=>window.__testMediaActions.seekbackward({seekOffset:5}));
+  await expect(page.locator('#bpmNum')).toHaveText('95');
+  await page.evaluate(()=>window.__testMediaActions.seekforward({}));
+  await expect(page.locator('#bpmNum')).toHaveText('105');
+
+  await page.locator('.tab-btn[data-tab="jam"]').click();
+  const jam=page.locator('#jamStart');
+  await jam.click();
+  await expect(jam).toHaveClass(/on/);
+  await expect(metro).not.toHaveClass(/running|starting/);
+  await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:15}));
+  await expect(page.locator('#jamBpmVal')).toHaveText('105');
+  await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.metadata.title))
+    .toBe('잼 세션 · 105 BPM');
+  await jam.click();
 });
 
 test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async({page})=>{

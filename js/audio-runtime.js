@@ -152,11 +152,7 @@ async function startBackgroundMedia(label,preparedCtx){
   }
   try{
     if(navigator.mediaSession){
-      if(typeof MediaMetadata==='function'){
-        navigator.mediaSession.metadata=new MediaMetadata({
-          title:label||'연습 재생', artist:"O'live", album:'음악 연습',
-        });
-      }
+      updateBackgroundMediaMetadata(label);
       navigator.mediaSession.playbackState=__backgroundMediaPaused?'paused':'playing';
       if(typeof navigator.mediaSession.setActionHandler==='function'){
         if(usesStream){
@@ -175,6 +171,17 @@ async function startBackgroundMedia(label,preparedCtx){
           }); }catch(e){}
           try{ navigator.mediaSession.setActionHandler('pause',pauseBackgroundPlayback); }catch(e){}
           try{ navigator.mediaSession.setActionHandler('stop',stopBackgroundTransports); }catch(e){}
+        }
+        // iOS가 원형 건너뛰기 버튼에 표시한 초 단위 값을
+        // 그대로 BPM 변화량으로 쓴다. 값을 안 보내는 기기에서는 10을 쓴다.
+        try{ navigator.mediaSession.setActionHandler('seekbackward',details=>{
+          adjustBackgroundTempo(-1,details);
+        }); }catch(e){}
+        try{ navigator.mediaSession.setActionHandler('seekforward',details=>{
+          adjustBackgroundTempo(1,details);
+        }); }catch(e){}
+        for(const action of ['previoustrack','nexttrack']){
+          try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
         }
       }
     }
@@ -335,7 +342,8 @@ function stopBackgroundMedia(){
     if(navigator.mediaSession){
       navigator.mediaSession.playbackState='none';
       if(typeof navigator.mediaSession.setActionHandler==='function'){
-        for(const action of ['play','pause','stop']){
+        for(const action of ['play','pause','stop','seekbackward','seekforward',
+                              'previoustrack','nexttrack']){
           try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
         }
       }
@@ -558,11 +566,38 @@ function hasBackgroundTransportPlaying(){
   });
 }
 function activeBackgroundLabel(){
+  const active=activeBackgroundTransport();
+  return active ? active.label : '';
+}
+function activeBackgroundTransport(){
   const active=__transports.filter(transport=>{
     try{ return Boolean(transport.background && transport.isPlaying()); }
     catch(e){ return false; }
   });
-  return active.length ? active[active.length-1].label : '';
+  return active.length ? active[active.length-1] : null;
+}
+function updateBackgroundMediaMetadata(fallbackLabel=''){
+  try{
+    if(!navigator.mediaSession || typeof MediaMetadata!=='function') return;
+    const transport=activeBackgroundTransport();
+    if(!transport && !fallbackLabel) return;
+    const label=(transport && transport.label) || fallbackLabel || '연습 재생';
+    const rawTempo=transport && typeof transport.getTempo==='function'
+      ? Number(transport.getTempo()) : NaN;
+    const title=Number.isFinite(rawTempo) ? `${label} · ${Math.round(rawTempo)} BPM` : label;
+    navigator.mediaSession.metadata=new MediaMetadata({
+      title, artist:"O'live", album:'음악 연습',
+    });
+  }catch(e){}
+}
+function adjustBackgroundTempo(direction,details){
+  const transport=activeBackgroundTransport();
+  if(!transport || typeof transport.adjustTempo!=='function') return;
+  const requested=Number(details && details.seekOffset);
+  const step=Number.isFinite(requested) && requested>0 ? Math.max(1,Math.round(requested)) : 10;
+  try{
+    transport.adjustTempo(direction<0 ? -step : step);
+  }catch(e){}
 }
 function stopAllTransports(){
   __transports.forEach(transport=>{

@@ -120,6 +120,27 @@
     bpm = Math.max(30, Math.min(260, Math.round(v)));
     updateBpmUI();
     window.OlivePreferences.changed();
+    updateBackgroundMediaMetadata();
+    return bpm;
+  }
+
+  // 잠금 중에는 약 2.5초치 클릭을 미리 예약한다. 속도를 바꿀 때
+  // 그 예약을 버리고 다음 스텝부터 다시 쌓아야 숫자와 소리가 같이 바뀐다.
+  function adjustTempo(delta){
+    setBpm(bpm+delta);
+    const ctx=metroCtx;
+    if(!isPlaying || isBackgroundMediaPaused() || !ctx || ctx!==audioCtx ||
+       ctx.state!=='running') return bpm;
+    const now=ctx.currentTime;
+    const next=scheduledBeats.find(mark=>mark.time>=now+0.02);
+    clearTimeout(timerID);
+    releaseMetroOutput();
+    createMetroOutput(ctx);
+    currentStep=next ? next.step : currentStep;
+    scheduledBeats=[];
+    nextNoteTime=now+0.05;
+    scheduler();
+    return bpm;
   }
 
   bindTempoKeys(document.getElementById('bpmMinus'),
@@ -420,6 +441,8 @@
     stop:stopMetro,
     setPaused:setMediaPaused,
     setContext:ctx=>{ metroCtx=ctx; },
+    getTempo:()=>bpm,
+    adjustTempo,
     background:true,
     label:'메트로놈',
   });
