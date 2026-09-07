@@ -270,6 +270,9 @@ function resumeBackgroundPlayback(){
     }
     setAudioSession('playback');
     __ctxMode='playback';
+    // iOS가 원격 play 명령을 처리하며 활성 명령 목록을 다시 만들기 전에
+    // pause와 양쪽 BPM 명령을 한 묶음으로 먼저 전달한다.
+    configureBackgroundMediaSession(activeBackgroundLabel(),__backgroundUsesStream);
     let mediaReady=Promise.resolve(), firstResume=Promise.resolve();
     try{
       const result=audio.play();

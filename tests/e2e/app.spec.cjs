@@ -280,7 +280,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.21');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.22');
 }
 
 test.afterEach(async({page})=>{
@@ -306,7 +306,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=151');
+  expect(workerUrl).toContain('service-worker.js?v=152');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -639,7 +639,7 @@ test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다
 
 test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async({page})=>{
   const progression=[1,5,6,4].map(deg=>({deg,beats:1,sev:false,fam:null}));
-  await preparePage(page,{microphone:'controls',preferences:{
+  await preparePage(page,{preferences:{
     data:{jam:{
       root:0,mode:'major',preset:'custom',bpm:90,seventh:false,style:'rock',
       tracks:{drum:false,bass:false,chord:false,click:false},progression,
@@ -650,6 +650,10 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
   const metro=page.locator('#metroStart');
   await metro.click();
   await expect(metro).toHaveClass(/running/);
+  const backgroundAudio=page.locator('audio[data-olive-background="true"]');
+  await expect.poll(()=>backgroundAudio.evaluate(audio=>Boolean(
+    audio.srcObject && audio.srcObject.getAudioTracks().length
+  ))).toBeTruthy();
   await expect.poll(()=>page.evaluate(()=>([
     typeof window.__testMediaActions.seekbackward,
     typeof window.__testMediaActions.seekforward,
@@ -671,14 +675,22 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
   const registrationsBeforeResume=await page.evaluate(()=>(
     window.__testMediaActionRegistrations.seekforward
   ));
-  await page.evaluate(()=>window.__testMediaActions.pause());
-  await expect(metro).toHaveClass(/media-paused/);
-  // iOS가 pause→play 전환 중 사이드 명령을 놓친 상태를 재현한다.
-  await page.evaluate(()=>{
+  await backgroundAudio.evaluate(audio=>{
+    const nativePlay=audio.play.bind(audio);
+    audio.play=()=>{
+      window.__testSeekReadyWhenResumePlay=
+        typeof window.__testMediaActions.seekforward==='function';
+      return nativePlay();
+    };
     delete window.__testMediaActions.seekforward;
-    window.__testMediaActions.play();
+    audio.pause();
   });
+  await expect(metro).toHaveClass(/media-paused/);
+  // iOS가 pause→play 전환 중 사이드 명령을 놓친 상태를 재현한다. 재생을
+  // 시작하기 전에 핸들러가 복구되어야 새 원격 제어 세션에도 포함된다.
+  await page.evaluate(()=>window.__testMediaActions.play());
   await expect(metro).toHaveClass(/running/);
+  await expect.poll(()=>page.evaluate(()=>window.__testSeekReadyWhenResumePlay)).toBe(true);
   await expect.poll(()=>page.evaluate(()=>(
     window.__testMediaActionRegistrations.seekforward
   ))).toBeGreaterThan(registrationsBeforeResume);
