@@ -549,7 +549,7 @@
       return;
     }
     if(ctx.state!=='running'){
-      if(document.visibilityState!=='visible'){
+      if(isBackgroundMediaPaused() || document.visibilityState!=='visible'){
         timerID=setTimeout(scheduler,250);
         return;
       }
@@ -603,6 +603,10 @@
     if(!playing || gen!==visualGen) return;
     const ctx=jamCtx;
     if(!ctx || ctx!==audioCtx || ctx.state!=='running'){
+      if(ctx && ctx===audioCtx && isBackgroundMediaPaused()){
+        requestAnimationFrame(()=>visualLoop(gen));
+        return;
+      }
       stop();
       return;
     }
@@ -630,7 +634,7 @@
     clearTimeout(timerID);
     scheduledMarks=[];
     visualBarIdx=-1;
-    jamStart.classList.remove('on');
+    jamStart.classList.remove('on','media-paused');
     jamStart.setAttribute('aria-label','재생');
     jamStart.setAttribute('aria-busy','false');
     jamStart.querySelector('svg').innerHTML='<path d="M8 5.5v13l11-6.5z"/>';
@@ -638,7 +642,21 @@
     progTimeline.querySelectorAll('.prog-bar').forEach(b=>b.classList.remove('now'));
   }
 
+  function setMediaPaused(paused){
+    if(!playing) return;
+    jamStart.classList.toggle('media-paused',paused);
+    jamStart.classList.toggle('on',!paused);
+    jamStart.setAttribute('aria-label',paused?'재생':'정지');
+    jamStart.querySelector('svg').innerHTML=paused
+      ? '<path d="M8 5.5v13l11-6.5z"/>'
+      : '<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
+  }
+
   jamStart.addEventListener('click', async ()=>{
+    if((playing || startPending) && isBackgroundMediaPaused()){
+      resumeBackgroundPlayback().catch(()=>{});
+      return;
+    }
     if(playing || startPending){ stop(); return; }
     if(progression.length===0) return;
     const token=++startToken;
@@ -657,6 +675,7 @@
       visualBarIdx=-1;
       nextStepTime=ctx.currentTime+0.06;
       jamStart.classList.add('on');
+      jamStart.classList.remove('media-paused');
       jamStart.setAttribute('aria-label','정지');
       jamStart.setAttribute('aria-busy','false');
       jamStart.querySelector('svg').innerHTML='<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
@@ -676,6 +695,7 @@
   registerTransport({
     isPlaying:()=>playing || startPending,
     stop,
+    setPaused:setMediaPaused,
     background:true,
     label:'잼 세션',
   });

@@ -17,6 +17,19 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
     try{ Object.defineProperty(navigator,'audioSession',{configurable:true,value:audioSession}); }
     catch(error){}
     window.__testAudioSession=audioSession;
+    const mediaActions={};
+    const mediaSession={
+      metadata:null,
+      playbackState:'none',
+      setActionHandler(action,handler){
+        if(handler) mediaActions[action]=handler;
+        else delete mediaActions[action];
+      },
+    };
+    try{ Object.defineProperty(navigator,'mediaSession',{configurable:true,value:mediaSession}); }
+    catch(error){}
+    window.__testMediaActions=mediaActions;
+    window.__testMediaSession=mediaSession;
     if(storedPreferences){
       localStorage.setItem('olive-preferences-v1',JSON.stringify(storedPreferences));
     }
@@ -107,6 +120,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
         }
         addEventListener(type,listener){ this.listeners.set(type,listener); }
         async resume(){ this.state='running'; }
+        async suspend(){ this.state='suspended'; }
         async close(){ this.state='closed'; }
         createMediaStreamSource(){ return new FakeNode(); }
         createBiquadFilter(){
@@ -261,7 +275,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.14');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.15');
 }
 
 test.afterEach(async({page})=>{
@@ -287,7 +301,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=144');
+  expect(workerUrl).toContain('service-worker.js?v=145');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -512,8 +526,8 @@ test('메트로놈 재생 중 튜너로 가면 방해 음원이 즉시 정지한
   await expect(page.locator('#tab-tuner')).toBeVisible();
 });
 
-test('잠금 중 재생을 유지하고 잠금 화면의 일시정지로 메트로놈을 멈춘다',async({page})=>{
-  await preparePage(page);
+test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다',async({page})=>{
+  await preparePage(page,{microphone:'controls'});
   const setVisibility=value=>page.evaluate(next=>{
     window.__testVisibility=next;
     if(!Object.prototype.hasOwnProperty.call(document,'visibilityState')){
@@ -533,14 +547,41 @@ test('잠금 중 재생을 유지하고 잠금 화면의 일시정지로 메트�
   await page.waitForTimeout(350);
   await expect(metro).toHaveClass(/running/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).toHaveClass(/sounding/);
+  await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.pause)).toBe('function');
+  await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.play)).toBe('function');
+  await page.evaluate(()=>window.__testMediaActions.pause());
+  await expect(metro).toHaveClass(/media-paused/);
+  await expect(metro).not.toHaveClass(/running/);
+  await expect(page.locator('#orbLabel')).toHaveText('재생');
+  await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('paused');
+  await page.evaluate(()=>window.__testMediaActions.play());
+  await expect(metro).toHaveClass(/running/);
+  await expect(metro).not.toHaveClass(/media-paused/);
+  await expect(page.locator('#orbLabel')).toHaveText('정지');
+  await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('playing');
   await page.locator('audio[data-olive-background="true"]').evaluate(audio=>{
     audio.dispatchEvent(new Event('playing'));
     audio.dispatchEvent(new Event('pause'));
   });
-  await expect(metro).not.toHaveClass(/running|starting/);
+  await expect(metro).toHaveClass(/media-paused/);
+  await page.evaluate(()=>window.__testMediaActions.stop());
+  await expect(metro).not.toHaveClass(/running|starting|media-paused/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).not.toHaveClass(/sounding/);
   await setVisibility('visible');
+});
 
+test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async({page})=>{
+  await preparePage(page);
+  const setVisibility=value=>page.evaluate(next=>{
+    window.__testVisibility=next;
+    if(!Object.prototype.hasOwnProperty.call(document,'visibilityState')){
+      Object.defineProperty(document,'visibilityState',{
+        configurable:true,
+        get:()=>window.__testVisibility,
+      });
+    }
+    document.dispatchEvent(new Event('visibilitychange'));
+  },value);
   await page.locator('.tab-btn[data-tab="jam"]').click();
   const jam=page.locator('#jamStart');
   await jam.click();

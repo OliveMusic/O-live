@@ -243,7 +243,7 @@
       return;
     }
     if(ctx.state!=='running'){
-      if(document.visibilityState!=='visible'){
+      if(isBackgroundMediaPaused() || document.visibilityState!=='visible'){
         timerID=setTimeout(scheduler,250);
         return;
       }
@@ -274,6 +274,10 @@
     if(!isPlaying || gen !== visualGen) return;   // 예전 루프는 여기서 끝난다
     const ctx = metroCtx;
     if(!ctx || ctx!==audioCtx || ctx.state!=='running'){
+      if(ctx && ctx===audioCtx && isBackgroundMediaPaused()){
+        requestAnimationFrame(()=>visualLoop(gen));
+        return;
+      }
       stopMetro('재시도');
       return;
     }
@@ -328,6 +332,7 @@
       nextNoteTime=ctx.currentTime+0.05;
       orbLabel.textContent='정지';
       metroStart.classList.remove('starting');
+      metroStart.classList.remove('media-paused');
       metroStart.classList.add('running');
       metroStart.setAttribute('aria-busy','false');
       setTabSounding('metronome',true);
@@ -365,16 +370,30 @@
     metroCtx=null;
     clearTimeout(timerID);
     orbLabel.textContent=label;
-    metroStart.classList.remove('starting','running','flash');
+    metroStart.classList.remove('starting','running','flash','media-paused');
     metroStart.setAttribute('aria-busy','false');
     rollRight = false; parkOlive();    // 왼쪽 끝에 멈춰 쉰다
     setTabSounding('metronome', false);
     beatDotsEl.querySelectorAll('.beat-dot').forEach(d=>d.classList.remove('on','mid-on','accent-on'));
   }
-  metroStart.addEventListener('click', ()=> (isPlaying || startPending) ? stopMetro() : startMetro());
+  function setMediaPaused(paused){
+    if(!isPlaying) return;
+    metroStart.classList.toggle('media-paused',paused);
+    metroStart.classList.toggle('running',!paused);
+    metroStart.classList.remove('flash');
+    orbLabel.textContent=paused?'재생':'정지';
+  }
+  metroStart.addEventListener('click', ()=>{
+    if((isPlaying || startPending) && isBackgroundMediaPaused()){
+      resumeBackgroundPlayback().catch(()=>{});
+      return;
+    }
+    (isPlaying || startPending) ? stopMetro() : startMetro();
+  });
   registerTransport({
     isPlaying:()=>isPlaying || startPending,
     stop:stopMetro,
+    setPaused:setMediaPaused,
     background:true,
     label:'메트로놈',
   });

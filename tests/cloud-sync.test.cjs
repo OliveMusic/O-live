@@ -80,7 +80,7 @@ function makeContext({config,storage,supabase}){
       addEventListener:(name,handler)=>{ documentListeners[name]=handler; },
     },
     addEventListener:(name,handler)=>{ windowListeners[name]=handler; },
-    OLIVE_RELEASE:{version:'1.3.14',build:144,schemaVersion:9},
+    OLIVE_RELEASE:{version:'1.3.15',build:145,schemaVersion:9},
     OLIVE_CLOUD_CONFIG:config,
     supabase,
   };
