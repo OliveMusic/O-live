@@ -313,7 +313,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.27');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.28');
 }
 
 test.afterEach(async({page})=>{
@@ -339,7 +339,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=157');
+  expect(workerUrl).toContain('service-worker.js?v=158');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -356,7 +356,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.27',build:157});
+  expect(payload.release).toEqual({version:'1.3.28',build:158});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -802,7 +802,39 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
     'media-action:play','media-element:replaced','transport:resume-ready',
     'media-action:seekforward','tempo:applied',
   ]));
+  const firstReplacementIndex=resumedTempoTrace.findIndex(entry=>entry.event==='media-element:replaced');
+  const firstReinstallIndex=resumedTempoTrace.findIndex((entry,index)=>
+    index>firstReplacementIndex && entry.event==='media-actions:installed'
+  );
+  const firstPlayingIndex=resumedTempoTrace.findIndex((entry,index)=>
+    index>firstReplacementIndex && entry.event==='media-element:playing'
+  );
+  expect(firstReinstallIndex).toBeGreaterThan(firstReplacementIndex);
+  expect(firstPlayingIndex).toBeGreaterThan(firstReinstallIndex);
   expect(resumedTempoTrace.filter(entry=>entry.event==='tempo:applied').at(-1).after).toBe(115);
+
+  // 반복 pause→play에서도 매번 하나의 새 플레이어만 남고 BPM 명령이 먼저 설치된다.
+  for(const expectedBpm of [125,135,145]){
+    const before=await backgroundAudio.evaluate(audio=>(
+      Number(audio.dataset.oliveBackgroundGeneration)
+    ));
+    const registrations=await page.evaluate(()=>(
+      window.__testMediaActionRegistrations.seekforward
+    ));
+    await backgroundAudio.evaluate(audio=>audio.pause());
+    await expect(metro).toHaveClass(/media-paused/);
+    await page.evaluate(()=>window.__testMediaActions.play());
+    await expect(metro).toHaveClass(/running/);
+    await expect(backgroundAudio).toHaveCount(1);
+    await expect.poll(()=>backgroundAudio.evaluate(audio=>(
+      Number(audio.dataset.oliveBackgroundGeneration)
+    ))).toBe(before+1);
+    await expect.poll(()=>page.evaluate(()=>(
+      window.__testMediaActionRegistrations.seekforward
+    ))).toBe(registrations+1);
+    await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
+    await expect(page.locator('#bpmNum')).toHaveText(String(expectedBpm));
+  }
 
   await page.locator('.tab-btn[data-tab="jam"]').click();
   const jam=page.locator('#jamStart');

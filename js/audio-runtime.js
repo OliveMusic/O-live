@@ -308,7 +308,8 @@ function createBackgroundAudioElement(){
 
 /* iOS는 잠금화면에서 실제 <audio>를 일시정지한 뒤 다시 재생해도, 원형
    건너뛰기 명령을 이전의 휴면 플레이어에 남겨두는 경우가 있다. 같은 Web Audio
-   스트림을 새 미디어 요소에서 재생하면 플랫폼이 활성 플레이어를 새로 선택한다. */
+   스트림을 새 미디어 요소에서 재생하면 플랫폼이 활성 플레이어를 새로 선택한다.
+   이전 요소는 load()까지 호출해 네이티브 플레이어도 확실히 반납한다. */
 function replaceBackgroundAudioForResume(ctx){
   const previous=__backgroundAudio;
   const destination=__backgroundStreamDestination;
@@ -334,6 +335,8 @@ function replaceBackgroundAudioForResume(ctx){
   __stoppingBackgroundMedia=true;
   try{ previous.pause(); }catch(e){}
   try{ previous.srcObject=null; }catch(e){}
+  try{ previous.removeAttribute('src'); }catch(e){}
+  try{ previous.load(); }catch(e){}
   try{ previous.remove(); }catch(e){}
   __stoppingBackgroundMedia=false;
   recordAudioDiagnostic('media-element:replaced',{
@@ -429,6 +432,12 @@ function resumeBackgroundPlayback(){
     __ctxMode='playback';
     audio=replaceBackgroundAudioForResume(ctx);
     if(!audio) throw new Error('BackgroundAudioUnavailable');
+    // iOS는 새 플레이어가 play()되는 순간의 지원 명령을 잠금화면에 반영한다.
+    // BPM 액션을 그보다 먼저 설치해야 반복 재개 중 기본 되감기 버튼이 끼어들지 않는다.
+    if(__backgroundUsesStream){
+      __backgroundMediaActionMode='';
+      configureBackgroundMediaSession(activeBackgroundLabel(),true);
+    }
     let mediaReady=Promise.resolve(), firstResume=Promise.resolve();
     try{
       const result=audio.play();
@@ -458,9 +467,7 @@ function resumeBackgroundPlayback(){
       __backgroundMediaPaused=false;
       __backgroundMediaArmed=!audio.paused;
       setBackgroundTransportsPaused(false);
-      // 새 미디어 요소가 활성 플레이어가 된 뒤에 액션을 다시 설치한다. 이는 화면을
-      // 풀었을 때 iOS가 연결을 되찾던 동작을 잠금화면 안에서 수행하는 복구 지점이다.
-      __backgroundMediaActionMode='';
+      // 액션은 play() 전에 설치했으므로 여기서는 표시 상태와 메타데이터만 맞춘다.
       configureBackgroundMediaSession(activeBackgroundLabel(),__backgroundUsesStream);
       recordAudioDiagnostic('transport:resume-ready');
     }catch(error){
