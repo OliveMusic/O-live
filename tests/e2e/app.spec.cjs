@@ -111,6 +111,8 @@ async function preparePage(page,{
       HTMLMediaElement.prototype.play=function(){
         window.__mediaPlayCalls=(window.__mediaPlayCalls||0)+1;
         window.__lastPlayedMedia=this;
+        if(this.dataset.oliveRecordingTransport==='true') window.__recordingTransportMedia=this;
+        else window.__lastRecordingContentMedia=this;
         const media=this;
         if(micMode!=='playback-stalled' || media.dataset.oliveRecordingPlayback!=='true'){
           setTimeout(()=>{
@@ -150,6 +152,11 @@ async function preparePage(page,{
     }
     if(micMode!=='native'){
       let analyserSampleCursor=0,analyserFrame=0;
+      Object.defineProperty(HTMLMediaElement.prototype,'srcObject',{
+        configurable:true,
+        get(){ return this.__testSrcObject||null; },
+        set(value){ this.__testSrcObject=value; },
+      });
       const harness={
         requests:0,stops:0,pending:false,contexts:0,zeroGainConnections:0,
         gainNodes:[],scheduledStarts:[],
@@ -169,6 +176,7 @@ async function preparePage(page,{
           this.sampleRate=48000;
           this.destination=new FakeNode();
           this.listeners=new Map();
+          this.audioWorklet={addModule:async url=>{ harness.workletModule=url; }};
         }
         addEventListener(type,listener){ this.listeners.set(type,listener); }
         async resume(){ this.state='running'; }
@@ -238,6 +246,10 @@ async function preparePage(page,{
         }
         createBufferSource(){
           const node=new FakeNode();
+          node.playbackRate={
+            value:1,
+            setValueAtTime(value){ this.value=value; },
+          };
           node.start=(when,offset)=>{ harness.lastSourceOffset=offset; };
           node.stop=()=>{};
           harness.bufferSource=node;
@@ -265,6 +277,20 @@ async function preparePage(page,{
           node.stream={getTracks:()=>[track],getAudioTracks:()=>[track]};
           harness.processedStream=node.stream;
           return node;
+        }
+      }
+      class FakeAudioWorkletNode extends FakeNode{
+        constructor(context,name){
+          super();
+          const makeParam=()=>({
+            value:1,
+            setValueAtTime(value){ this.value=value; },
+          });
+          this.parameters=new Map([
+            ['pitch',makeParam()],['pitchSemitones',makeParam()],['playbackRate',makeParam()],
+          ]);
+          harness.workletNode=this;
+          harness.workletName=name;
         }
       }
       if(micMode==='scope-error'){
@@ -309,6 +335,7 @@ async function preparePage(page,{
       };
       window.AudioContext=FakeAudioContext;
       window.webkitAudioContext=FakeAudioContext;
+      window.AudioWorkletNode=FakeAudioWorkletNode;
       if(micMode==='meter-signal'){
         class FakeMediaRecorder extends EventTarget{
           static isTypeSupported(){ return true; }
@@ -333,7 +360,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.36');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.37');
 }
 
 test.afterEach(async({page})=>{
@@ -359,7 +386,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=166');
+  expect(workerUrl).toContain('service-worker.js?v=167');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -376,7 +403,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.36',build:166});
+  expect(payload.release).toEqual({version:'1.3.37',build:167});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -445,8 +472,8 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await page.evaluate(()=>window.__resolveRecordingDownload());
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   expect(await page.evaluate(()=>Boolean(
-    window.__lastPlayedMedia &&
-    window.__lastPlayedMedia.dataset.oliveRecordingPlayback!=='true'
+    window.__recordingTransportMedia &&
+    window.__recordingTransportMedia.dataset.oliveRecordingTransport==='true'
   ))).toBeTruthy();
   expect(await page.evaluate(()=>Boolean(window.__micHarness.mediaElementGain))).toBeTruthy();
   expect(await page.evaluate(()=>window.__testAudioSession.type)).toBe('playback');
@@ -455,7 +482,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     pause:typeof window.__testMediaActions.pause,
     backward:typeof window.__testMediaActions.seekbackward,
     forward:typeof window.__testMediaActions.seekforward,
-  }))).toEqual({play:'function',pause:'function',backward:'function',forward:'function'});
+  }))).toEqual({play:'function',pause:'undefined',backward:'function',forward:'function'});
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/5[01-3]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('00:51');
   const playCallsBeforeSeek=await page.evaluate(()=>window.__mediaPlayCalls||0);
@@ -472,7 +499,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-waveform')).toHaveClass(/has-loop-end/);
   await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
   await expect(page.locator('.record-player-tool.repeat')).toHaveAttribute('aria-pressed','true');
-  await page.evaluate(()=>{ window.__lastPlayedMedia.currentTime=35; });
+  await page.evaluate(()=>{ window.__lastRecordingContentMedia.currentTime=35; });
   await expect(page.locator('.record-player-elapsed')).toHaveText('00:17');
   await page.locator('.record-player-tool.repeat').click();
   await expect(page.locator('.record-player-tool.repeat')).not.toHaveClass(/active/);
@@ -482,39 +509,47 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-waveform')).not.toHaveClass(/has-loop-start/);
   await expect(page.locator('.record-player-tool.repeat')).toBeEnabled();
   await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
-  expect(await page.evaluate(()=>window.__lastPlayedMedia.loop)).toBeTruthy();
+  expect(await page.evaluate(()=>window.__lastRecordingContentMedia.loop)).toBeTruthy();
 
   await page.locator('.record-rate-control input[type="range"]').fill('0.75');
   await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('0.75');
   await expect(page.locator('.record-rate-value')).toHaveText('0.75×');
   await expect.poll(()=>page.evaluate(()=>({
-    playbackRate:window.__lastPlayedMedia.playbackRate,
-    preservesPitch:window.__lastPlayedMedia.preservesPitch,
-    webkitPreservesPitch:window.__lastPlayedMedia.webkitPreservesPitch,
-  }))).toMatchObject({playbackRate:.75,preservesPitch:true,webkitPreservesPitch:true});
+    module:window.__micHarness.workletModule,
+    processor:window.__micHarness.workletName,
+    sourceRate:window.__micHarness.bufferSource&&window.__micHarness.bufferSource.playbackRate.value,
+    stretchRate:window.__micHarness.workletNode&&
+      window.__micHarness.workletNode.parameters.get('playbackRate').value,
+  }))).toMatchObject({
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=167',
+    processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
+  });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
   await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('1');
   await expect(page.locator('.record-rate-value')).toHaveText('1×');
-  await expect.poll(()=>page.evaluate(()=>window.__lastPlayedMedia.playbackRate)).toBe(1);
-  await page.evaluate(()=>{ window.__lastPlayedMedia.currentTime=20; });
+  await expect.poll(()=>page.evaluate(()=>([
+    window.__micHarness.bufferSource.playbackRate.value,
+    window.__micHarness.workletNode.parameters.get('playbackRate').value,
+  ]))).toEqual([1,1]);
+  const beforeRemoteSeek=await page.evaluate(()=>window.__testMediaSession.positionState.position);
   await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
-  await expect.poll(()=>page.evaluate(()=>window.__lastPlayedMedia.currentTime)).toBe(30);
+  await expect.poll(()=>page.evaluate(()=>window.__micHarness.lastSourceOffset))
+    .toBeCloseTo(beforeRemoteSeek+10,3);
   await page.evaluate(()=>window.__testMediaActions.seekbackward({seekOffset:10}));
-  await expect.poll(()=>page.evaluate(()=>window.__lastPlayedMedia.currentTime)).toBe(20);
+  await expect.poll(()=>page.evaluate(()=>window.__micHarness.lastSourceOffset))
+    .toBeCloseTo(beforeRemoteSeek,3);
   const actionRegistrations=await page.evaluate(()=>({
     play:window.__testMediaActionRegistrations.play,
-    pause:window.__testMediaActionRegistrations.pause,
     backward:window.__testMediaActionRegistrations.seekbackward,
     forward:window.__testMediaActionRegistrations.seekforward,
   }));
-  await page.evaluate(()=>window.__testMediaActions.pause());
+  await page.evaluate(()=>window.__recordingTransportMedia.dispatchEvent(new Event('pause')));
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
   await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('paused');
   await page.evaluate(()=>window.__testMediaActions.play());
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   expect(await page.evaluate(()=>({
     play:window.__testMediaActionRegistrations.play,
-    pause:window.__testMediaActionRegistrations.pause,
     backward:window.__testMediaActionRegistrations.seekbackward,
     forward:window.__testMediaActionRegistrations.seekforward,
   }))).toEqual(actionRegistrations);
@@ -599,10 +634,15 @@ test('iPhone PWA는 무음이 되는 직접 재생기 대신 검증된 오디오
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
   await page.locator('.record-row-open').click();
   await page.locator('.record-player-play').click();
-  await expect.poll(()=>page.evaluate(()=>({
-    native:window.__lastPlayedMedia&&window.__lastPlayedMedia.dataset.oliveRecordingPlayback==='true',
-    calls:window.__mediaPlayCalls||0,
-  })),{timeout:3000}).toEqual({native:false,calls:1});
+  await expect.poll(()=>page.evaluate(()=>(
+    window.__mediaPlayCalls||0
+  )),{timeout:3000}).toBeGreaterThanOrEqual(2);
+  expect(await page.evaluate(()=>Boolean(
+    window.__lastRecordingContentMedia &&
+    window.__lastRecordingContentMedia.dataset.oliveRecordingPlayback!=='true' &&
+    window.__recordingTransportMedia &&
+    window.__recordingTransportMedia.dataset.oliveRecordingTransport==='true'
+  ))).toBeTruthy();
   expect(await page.evaluate(()=>Boolean(window.__micHarness.mediaElementGain))).toBeTruthy();
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   await expect(page.locator('#recordMessage')).not.toHaveClass(/error/);
@@ -651,6 +691,25 @@ test('메트로놈과 잼은 서로 교대하고 진행 중인 녹음은 유지�
   await recorder.click();
   await page.locator('.tab-btn[data-tab="metronome"]').click();
   await metro.click();
+});
+
+test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된다',async({page})=>{
+  await preparePage(page);
+  const result=await page.evaluate(async()=>{
+    const Context=window.AudioContext||window.webkitAudioContext;
+    const ctx=new Context();
+    try{
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=167');
+      const node=new AudioWorkletNode(ctx,'soundtouch-processor');
+      return {
+        pitch:Boolean(node.parameters.get('pitch')),
+        playbackRate:Boolean(node.parameters.get('playbackRate')),
+      };
+    }finally{
+      await ctx.close();
+    }
+  });
+  expect(result).toEqual({pitch:true,playbackRate:true});
 });
 
 test('내 녹음 재생은 녹음 시작 시 정지되고 잠금화면에서도 녹음 상태를 유지한다',async({page})=>{
@@ -862,7 +921,7 @@ test('메트로놈 재생 중 튜너로 가면 방해 음원이 즉시 정지한
 });
 
 test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다',async({page})=>{
-  await preparePage(page,{microphone:'controls'});
+  await preparePage(page);
   const setVisibility=value=>page.evaluate(next=>{
     window.__testVisibility=next;
     if(!Object.prototype.hasOwnProperty.call(document,'visibilityState')){
@@ -882,9 +941,9 @@ test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다
   await page.waitForTimeout(350);
   await expect(metro).toHaveClass(/running/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).toHaveClass(/sounding/);
-  await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.pause)).toBe('function');
+  await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.pause)).toBe('undefined');
   await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.play)).toBe('function');
-  await page.evaluate(()=>window.__testMediaActions.pause());
+  await page.locator('audio[data-olive-background="true"]').evaluate(audio=>audio.pause());
   await expect(metro).toHaveClass(/media-paused/);
   await expect(metro).not.toHaveClass(/running/);
   await expect(page.locator('#orbLabel')).toHaveText('재생');
@@ -899,7 +958,7 @@ test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다
     audio.dispatchEvent(new Event('pause'));
   });
   await expect(metro).toHaveClass(/media-paused/);
-  await page.evaluate(()=>window.__testMediaActions.stop());
+  await page.evaluate(()=>stopBackgroundTransports());
   await expect(metro).not.toHaveClass(/running|starting|media-paused/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).not.toHaveClass(/sounding/);
   await setVisibility('visible');

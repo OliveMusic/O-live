@@ -11,6 +11,8 @@ const rhythm=fs.readFileSync('js/rhythm-trainer.js','utf8');
 const jam=fs.readFileSync('js/jam-session.js','utf8');
 const cloud=fs.readFileSync('cloud-sync.js','utf8');
 const recordingCache=fs.readFileSync('js/recording-cache.js','utf8');
+const soundTouchProcessor=fs.readFileSync('vendor/soundtouch/soundtouch-processor.js','utf8');
+const soundTouchLicense=fs.readFileSync('vendor/soundtouch/LICENSE','utf8');
 const baseMigration=fs.readFileSync('supabase/006_recordings.sql','utf8');
 const waveformMigration=fs.readFileSync('supabase/007_recording_waveforms.sql','utf8');
 const timestampMigration=fs.readFileSync('supabase/008_recording_timestamps.sql','utf8');
@@ -123,7 +125,7 @@ assert.match(audioRuntime,/function transportKeepsWhenHidden\(transport\)/);
 assert.match(audioRuntime,/!transportKeepsWhenHidden\(transport\)/);
 assert.match(audioRuntime,/if\(hasHiddenSafeTransportPlaying\(\)\)/);
 assert.match(audioRuntime,/window\.OliveRecorder\.resumeAfterVisibility\(\)/);
-assert.match(audioRuntime,/if\(!anySounding\(\) && !recording\)[\s\S]*?setAudioSession\('ambient'\)/);
+assert.match(audioRuntime,/if\(!anySounding\(\) && !recording && !hiddenSafe\)[\s\S]*?setAudioSession\('ambient'\)/);
 assert.match(rhythm,/await ensurePlaybackCtx\(\)/);
 for(const source of [metronome,jam]){
   assert.match(source,/await ensureBackgroundPlaybackCtx\(/);
@@ -151,8 +153,8 @@ assert.match(recorder,/findPlaybackBlob\(row\)/);
 assert.match(recorder,/await cacheRowBlob\(saved,saved\.blob\)/);
 assert.match(recorder,/await cache\.remove\(currentUser\.id,row\.id\)/);
 
-// iOS Safari에서는 서명 주소를 네이티브 플레이어로 즉시 재생하고,
-// 실패할 때만 제스처에서 미리 연 Web Audio 디코딩 경로를 사용한다.
+// iOS Safari에서는 검증된 Web Audio 출력을 실제 MediaStream 운반자로 보내고,
+// 배속할 때는 별도 처리기로 음높이를 보존한다.
 const playRow=recorder.match(/function playRow\(row,requestedOffset\)\{[\s\S]*?\n  \}/)?.[0]||'';
 assert.match(playRow,/beginPlaybackFromGesture\(\)/);
 assert.match(playRow,/preferPersistentNativePlayback\(\)/);
@@ -174,6 +176,19 @@ assert.match(recorder,/const edgeSnap=Math\.min\(12,bounds\.width\*\.04\)/);
 assert.match(recorder,/const PLAYBACK_RATE_MIN=\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_MAX=1\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_STEP=\.05/);
+assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=167'/);
+assert.match(recorder,/function makeCloudTransportAudio\(\)/);
+assert.match(recorder,/audio\.dataset\.oliveRecordingTransport='true'/);
+assert.match(recorder,/ctx\.createMediaStreamDestination\(\)/);
+assert.match(recorder,/navigator\.mediaSession\.setActionHandler\('pause',null\)/);
+assert.match(recorder,/function ensureSoundTouchProcessor\(ctx\)/);
+assert.match(recorder,/new AudioWorkletNode\(ctx,'soundtouch-processor'/);
+assert.match(recorder,/source\.playbackRate\.value=rate/);
+assert.match(recorder,/stretch\.parameters&&stretch\.parameters\.get\('playbackRate'\)/);
+assert.match(audioRuntime,/if\(!anySounding\(\) && !recording && !hiddenSafe\)/);
+assert.match(soundTouchProcessor,/PROCESSOR_NAME = "soundtouch-processor"/);
+assert.match(soundTouchProcessor,/registerProcessor\(PROCESSOR_NAME, SoundTouchProcessor\)/);
+assert.match(soundTouchLicense,/Mozilla Public License Version 2\.0/);
 assert.match(recorder,/audio\.preservesPitch=true/);
 assert.match(recorder,/audio\.webkitPreservesPitch=true/);
 assert.match(recorder,/source\.loopStart=region\.a/);

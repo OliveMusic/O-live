@@ -918,7 +918,7 @@ function setTabSounding(tab,on,source){
       if(audioCtx && audioCtx.state!=='closed') __ctxMode=mode;
     }
   }
-  if(!anySounding() && !recording){
+  if(!anySounding() && !recording && !hiddenSafe){
     setAudioSession('ambient');
     // 잠금 중에는 몇 박을 미리 예약한다. 마지막 재생을 멈출 때 컨텍스트를
     // 닫아 두면 그 예약음도 즉시 취소되어 뒤늦게 틱 소리가 남지 않는다.
