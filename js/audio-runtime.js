@@ -9,6 +9,7 @@ let __stoppingBackgroundMedia = false;
 let __backgroundMediaArmed = false;
 let __backgroundMediaPaused = false;
 let __backgroundSuspendPromise = null;
+let __backgroundResumePromise = null;
 let __appOutput = null;
 let __appOutputCtx = null;
 let __backgroundStreamDestination = null;
@@ -115,15 +116,15 @@ async function startBackgroundMedia(label,preparedCtx){
     audio.hidden=true;
     audio.dataset.oliveBackground='true';
     audio.addEventListener('playing',()=>{
-      if(audio===__backgroundAudio){
-        __backgroundMediaArmed=true;
-        if(__backgroundMediaPaused){
-          __backgroundMediaPaused=false;
-          setBackgroundTransportsPaused(false);
-          if(audioCtx && audioCtx.state!=='running') resumeCtx(audioCtx).catch(()=>{});
-        }
-        try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='playing'; }catch(e){}
+      if(audio!==__backgroundAudio) return;
+      // 오래 잠근 뒤에는 <audio>가 먼저 playing이 되어도 AudioContext는 아직
+      // suspended일 수 있다. 박자를 먼저 열지 말고 엔진 복구가 끝날 때까지 기다린다.
+      if(__backgroundMediaPaused){
+        resumeBackgroundPlayback().catch(()=>{});
+        return;
       }
+      __backgroundMediaArmed=true;
+      try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='playing'; }catch(e){}
     });
     // iPhone의 잠금 화면은 Media Session 콜백 대신 실제 <audio>만
     // 일시정지시키는 경우가 있다. 그 이벤트도 앱의 재생 정지로 연결한다.
@@ -160,8 +161,12 @@ async function startBackgroundMedia(label,preparedCtx){
       if(typeof navigator.mediaSession.setActionHandler==='function'){
         if(usesStream){
           // 실제 소리가 <audio>를 통과하므로 iOS의 기본 원격 제어가 가장 빠르다.
-          // 웹 프로세스가 잠든 동안에도 시스템이 미디어 요소를 직접 멈추고 재생한다.
-          for(const action of ['play','pause','stop']){
+          // 일시정지는 시스템이 미디어 요소를 직접 멈추게 두고, 오래 멈춰 웹 오디오가
+          // 잠든 경우를 깨울 수 있도록 재생 명령만 앱에도 전달한다.
+          try{ navigator.mediaSession.setActionHandler('play',()=>{
+            resumeBackgroundPlayback().catch(()=>{});
+          }); }catch(e){}
+          for(const action of ['pause','stop']){
             try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
           }
         }else{
@@ -219,53 +224,97 @@ function pauseBackgroundPlayback(){
   }
 }
 
-async function resumeBackgroundPlayback(){
-  if(!__backgroundMediaPaused || !hasBackgroundTransportPlaying()) return;
-  const audio=__backgroundAudio;
-  const ctx=audioCtx;
-  if(!audio || !ctx || ctx.state==='closed'){
-    stopBackgroundTransports();
-    return;
+function replaceDormantBackgroundContext(){
+  const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  if(recording) throw new Error('RecordingContextUnavailable');
+  const old=audioCtx;
+  audioCtx=null; __ctxMode=null; __ctxResumePromise=null; __ctxReadyPromise=null;
+  __backgroundSuspendPromise=null;
+  __appOutput=null; __appOutputCtx=null;
+  __master=null; __send=null; __gtrCache.clear();
+  if(__backgroundStreamDestination){
+    try{ __backgroundStreamDestination.stream.getTracks().forEach(track=>track.stop()); }catch(e){}
   }
-  __backgroundMediaPaused=false;
-  setAudioSession('playback');
-  __ctxMode='playback';
-  let mediaReady=Promise.resolve(), firstResume=Promise.resolve();
-  try{
-    const result=audio.play();
-    if(result && typeof result.then==='function') mediaReady=result;
-  }catch(error){ mediaReady=Promise.reject(error); }
-  try{
-    // 구형 경로의 suspend()가 아직 끝나지 않았어도 원격 버튼의 사용자 제스처
-    // 안에서 resume()을 먼저 요청한다. 완료 뒤에도 상태를 다시 확인한다.
-    firstResume=Promise.resolve(ctx.resume());
-  }catch(error){ firstResume=Promise.reject(error); }
-  const suspendSettled=__backgroundSuspendPromise
-    ? __backgroundSuspendPromise.catch(()=>{}) : Promise.resolve();
-  const contextReady=Promise.all([suspendSettled,firstResume.catch(()=>{})]).then(()=>{
-    if(ctx!==audioCtx) throw new Error('AudioContextChanged');
-    return ctx.state==='running' ? ctx : ctx.resume();
+  __backgroundStreamDestination=null;
+  __backgroundStreamCtx=null;
+  __backgroundUsesStream=false;
+  const ctx=createCtx('playback');
+  setBackgroundTransportContext(ctx);
+  if(old && old.state!=='closed'){
+    try{ const closing=old.close(); if(closing) closing.catch(()=>{}); }catch(e){}
+  }
+  return ctx;
+}
+
+function resumeBackgroundPlayback(){
+  if(__backgroundResumePromise) return __backgroundResumePromise;
+  if(!__backgroundMediaPaused || !hasBackgroundTransportPlaying()) return Promise.resolve();
+  const task=(async()=>{
+    const audio=__backgroundAudio;
+    if(!audio) throw new Error('BackgroundAudioUnavailable');
+    let ctx=audioCtx;
+    if(!ctx || ctx.state==='closed' || ctx.state==='interrupted'){
+      ctx=replaceDormantBackgroundContext();
+      attachBackgroundStream(audio,ctx);
+    }
+    setAudioSession('playback');
+    __ctxMode='playback';
+    let mediaReady=Promise.resolve(), firstResume=Promise.resolve();
+    try{
+      const result=audio.play();
+      if(result && typeof result.then==='function') mediaReady=result;
+    }catch(error){ mediaReady=Promise.reject(error); }
+    try{
+      // 구형 경로의 suspend()가 아직 끝나지 않았어도 원격 버튼의 사용자 제스처
+      // 안에서 resume()을 먼저 요청한다. 완료 뒤에도 상태를 다시 확인한다.
+      firstResume=Promise.resolve(ctx.resume());
+    }catch(error){ firstResume=Promise.reject(error); }
+    const suspendSettled=__backgroundSuspendPromise
+      ? __backgroundSuspendPromise.catch(()=>{}) : Promise.resolve();
+    const contextReady=Promise.all([suspendSettled,firstResume.catch(()=>{})]).then(()=>{
+      if(ctx!==audioCtx) throw new Error('AudioContextChanged');
+      return ctx.state==='running' ? ctx : ctx.resume();
+    });
+    try{
+      // 긴 잠금 뒤에는 iOS가 오디오 엔진을 되살리는 데 시간이 더 걸릴 수 있다.
+      // 실제 엔진이 열린 뒤에만 첫 박부터 스케줄러와 애니메이션을 함께 연다.
+      let resumeReady=contextReady;
+      if(__backgroundUsesStream) resumeReady=Promise.all([contextReady,mediaReady]);
+      else mediaReady.catch(()=>{});
+      await withTimeout(resumeReady,4500);
+      if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
+      if(__backgroundUsesStream && audio.paused) throw new Error('BackgroundAudioNotPlaying');
+      if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
+      __backgroundMediaPaused=false;
+      __backgroundMediaArmed=!audio.paused;
+      try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='playing'; }catch(e){}
+      setBackgroundTransportsPaused(false);
+    }catch(error){
+      if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
+      // 한 번의 늦은 복구로 기능 자체를 종료하지 않는다. 일시정지 상태를 보존해
+      // 잠금화면의 재생 버튼을 다시 누르거나 화면을 열어 재시도할 수 있게 한다.
+      __backgroundMediaPaused=true;
+      __backgroundMediaArmed=false;
+      setBackgroundTransportsPaused(true);
+      __stoppingBackgroundMedia=true;
+      try{ audio.pause(); }catch(e){}
+      __stoppingBackgroundMedia=false;
+      try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+      throw error;
+    }
+  })();
+  const wrapped=task.finally(()=>{
+    if(__backgroundResumePromise===wrapped) __backgroundResumePromise=null;
   });
-  try{
-    // MediaStream 경로는 실제 <audio>를, 구형 경로는 Web Audio 시계까지 연다.
-    // 보조 재생 Promise만 늦게 거절되어도 이미 재개된 박자를 다시 끊지 않는다.
-    mediaReady.catch(()=>{});
-    await withTimeout(contextReady,1400);
-    if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
-    __backgroundMediaArmed=!audio.paused;
-    try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='playing'; }catch(e){}
-    setBackgroundTransportsPaused(false);
-  }catch(error){
-    __backgroundMediaPaused=true;
-    setBackgroundTransportsPaused(true);
-    stopBackgroundTransports();
-  }
+  __backgroundResumePromise=wrapped;
+  return wrapped;
 }
 
 function isBackgroundMediaPaused(){ return __backgroundMediaPaused; }
 
 function stopBackgroundMedia(){
   __backgroundMediaPaused=false;
+  __backgroundResumePromise=null;
   detachBackgroundStream();
   if(__backgroundAudio){
     const audio=__backgroundAudio;
@@ -422,6 +471,7 @@ function ensurePlaybackCtx(){
 /* 메트로놈과 잼은 잠금 화면에서도 이어져야 한다. 녹음 중이면 공유 중인
    play-and-record 컨텍스트를 보존하고, 그 밖에는 playback 세션을 쓴다. */
 function ensureBackgroundPlaybackCtx(label){
+  stopCompetingBackgroundTransports(label);
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
   if(__backgroundMediaPaused){
     __backgroundMediaPaused=false;
@@ -527,6 +577,21 @@ function stopForegroundTransports(){
 function stopBackgroundTransports(){
   __transports.forEach(transport=>{
     try{ if(transport.background && transport.isPlaying()) transport.stop(); }catch(e){}
+  });
+}
+function stopCompetingBackgroundTransports(label){
+  __transports.forEach(transport=>{
+    try{
+      if(transport.background && transport.label!==label && transport.isPlaying()) transport.stop();
+    }catch(e){}
+  });
+}
+function setBackgroundTransportContext(ctx){
+  __transports.forEach(transport=>{
+    try{
+      if(transport.background && transport.isPlaying() &&
+         typeof transport.setContext==='function') transport.setContext(ctx);
+    }catch(e){}
   });
 }
 

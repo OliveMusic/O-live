@@ -54,6 +54,8 @@ const sandbox={
   hasBackgroundTransportPlaying:()=>false,
   stopAllTransports:()=>{ stopCalls++; },
   stopForegroundTransports:()=>{ stopForegroundCalls++; },
+  stopCompetingBackgroundTransports:()=>{},
+  setBackgroundTransportContext:()=>{},
 };
 sandbox.globalThis=sandbox;
 vm.createContext(sandbox);

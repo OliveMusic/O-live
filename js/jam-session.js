@@ -741,6 +741,7 @@
     isPlaying:()=>playing || startPending,
     stop,
     setPaused:setMediaPaused,
+    setContext:ctx=>{ jamCtx=ctx; },
     background:true,
     label:'잼 세션',
   });

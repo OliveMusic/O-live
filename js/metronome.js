@@ -419,6 +419,7 @@
     isPlaying:()=>isPlaying || startPending,
     stop:stopMetro,
     setPaused:setMediaPaused,
+    setContext:ctx=>{ metroCtx=ctx; },
     background:true,
     label:'메트로놈',
   });

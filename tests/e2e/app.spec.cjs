@@ -275,7 +275,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.18');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.19');
 }
 
 test.afterEach(async({page})=>{
@@ -301,7 +301,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=148');
+  expect(workerUrl).toContain('service-worker.js?v=149');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -416,6 +416,51 @@ test('녹음 재생 중 메트로놈을 시작하면 녹음 버튼도 정지 상
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(recordingPlay).not.toHaveClass(/playing/);
   await expect(recordingPlay).toHaveAttribute('aria-label','무제 재생');
+});
+
+test('메트로놈과 잼은 서로 교대하고 진행 중인 녹음은 유지한다',async({page})=>{
+  const progression=[1,5,6,4].map(deg=>({deg,beats:1,sev:false,fam:null}));
+  await preparePage(page,{
+    cloudClient:'recordings',
+    microphone:'meter-signal',
+    preferences:{
+      data:{jam:{
+        root:0,mode:'major',preset:'custom',bpm:90,seventh:false,style:'rock',
+        tracks:{drum:false,bass:false,chord:false,click:false},progression,
+      }},
+      updatedAt:'2026-09-07T00:00:00.000Z',
+    },
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  const recorder=page.locator('#recordToggle');
+  await recorder.click();
+  await expect(recorder).toHaveClass(/on/);
+
+  const metro=page.locator('#metroStart');
+  const jam=page.locator('#jamStart');
+  await page.locator('.tab-btn[data-tab="metronome"]').click();
+  await metro.click();
+  await expect(metro).toHaveClass(/running/);
+  await expect(recorder).toHaveClass(/on/);
+
+  await page.locator('.tab-btn[data-tab="jam"]').click();
+  await jam.click();
+  await expect(jam).toHaveClass(/on/);
+  await expect(metro).not.toHaveClass(/running|starting|media-paused/);
+  await expect(recorder).toHaveClass(/on/);
+
+  await page.locator('.tab-btn[data-tab="metronome"]').click();
+  await metro.click();
+  await expect(metro).toHaveClass(/running/);
+  await expect(jam).not.toHaveClass(/on|media-paused/);
+  await expect(recorder).toHaveClass(/on/);
+
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await expect(recorder).toHaveClass(/on/);
+  await recorder.click();
+  await page.locator('.tab-btn[data-tab="metronome"]').click();
+  await metro.click();
 });
 
 test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다',async({page})=>{
@@ -624,7 +669,7 @@ test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async(
     audio.srcObject && audio.srcObject.getAudioTracks().length
   ))).toBeTruthy();
   await expect.poll(()=>page.evaluate(()=>(
-    typeof window.__testMediaActions.play==='undefined' &&
+    typeof window.__testMediaActions.play==='function' &&
     typeof window.__testMediaActions.pause==='undefined'
   ))).toBeTruthy();
   await backgroundAudio.evaluate(audio=>audio.pause());
@@ -648,7 +693,12 @@ test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async(
   });
   expect(stillPaused.bar).toBe(pausedState.bar);
   expect(Math.abs(stillPaused.scrollLeft-pausedState.scrollLeft)).toBeLessThan(1);
-  await backgroundAudio.evaluate(audio=>audio.play());
+  // 오래 잠근 iPhone처럼 Web Audio만 절전 상태가 된 뒤 잠금화면 재생을 누른다.
+  await page.evaluate(async()=>{
+    if(audioCtx && audioCtx.state==='running') await audioCtx.suspend();
+  });
+  await expect.poll(()=>page.evaluate(()=>audioCtx&&audioCtx.state)).toBe('suspended');
+  await page.evaluate(()=>window.__testMediaActions.play());
   await expect(jam).toHaveClass(/on/);
   await expect(jam).not.toHaveClass(/media-paused/);
   await expect.poll(()=>page.locator('#progTimeline').evaluate(view=>{

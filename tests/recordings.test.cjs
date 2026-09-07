@@ -75,6 +75,8 @@ assert.match(recorder,/window\.confirm\(`“\$\{row\.title\}” 녹음을 삭제
 assert.match(audioRuntime,/function ensurePlaybackCtx\(\)/);
 assert.match(audioRuntime,/recording\?'play-and-record':background\?'playback':'ambient'/);
 assert.match(audioRuntime,/function ensureBackgroundPlaybackCtx\(label\)/);
+assert.match(audioRuntime,/function ensureBackgroundPlaybackCtx\(label\)\{[\s\S]*?stopCompetingBackgroundTransports\(label\)/);
+assert.match(audioRuntime,/function resumeBackgroundPlayback\(\)[\s\S]*?await withTimeout\(resumeReady,4500\)[\s\S]*?setBackgroundTransportsPaused\(false\)/);
 assert.match(audioRuntime,/navigator\.audioSession\.type = mode/);
 assert.match(audioRuntime,/function startBackgroundMedia\(label,preparedCtx\)/);
 assert.match(audioRuntime,/function beginPlaybackFromGesture\(\)/);
@@ -141,6 +143,7 @@ for(const source of [metronome,jam]){
   assert.match(source,/function scheduler\(\)\{[\s\S]*?if\(isBackgroundMediaPaused\(\)\)/);
   assert.match(source,/function visualLoop\(gen\)\{[\s\S]*?if\(isBackgroundMediaPaused\(\)\)/);
   assert.match(source,/function setMediaPaused\(paused\)\{[\s\S]*?clearTimeout\(timerID\)/);
+  assert.match(source,/setContext:ctx=>\{/);
 }
 
 assert.match(migration,/create table if not exists public\.practice_recordings/);
