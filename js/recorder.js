@@ -9,7 +9,9 @@
   const MAX_UPLOAD_DURATION_MS=30*60*1000;
   const WAVEFORM_POINTS=160;
   const WAVEFORM_MAX_POINTS=240;
-  const PLAYBACK_RATES=[.5,.75,1,1.25,1.5];
+  const PLAYBACK_RATE_MIN=.5;
+  const PLAYBACK_RATE_MAX=1.5;
+  const PLAYBACK_RATE_STEP=.05;
   const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
@@ -64,6 +66,9 @@
   let levelAnalyser=null;
   let levelSource=null;
   let levelSink=null;
+  let captureMixer=null;
+  let captureDestination=null;
+  let recordingStream=null;
   let levelSamples=null;
   let waveformLevels=[];
   let recordingPeak=0;
@@ -136,7 +141,12 @@
   function rowDurationSeconds(row){ return Math.max(0,Number(row&&row.duration_ms)||0)/1000; }
   function rowPlaybackRate(row){
     const value=Number(playbackRates.get(row&&row.id))||1;
-    return PLAYBACK_RATES.includes(value)?value:1;
+    return clamp(Math.round(value/PLAYBACK_RATE_STEP)*PLAYBACK_RATE_STEP,
+      PLAYBACK_RATE_MIN,PLAYBACK_RATE_MAX);
+  }
+  function formatPlaybackRate(value){
+    const rate=Number(value)||1;
+    return `${rate.toFixed(2).replace(/0+$/,'').replace(/\.$/,'')}×`;
   }
   function loopRegionFor(row){
     const region=loopRegions.get(row&&row.id);
@@ -149,8 +159,13 @@
   }
   function activeLoopFor(row){
     const region=loopRegionFor(row);
-    return region.enabled && region.a!==null && region.b!==null &&
-      region.b-region.a>=MIN_LOOP_SECONDS ? region : null;
+    if(!region.enabled) return null;
+    if(region.a!==null && region.b!==null && region.b-region.a>=MIN_LOOP_SECONDS) return region;
+    const duration=rowDurationSeconds(row);
+    return duration>=MIN_LOOP_SECONDS ? {a:0,b:duration,enabled:true,whole:true} : null;
+  }
+  function isNativePlaybackMode(mode=cloudPlaybackMode){
+    return mode==='native-connected' || mode==='native-direct';
   }
   function applyNativePlaybackSettings(row){
     const rate=rowPlaybackRate(row);
@@ -158,6 +173,11 @@
     try{ cloudFallbackAudio.playbackRate=rate; }catch(error){}
     try{ cloudFallbackAudio.preservesPitch=true; }catch(error){}
     try{ cloudFallbackAudio.webkitPreservesPitch=true; }catch(error){}
+    const region=loopRegionFor(row);
+    try{
+      cloudFallbackAudio.loop=Boolean(region.enabled &&
+        (region.a===null || region.b===null || region.b-region.a<MIN_LOOP_SECONDS));
+    }catch(error){}
   }
   function normalizeWaveform(values){
     if(!Array.isArray(values) || !values.length || values.length>WAVEFORM_MAX_POINTS) return [];
@@ -332,6 +352,12 @@
   function teardownCaptureGraph(){
     try{ if(levelSource) levelSource.disconnect(); }catch(e){}
     try{ if(levelSink) levelSink.disconnect(); }catch(e){}
+    try{ if(captureMixer) captureMixer.disconnect(); }catch(e){}
+    if(captureDestination){
+      try{ captureDestination.stream.getTracks().forEach(track=>track.stop()); }catch(e){}
+    }
+    captureMixer=captureDestination=null;
+    recordingStream=null;
     levelSource=levelAnalyser=levelSink=levelSamples=null;
     cancelAnimationFrame(levelFrame); levelFrame=0;
     recordLevel.style.transform='scaleX(0)';
@@ -471,8 +497,21 @@
   function setupCapture(ctx){
     levelSource=ctx.createMediaStreamSource(stream);
     setupLevel(ctx,levelSource);
-    // 실제 녹음은 Web Audio 출력이 아니라 마이크 원본을 받는다. iPhone이
-    // 잠금 중 화면용 AudioContext를 쉬게 해도 MediaRecorder 데이터가 끊기지 않는다.
+    if(typeof ctx.createMediaStreamDestination!=='function') return stream;
+    try{
+      // iPhone PWA가 잠금 중 원본 MediaRecorder의 컨테이너 시계를 멈추는 경우가
+      // 있다. 같은 play-and-record 그래프의 연속 스트림을 기록해, 잠금 뒤 입력도
+      // 한 파일 안에서 이어지고 재생이 잠근 시점에서 잘리지 않게 한다.
+      captureMixer=makeMono(ctx.createGain());
+      captureDestination=makeMono(ctx.createMediaStreamDestination());
+      levelSource.connect(captureMixer).connect(captureDestination);
+      const processed=captureDestination.stream;
+      if(processed && typeof processed.getAudioTracks==='function' &&
+         processed.getAudioTracks().length) return processed;
+    }catch(error){
+      try{ if(captureMixer) captureMixer.disconnect(); }catch(ignore){}
+      captureMixer=captureDestination=null;
+    }
     return stream;
   }
   async function resumeAfterVisibility(){
@@ -486,10 +525,14 @@
         await resumeCtx(ctx);
       }
       if(!recording || !stream || ctx!==audioCtx || ctx.state!=='running') return;
-      teardownCaptureGraph();
-      setupCapture(ctx);
+      // 기존 녹음 스트림을 다시 만들면 진행 중인 MP4 파일이 끊어진다. 잠금 중
+      // 멈춘 화면용 requestAnimationFrame만 같은 입력 그래프에서 다시 시작한다.
+      if(levelAnalyser){
+        cancelAnimationFrame(levelFrame);
+        levelFrame=requestAnimationFrame(drawLevel);
+      }
     }catch(e){
-      // 입력 막대가 바로 돌아오지 않아도 원본 마이크 녹음은 계속된다.
+      // 입력 막대 복구 실패가 진행 중인 MediaRecorder를 종료시키지는 않는다.
     }
   }
   async function startRecording(){
@@ -520,7 +563,7 @@
       const mimeType=chooseMimeType();
       const options={audioBitsPerSecond:96000};
       if(mimeType) options.mimeType=mimeType;
-      const recordingStream=setupCapture(ctx);
+      recordingStream=setupCapture(ctx);
       recorder=new MediaRecorder(recordingStream,options);
       chunks=[];
       waveformLevels=[];
@@ -533,19 +576,31 @@
         setMessage('녹음을 완료하지 못했습니다. 다시 시도해 주세요',true);
       });
       recorder.addEventListener('stop',finalizeDraft,{once:true});
-      stream.getAudioTracks().forEach(track=>track.addEventListener('ended',()=>{
-        if(recording) stopRecording();
-      },{once:true}));
+      stream.getAudioTracks().forEach(track=>{
+        track.addEventListener('mute',()=>{
+          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-track:muted');
+        });
+        track.addEventListener('unmute',()=>{
+          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-track:unmuted');
+        });
+        track.addEventListener('ended',()=>{
+          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-track:ended');
+          if(recording) stopRecording();
+        },{once:true});
+      });
       /* iPhone Safari의 MP4 MediaRecorder는 timeslice로 잘게 나눈 조각을
          다시 합쳤을 때 긴 녹음이 재생 불가능해지는 경우가 있다.
          최대 5분·96kbps면 메모리 부담이 작으므로 stop 때 한 파일로 받는다. */
       recorder.start();
+      if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording:started',{
+        processedStream:recordingStream!==stream,
+      });
       recording=true; startPending=false; startedAt=performance.now(); recordedAt=new Date().toISOString();
       timerId=setInterval(updateTimer,200);
       setTabSounding('trainer',true,'recorder');
       recordState.textContent='녹음 중';
       recordStateDot.hidden=false;
-      recordHint.textContent='잠금화면에서도 녹음을 유지합니다 · 튜너 또는 앱 종료 시 중지됩니다';
+      recordHint.textContent='화면이 자동으로 꺼지지 않게 유지합니다 · 튜너 또는 앱 종료 시 중지됩니다';
       setButtonMode('recording');
     }catch(error){
       if(token!==startToken) return;
@@ -616,7 +671,7 @@
     }
   }
   function currentCloudPosition(){
-    if(cloudPlayingId && cloudPlaybackMode==='native'){
+    if(cloudPlayingId && isNativePlaybackMode()){
       return Math.max(0,Number(cloudFallbackAudio.currentTime)||0);
     }
     if(cloudPlayingId && cloudPlaybackMode==='decoded' && cloudDecodedContext){
@@ -657,7 +712,7 @@
       let position=currentCloudPosition();
       const row=rows.find(item=>item.id===cloudPlayingId);
       const region=row&&activeLoopFor(row);
-      if(region && cloudPlaybackMode==='native' && position>=region.b){
+      if(region && isNativePlaybackMode() && !region.whole && position>=region.b){
         position=region.a;
         try{ cloudFallbackAudio.currentTime=region.a; }catch(error){}
       }
@@ -709,9 +764,9 @@
     playbackPositions.set(id,currentCloudPosition());
     ++cloudPlayToken;
     stopCloudProgress();
-    if(cloudPlaybackMode==='native') cloudFallbackAudio.pause();
+    if(isNativePlaybackMode()) cloudFallbackAudio.pause();
     else releaseCloudSource();
-    cloudPlaybackMode=cloudPlaybackMode==='native'?'native-paused':'decoded-paused';
+    cloudPlaybackMode=isNativePlaybackMode()?'native-paused':'decoded-paused';
     cloudPlayingId='';
     setTabSounding('trainer',false,'recording-playback');
     renderList();
@@ -722,7 +777,7 @@
     releaseCloudSource();
     if(id) playbackPositions.delete(id);
     cloudPlayingId='';
-    cloudPlaybackMode=cloudPlaybackMode==='native'?'native-paused':'decoded-paused';
+    cloudPlaybackMode=isNativePlaybackMode()?'native-paused':'decoded-paused';
     setTabSounding('trainer',false,'recording-playback');
     renderList();
   }
@@ -879,7 +934,7 @@
       cloudMediaGain=gain;
       cloudFallbackAudio.src=playbackUrl;
       applyNativePlaybackSettings(row);
-      cloudPlaybackMode='native';
+      cloudPlaybackMode='native-connected';
       prepareNativeOffset(offset);
       // iPhone의 사용자 제스처가 살아 있는 동안 곧바로 play()를 호출한다.
       const mediaReady=Promise.resolve(cloudFallbackAudio.play());
@@ -924,9 +979,10 @@
     else cloudFallbackAudio.addEventListener('loadedmetadata',apply,{once:true});
   }
   function startNativePlayback(playbackUrl,row,token,offset){
+    resetCloudMediaElement();
     cloudFallbackAudio.src=playbackUrl;
     applyNativePlaybackSettings(row);
-    cloudPlaybackMode='native';
+    cloudPlaybackMode='native-direct';
     prepareNativeOffset(offset);
     return Promise.resolve(cloudFallbackAudio.play()).then(()=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
@@ -940,7 +996,7 @@
     if(cloudPlayingId===row.id && seeking){
       playbackPositions.set(row.id,offset);
       updatePlayerProgress(row.id,offset);
-      if(cloudPlaybackMode==='native'){
+      if(isNativePlaybackMode()){
         prepareNativeOffset(offset);
         return;
       }
@@ -974,9 +1030,15 @@
     // 저장한 파일도 양쪽 이어폰의 중앙에서 들리게 한다.
     recordingBlob.catch(error=>console.warn('[O\'live recording cache fill]',error));
     const playbackUrl=cached ? cached.url : String(row.playback_url||'');
-    const normalized=playbackUrl
-      ? startNormalizedNative(playbackUrl,playback,row,token,offset)
-      : playNormalizedBlob(playback,recordingBlob,row,token,offset);
+    // WebKit은 MediaElementSource에 연결된 오디오의 playbackRate를 일부 버전에서
+    // 무시한다. 1배속이 아닐 때는 음높이 보존이 되는 네이티브 요소를 직접 써서
+    // 슬라이더의 값이 실제 재생속도에 확실히 반영되게 한다.
+    const adjustedRate=rowPlaybackRate(row)!==1;
+    const normalized=adjustedRate && playbackUrl
+      ? startNativePlayback(playbackUrl,row,token,offset)
+      : playbackUrl
+        ? startNormalizedNative(playbackUrl,playback,row,token,offset)
+        : playNormalizedBlob(playback,recordingBlob,row,token,offset);
     normalized.catch(error=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
       console.warn('[O\'live centered recording playback]',error);
@@ -1135,7 +1197,7 @@
     // AudioBufferSourceNode의 반복을 끈 직후에는 내부 재생 위치와 표시 시간이
     // 달라질 수 있으므로, 디코딩 경로는 현재 들리던 위치에서 한 번 다시 연다.
     if(cloudPlaybackMode==='decoded'){ playRow(row,target); return; }
-    if(cloudPlaybackMode==='native' && target!==position) prepareNativeOffset(target);
+    if(isNativePlaybackMode() && target!==position) prepareNativeOffset(target);
   }
   function setLoopPoint(row,point){
     const current=clamp(cloudMediaId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0,
@@ -1144,7 +1206,7 @@
     const next={a:previous.a,b:previous.b,enabled:previous.enabled};
     if(point==='a'){
       next.a=current;
-      if(next.b!==null && next.b-next.a<MIN_LOOP_SECONDS){ next.b=null; next.enabled=false; }
+      if(next.b!==null && next.b-next.a<MIN_LOOP_SECONDS) next.b=null;
     }else{
       if(next.a===null) next.a=0;
       if(current-next.a<MIN_LOOP_SECONDS){
@@ -1161,36 +1223,44 @@
   }
   function toggleLoop(row){
     const region=loopRegionFor(row);
-    if(region.a===null || region.b===null || region.b-region.a<MIN_LOOP_SECONDS) return;
     const current=cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0;
     region.enabled=!region.enabled;
     loopRegions.set(row.id,region);
+    if(isNativePlaybackMode()) applyNativePlaybackSettings(row);
     applyLoopToActivePlayback(row,current);
     renderList();
   }
   function clearLoop(row){
     const current=cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0;
-    loopRegions.delete(row.id);
+    const region=loopRegionFor(row);
+    loopRegions.set(row.id,{a:null,b:null,enabled:region.enabled});
+    if(isNativePlaybackMode()) applyNativePlaybackSettings(row);
     applyLoopToActivePlayback(row,current);
     renderList();
   }
-  function setPlaybackRate(row,value){
-    const rate=Number(value);
-    if(!PLAYBACK_RATES.includes(rate)) return;
+  function setPlaybackRate(row,value,commit=false){
+    const rate=clamp(Math.round((Number(value)||1)/PLAYBACK_RATE_STEP)*PLAYBACK_RATE_STEP,
+      PLAYBACK_RATE_MIN,PLAYBACK_RATE_MAX);
     playbackRates.set(row.id,rate);
+    const player=document.getElementById(`record-player-${row.id}`);
+    const output=player&&player.querySelector('.record-rate-value');
+    if(output) output.value=output.textContent=formatPlaybackRate(rate);
     if(cloudPlayingId===row.id){
-      if(cloudPlaybackMode==='native'){
+      if(isNativePlaybackMode()){
         applyNativePlaybackSettings(row);
-        renderList();
-        return;
+        const needsDirect=rate!==1;
+        const routeMatches=needsDirect ? cloudPlaybackMode==='native-direct'
+          : cloudPlaybackMode==='native-connected';
+        if(!commit || routeMatches) return;
       }
+      if(!commit) return;
       const position=currentCloudPosition();
       stopCloudPlayback(false);
       playbackPositions.set(row.id,position);
       playRow(row,position);
       return;
     }
-    renderList();
+    if(commit) renderList();
   }
   function createExpandedPlayer(row){
     const player=document.createElement('div');
@@ -1218,10 +1288,10 @@
     if(region.b!==null) waveform.style.setProperty('--loop-end',`${duration?region.b/duration*100:0}%`);
     waveform.classList.toggle('has-loop-start',region.a!==null);
     waveform.classList.toggle('has-loop-end',region.b!==null);
-    waveform.classList.toggle('looping',Boolean(activeLoopFor(row)));
+    waveform.classList.toggle('looping',Boolean(activeLoopFor(row) && region.a!==null && region.b!==null));
     const loopShade=document.createElement('span'); loopShade.className='record-loop-region';
-    const markerA=document.createElement('span'); markerA.className='record-loop-marker start'; markerA.textContent='A';
-    const markerB=document.createElement('span'); markerB.className='record-loop-marker end'; markerB.textContent='B';
+    const markerA=document.createElement('span'); markerA.className='record-loop-marker start'; markerA.dataset.label='A';
+    const markerB=document.createElement('span'); markerB.className='record-loop-marker end'; markerB.dataset.label='B';
     waveform.append(loopShade,createWaveformSvg(shown,'base'),createWaveformSvg(shown,'played'),markerA,markerB);
     bindWaveformScrubbing(waveform,row);
     waveform.addEventListener('keydown',event=>{
@@ -1249,22 +1319,30 @@
     pointB.textContent='B'; pointB.setAttribute('aria-label',region.b===null?'현재 위치를 B 지점으로 지정':`B 지점 ${formatDuration(region.b*1000)}, 다시 지정`);
     pointB.addEventListener('click',()=>setLoopPoint(row,'b'));
     const repeat=document.createElement('button'); repeat.type='button';
-    repeat.className='record-player-tool repeat'+(region.enabled?' active':''); repeat.textContent='반복';
-    repeat.disabled=region.a===null || region.b===null;
+    repeat.className='record-player-tool icon repeat'+(region.enabled?' active':'');
+    repeat.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.5 8A7 7 0 0 0 6.4 5.6L4.5 7.5M4.5 7.5V3.8M4.5 7.5h3.7M5.5 16A7 7 0 0 0 17.6 18.4l1.9-1.9M19.5 16.5v3.7M19.5 16.5h-3.7"/></svg>';
+    repeat.setAttribute('aria-label',region.enabled?'반복 끄기':(region.a!==null&&region.b!==null?'A/B 구간 반복 켜기':'전체 반복 켜기'));
     repeat.setAttribute('aria-pressed',String(region.enabled));
     repeat.addEventListener('click',()=>toggleLoop(row));
-    const clear=document.createElement('button'); clear.type='button'; clear.className='record-player-tool clear'; clear.textContent='해제';
+    const clear=document.createElement('button'); clear.type='button'; clear.className='record-player-tool icon clear';
+    clear.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>';
+    clear.setAttribute('aria-label','A/B 지점 지우기');
     clear.disabled=region.a===null && region.b===null; clear.addEventListener('click',()=>clearLoop(row));
     loopTools.append(pointA,pointB,repeat,clear);
     const rateLabel=document.createElement('label'); rateLabel.className='record-rate-control';
     const rateText=document.createElement('span'); rateText.textContent='속도';
-    const rateSelect=document.createElement('select'); rateSelect.setAttribute('aria-label',`${row.title} 재생 속도`);
-    PLAYBACK_RATES.forEach(rate=>{
-      const option=document.createElement('option'); option.value=String(rate);
-      option.textContent=`${rate}×`; option.selected=rate===rowPlaybackRate(row); rateSelect.appendChild(option);
+    const rateSlider=document.createElement('input'); rateSlider.type='range';
+    rateSlider.min=String(PLAYBACK_RATE_MIN); rateSlider.max=String(PLAYBACK_RATE_MAX);
+    rateSlider.step=String(PLAYBACK_RATE_STEP); rateSlider.value=String(rowPlaybackRate(row));
+    rateSlider.setAttribute('aria-label',`${row.title} 재생 속도`);
+    const rateValue=document.createElement('output'); rateValue.className='record-rate-value';
+    rateValue.value=rateValue.textContent=formatPlaybackRate(rowPlaybackRate(row));
+    rateSlider.addEventListener('input',()=>{
+      rateSlider.setAttribute('aria-valuetext',formatPlaybackRate(rateSlider.value));
+      setPlaybackRate(row,rateSlider.value,false);
     });
-    rateSelect.addEventListener('change',()=>setPlaybackRate(row,rateSelect.value));
-    rateLabel.append(rateText,rateSelect); tools.append(loopTools,rateLabel);
+    rateSlider.addEventListener('change',()=>setPlaybackRate(row,rateSlider.value,true));
+    rateLabel.append(rateText,rateSlider,rateValue); tools.append(loopTools,rateLabel);
     detail.append(waveform,times,tools); player.append(play,detail);
     requestAnimationFrame(()=>updatePlayerProgress(row.id,
       cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0));

@@ -325,7 +325,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.31');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.32');
 }
 
 test.afterEach(async({page})=>{
@@ -351,7 +351,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=161');
+  expect(workerUrl).toContain('service-worker.js?v=162');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -368,7 +368,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.31',build:161});
+  expect(payload.release).toEqual({version:'1.3.32',build:162});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -420,8 +420,9 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-waveform[role="slider"]')).toBeVisible();
   await expect(page.locator('.record-waveform-svg.base path')).toHaveAttribute('d',/M/);
   await expect(page.locator('.record-player-tool.point')).toHaveCount(2);
-  await expect(page.locator('.record-player-tool.repeat')).toBeDisabled();
-  await expect(page.locator('.record-rate-control select')).toHaveValue('1');
+  await expect(page.locator('.record-player-tool.repeat')).toBeEnabled();
+  await expect(page.locator('.record-player-tool.repeat svg')).toBeVisible();
+  await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('1');
   await expect(page.locator('.record-row-copy small')).toHaveText(/2026\. 09\. 06\. \d{2}:\d{2}/);
 
   const waveformControl=page.locator('.record-waveform');
@@ -461,10 +462,13 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
   await page.locator('.record-player-tool.clear').click();
   await expect(page.locator('.record-waveform')).not.toHaveClass(/has-loop-start/);
-  await expect(page.locator('.record-player-tool.repeat')).toBeDisabled();
+  await expect(page.locator('.record-player-tool.repeat')).toBeEnabled();
+  await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
+  expect(await page.evaluate(()=>window.__lastPlayedMedia.loop)).toBeTruthy();
 
-  await page.locator('.record-rate-control select').selectOption('0.75');
-  await expect(page.locator('.record-rate-control select')).toHaveValue('0.75');
+  await page.locator('.record-rate-control input[type="range"]').fill('0.75');
+  await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('0.75');
+  await expect(page.locator('.record-rate-value')).toHaveText('0.75×');
   await expect.poll(()=>page.evaluate(()=>({
     playbackRate:window.__lastPlayedMedia.playbackRate,
     preservesPitch:window.__lastPlayedMedia.preservesPitch,
@@ -593,7 +597,7 @@ test('업로드한 반주를 내 녹음에서 재생하며 잠금화면에서도
   await recorder.click();
   await expect(recorder).toHaveClass(/on/);
   await expect(backingPlay).toHaveClass(/playing/);
-  expect(await page.evaluate(()=>window.__micHarness.recorderStream===window.__micHarness.inputStream)).toBeTruthy();
+  expect(await page.evaluate(()=>window.__micHarness.recorderStream===window.__micHarness.processedStream)).toBeTruthy();
   expect(await page.evaluate(()=>window.__testAudioSession.type)).toBe('play-and-record');
 
   await page.evaluate(()=>{
@@ -664,7 +668,7 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
     echoCancellation:false,noiseSuppression:false,autoGainControl:false,
   });
   expect(await page.evaluate(()=>(
-    window.__micHarness.recorderStream===window.__micHarness.inputStream
+    window.__micHarness.recorderStream===window.__micHarness.processedStream
   ))).toBeTruthy();
   await expect.poll(()=>page.locator('#recordLevelFill').evaluate(element=>{
     const transform=getComputedStyle(element).transform;

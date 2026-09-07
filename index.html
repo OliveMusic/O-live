@@ -1644,9 +1644,9 @@
   .record-row-open:active{ background:var(--key); }
   .record-row-open[aria-expanded="true"] .record-row-copy strong{ color:var(--signal); }
   .record-player{
-    min-height:101px; display:grid; grid-template-columns:44px minmax(0,1fr); align-items:center; gap:8px;
-    margin:0 4px 8px 8px; padding:8px 10px 7px 4px; border:1px solid var(--line-soft);
-    border-radius:var(--r); background:var(--key);
+    min-height:132px; display:grid; grid-template-columns:44px minmax(0,1fr); align-items:center; gap:10px;
+    margin:0 4px 8px 8px; padding:11px 12px 10px 5px; border:1px solid var(--line-soft);
+    border-radius:var(--r); background:color-mix(in srgb,var(--key) 76%,transparent);
   }
   .record-player-play{
     position:relative; width:44px; height:44px; padding:0; border:0; border-radius:50%;
@@ -1682,15 +1682,15 @@
     font-size:.7rem; letter-spacing:1px; cursor:pointer; border-radius:50%;
   }
   .record-row-more:active{ background:var(--key); }
-  .record-player-detail{ min-width:0; }
+  .record-player-detail{ min-width:0; padding-top:2px; }
   .record-waveform{
-    --wave-progress:0%; --loop-start:0%; --loop-end:0%; position:relative; width:100%; height:44px; border-radius:6px;
+    --wave-progress:0%; --loop-start:0%; --loop-end:0%; position:relative; width:100%; height:54px; border-radius:6px;
     cursor:pointer; touch-action:pan-y; outline:none; overflow:hidden; user-select:none; -webkit-user-select:none;
   }
   .record-waveform:focus-visible{ box-shadow:0 0 0 2px var(--signal-soft); }
   .record-waveform:active{ background:var(--key-press); }
   .record-waveform.scrubbing{ background:var(--key-press); cursor:grabbing; }
-  .record-waveform-svg{ position:absolute; z-index:1; inset:2px 0; width:100%; height:40px; overflow:visible; }
+  .record-waveform-svg{ position:absolute; z-index:1; inset:12px 0 2px; width:100%; height:40px; overflow:visible; }
   .record-waveform-svg path{
     fill:none; stroke:var(--ink-3); stroke-width:1.1; stroke-linecap:round;
     vector-effect:non-scaling-stroke;
@@ -1701,39 +1701,68 @@
   .record-waveform-svg.played path{ stroke:var(--signal); }
   .record-waveform.loading .record-waveform-svg{ opacity:.32; }
   .record-loop-region{
-    display:none; position:absolute; z-index:0; top:4px; bottom:4px; left:var(--loop-start);
+    display:none; position:absolute; z-index:0; top:14px; bottom:4px; left:var(--loop-start);
     width:calc(var(--loop-end) - var(--loop-start)); background:var(--signal-soft); pointer-events:none;
   }
   .record-waveform.has-loop-start.has-loop-end .record-loop-region{ display:block; opacity:.42; }
   .record-waveform.looping .record-loop-region{ opacity:.72; }
   .record-loop-marker{
-    display:none; position:absolute; z-index:2; top:2px; bottom:2px; width:1px;
-    background:var(--signal); color:var(--signal); font:600 .5rem/1 inherit; pointer-events:none;
+    display:none; position:absolute; z-index:2; top:12px; bottom:2px; width:1px;
+    background:var(--signal); color:var(--signal); pointer-events:none;
+  }
+  .record-loop-marker::before{
+    content:attr(data-label); position:absolute; left:50%; top:-11px; transform:translateX(-50%);
+    min-width:12px; color:var(--signal); font:650 .5rem/1 inherit; text-align:center;
   }
   .record-loop-marker.start{ left:var(--loop-start); }
   .record-loop-marker.end{ left:var(--loop-end); }
-  .record-loop-marker.start::first-letter,.record-loop-marker.end::first-letter{ color:inherit; }
-  .record-loop-marker.start{ text-indent:3px; }
-  .record-loop-marker.end{ text-indent:-10px; }
   .record-waveform.has-loop-start .record-loop-marker.start,
   .record-waveform.has-loop-end .record-loop-marker.end{ display:block; }
   .record-player-times{
-    display:flex; justify-content:space-between; margin-top:-2px; color:var(--ink-3);
+    display:flex; justify-content:space-between; margin-top:-1px; color:var(--ink-3);
     font-size:.5938rem; font-variant-numeric:tabular-nums;
   }
-  .record-player-tools{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:5px; }
-  .record-loop-tools{ min-width:0; display:flex; align-items:center; gap:4px; }
-  .record-player-tool{
-    min-width:28px; height:28px; padding:0 7px; border:1px solid var(--line); border-radius:8px;
-    background:transparent; color:var(--ink-3); font:600 .5938rem/1 inherit; cursor:pointer;
+  .record-player-tools{
+    display:grid; grid-template-columns:auto minmax(104px,1fr); align-items:center; gap:12px; margin-top:7px;
   }
-  .record-player-tool.active{ border-color:var(--signal); background:var(--signal-soft); color:var(--signal); }
+  .record-loop-tools{
+    min-width:0; height:32px; display:flex; align-items:center; gap:1px; padding:2px;
+    border-radius:10px; background:var(--body-hi);
+  }
+  .record-player-tool{
+    min-width:28px; height:28px; padding:0 7px; border:0; border-radius:8px;
+    background:transparent; color:var(--ink-3); font:650 .5938rem/1 inherit; cursor:pointer;
+  }
+  .record-player-tool.icon{ width:30px; padding:0; display:grid; place-items:center; }
+  .record-player-tool.icon svg{ width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  .record-player-tool.active{ background:var(--signal-soft); color:var(--signal); }
   .record-player-tool:disabled{ opacity:.34; cursor:default; }
   .record-player-tool:not(:disabled):active{ background:var(--key-press); }
-  .record-rate-control{ display:flex; align-items:center; gap:4px; color:var(--ink-3); font-size:.5625rem; white-space:nowrap; }
-  .record-rate-control select{
-    height:28px; padding:0 20px 0 7px; border:1px solid var(--line); border-radius:8px;
-    background:var(--body-hi); color:var(--ink-2); font:600 .5938rem/1 inherit;
+  .record-rate-control{
+    min-width:0; display:grid; grid-template-columns:auto minmax(52px,1fr) 30px; align-items:center; gap:7px;
+    color:var(--ink-3); font-size:.5625rem; white-space:nowrap;
+  }
+  .record-rate-control input[type="range"]{
+    width:100%; height:28px; margin:0; padding:0; appearance:none; -webkit-appearance:none; background:transparent;
+  }
+  .record-rate-control input[type="range"]::-webkit-slider-runnable-track{
+    height:2px; border-radius:2px; background:var(--line);
+  }
+  .record-rate-control input[type="range"]::-webkit-slider-thumb{
+    width:14px; height:14px; margin-top:-6px; border:0; border-radius:50%;
+    appearance:none; -webkit-appearance:none; background:var(--signal); box-shadow:0 0 0 3px var(--signal-soft);
+  }
+  .record-rate-control input[type="range"]::-moz-range-track{ height:2px; border:0; border-radius:2px; background:var(--line); }
+  .record-rate-control input[type="range"]::-moz-range-thumb{
+    width:14px; height:14px; border:0; border-radius:50%; background:var(--signal); box-shadow:0 0 0 3px var(--signal-soft);
+  }
+  .record-rate-value{
+    color:var(--ink-2); font:650 .5938rem/1 inherit; font-variant-numeric:tabular-nums; text-align:right;
+  }
+  @media(max-width:390px){
+    .record-player{ grid-template-columns:40px minmax(0,1fr); gap:7px; padding-right:9px; }
+    .record-player-tools{ gap:7px; }
+    .record-rate-control{ gap:5px; }
   }
   body.record-menu-open{ overflow:hidden; }
   .record-menu-backdrop{
@@ -2334,21 +2363,21 @@
   </section>
 </div>
 
-<script src="app-version.js?v=161"></script>
+<script src="app-version.js?v=162"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=161"></script>
-<script src="js/audio-runtime.js?v=161"></script>
-<script src="js/core.js?v=161"></script>
-<script src="js/metronome.js?v=161"></script>
-<script src="js/tuner-engine.js?v=161"></script>
-<script src="js/tuner.js?v=161"></script>
-<script src="js/scales.js?v=161"></script>
-<script src="js/ear-trainer.js?v=161"></script>
-<script src="js/rhythm-trainer.js?v=161"></script>
-<script src="js/recording-cache.js?v=161"></script>
-<script src="js/recorder.js?v=161"></script>
-<script src="js/jam-session.js?v=161"></script>
-<script src="js/app-shell.js?v=161"></script>
+<script src="cloud-sync.js?v=162"></script>
+<script src="js/audio-runtime.js?v=162"></script>
+<script src="js/core.js?v=162"></script>
+<script src="js/metronome.js?v=162"></script>
+<script src="js/tuner-engine.js?v=162"></script>
+<script src="js/tuner.js?v=162"></script>
+<script src="js/scales.js?v=162"></script>
+<script src="js/ear-trainer.js?v=162"></script>
+<script src="js/rhythm-trainer.js?v=162"></script>
+<script src="js/recording-cache.js?v=162"></script>
+<script src="js/recorder.js?v=162"></script>
+<script src="js/jam-session.js?v=162"></script>
+<script src="js/app-shell.js?v=162"></script>
 </body>
 </html>
