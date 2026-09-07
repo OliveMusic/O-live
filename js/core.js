@@ -180,7 +180,7 @@ function getMaster(preparedCtx){
     const comp=ctx.createDynamicsCompressor();
     comp.threshold.value=-15; comp.knee.value=24; comp.ratio.value=4.5;
     comp.attack.value=0.005; comp.release.value=0.25;
-    __master.connect(comp).connect(ctx.destination);
+    __master.connect(comp).connect(getAppOutput(ctx));
 
     // 리버브 센드
     try{

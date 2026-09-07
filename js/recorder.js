@@ -58,6 +58,8 @@
   let levelAnalyser=null;
   let levelSource=null;
   let levelSink=null;
+  let captureMixer=null;
+  let captureDestination=null;
   let levelSamples=null;
   let waveformLevels=[];
   let recordingPeak=0;
@@ -115,6 +117,15 @@
     return `${date.getFullYear()}. ${pad(date.getMonth()+1)}. ${pad(date.getDate())}. ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
   function clamp(value,min,max){ return Math.min(max,Math.max(min,value)); }
+  function makeMono(node){
+    if(!node) return node;
+    try{
+      node.channelCount=1;
+      node.channelCountMode='explicit';
+      node.channelInterpretation='speakers';
+    }catch(e){}
+    return node;
+  }
   function rowDurationSeconds(row){ return Math.max(0,Number(row&&row.duration_ms)||0)/1000; }
   function normalizeWaveform(values){
     if(!Array.isArray(values) || !values.length || values.length>WAVEFORM_MAX_POINTS) return [];
@@ -220,6 +231,11 @@
   function teardownCaptureGraph(){
     try{ if(levelSource) levelSource.disconnect(); }catch(e){}
     try{ if(levelSink) levelSink.disconnect(); }catch(e){}
+    try{ if(captureMixer) captureMixer.disconnect(); }catch(e){}
+    if(captureDestination){
+      try{ captureDestination.stream.getTracks().forEach(track=>track.stop()); }catch(e){}
+    }
+    captureMixer=captureDestination=null;
     levelSource=levelAnalyser=levelSink=levelSamples=null;
     cancelAnimationFrame(levelFrame); levelFrame=0;
     recordLevel.style.transform='scaleX(0)';
@@ -272,7 +288,7 @@
   function startDraftDecoded(ctx,buffer,token){
     releaseDraftSource();
     const source=ctx.createBufferSource();
-    const gain=ctx.createGain();
+    const gain=makeMono(ctx.createGain());
     const startAt=clamp(draftStartedOffset,0,Math.max(0,Number(buffer.duration)||0));
     source.buffer=buffer;
     gain.gain.value=rowPlaybackGain(draft);
@@ -355,6 +371,19 @@
   function setupCapture(ctx){
     levelSource=ctx.createMediaStreamSource(stream);
     setupLevel(ctx,levelSource);
+    if(typeof ctx.createMediaStreamDestination!=='function') return stream;
+    try{
+      captureMixer=makeMono(ctx.createGain());
+      captureDestination=makeMono(ctx.createMediaStreamDestination());
+      levelSource.connect(captureMixer).connect(captureDestination);
+      const processed=captureDestination.stream;
+      if(processed && typeof processed.getAudioTracks==='function' &&
+         processed.getAudioTracks().length) return processed;
+    }catch(e){
+      try{ if(captureMixer) captureMixer.disconnect(); }catch(ignore){}
+      captureMixer=captureDestination=null;
+    }
+    return stream;
   }
   async function startRecording(){
     if(!currentUser){ window.OliveCloud.openAccount(); return; }
@@ -385,8 +414,8 @@
       const mimeType=chooseMimeType();
       const options={audioBitsPerSecond:96000};
       if(mimeType) options.mimeType=mimeType;
-      recorder=new MediaRecorder(stream,options);
-      setupCapture(ctx);
+      const recordingStream=setupCapture(ctx);
+      recorder=new MediaRecorder(recordingStream,options);
       chunks=[];
       waveformLevels=[];
       recordingPeak=0;
@@ -670,7 +699,7 @@
     try{
       releaseCloudSource();
       const source=ctx.createBufferSource();
-      const gain=ctx.createGain();
+      const gain=makeMono(ctx.createGain());
       const duration=Math.max(0,Number(buffer.duration)||rowDurationSeconds(row));
       const startAt=clamp(Number(offset)||0,0,Math.max(0,duration-.02));
       source.buffer=buffer;
@@ -716,7 +745,7 @@
       resetCloudMediaElement();
       cloudFallbackAudio.crossOrigin='anonymous';
       const source=ctx.createMediaElementSource(cloudFallbackAudio);
-      const gain=ctx.createGain();
+      const gain=makeMono(ctx.createGain());
       gain.gain.value=rowPlaybackGain(row);
       source.connect(gain).connect(ctx.destination);
       cloudMediaSource=source;
@@ -816,44 +845,25 @@
     const recordingBlob=cached
       ? Promise.resolve({blob:cached.blob,cached:true})
       : findPlaybackBlob(row);
-    // 고정 음량 보정이 필요한 새 녹음은 캐시 Blob을 iOS 네이티브 디코더로 재생하면서
-    // GainNode 하나만 통과시킨다. 기존 녹음은 서명 주소를 바로 재생할 수 있다.
+    // 새 녹음과 기존 녹음을 모두 모노 GainNode로 통과시켜, iPhone이 한쪽 채널에만
+    // 저장한 파일도 양쪽 이어폰의 중앙에서 들리게 한다.
     recordingBlob.catch(error=>console.warn('[O\'live recording cache fill]',error));
     const playbackUrl=cached ? cached.url : String(row.playback_url||'');
-    if(Math.abs(rowPlaybackGain(row)-1)>.01){
-      const normalized=playbackUrl
-        ? startNormalizedNative(playbackUrl,playback,row,token,offset)
-        : playNormalizedBlob(playback,recordingBlob,row,token,offset);
-      normalized.catch(error=>{
+    const normalized=playbackUrl
+      ? startNormalizedNative(playbackUrl,playback,row,token,offset)
+      : playNormalizedBlob(playback,recordingBlob,row,token,offset);
+    normalized.catch(error=>{
+      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+      console.warn('[O\'live centered recording playback]',error);
+      resetCloudMediaElement();
+      cloudPlaybackMode='';
+      playDecodedBlob(playback,recordingBlob,row,token,offset).catch(decodeError=>{
         if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-        console.warn('[O\'live normalized recording playback]',error);
-        resetCloudMediaElement();
-        cloudPlaybackMode='';
-        playDecodedBlob(playback,recordingBlob,row,token,offset).catch(decodeError=>{
-          if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-          if(!playbackUrl){ handlePlaybackFailure(decodeError,row,token); return; }
-          startNativePlayback(playbackUrl,row,token,offset)
-            .catch(fallbackError=>handlePlaybackFailure(playbackStageError('audio',fallbackError),row,token));
-        });
+        if(!playbackUrl){ handlePlaybackFailure(decodeError,row,token); return; }
+        startNativePlayback(playbackUrl,row,token,offset)
+          .catch(fallbackError=>handlePlaybackFailure(playbackStageError('audio',fallbackError),row,token));
       });
-      renderList();
-      return;
-    }
-    if(playbackUrl){
-      startNativePlayback(playbackUrl,row,token,offset).catch(error=>{
-        if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-        console.warn('[O\'live native recording playback]',error);
-        cloudFallbackAudio.pause();
-        cloudFallbackAudio.removeAttribute('src');
-        cloudPlaybackMode='';
-        playDecodedBlob(playback,recordingBlob,row,token,offset)
-          .catch(fallbackError=>handlePlaybackFailure(fallbackError,row,token));
-      });
-      renderList();
-      return;
-    }
-    playDecodedBlob(playback,recordingBlob,row,token,offset)
-      .catch(error=>handlePlaybackFailure(error,row,token));
+    });
     renderList();
   }
   function waveformPath(values){

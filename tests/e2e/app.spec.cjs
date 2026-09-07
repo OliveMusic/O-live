@@ -275,7 +275,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.15');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.16');
 }
 
 test.afterEach(async({page})=>{
@@ -301,7 +301,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=145');
+  expect(workerUrl).toContain('service-worker.js?v=146');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -360,7 +360,9 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await page.evaluate(()=>window.__resolveRecordingDownload());
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   await expect.poll(()=>page.evaluate(()=>(
-    window.__micHarness.gainNodes.some(node=>node.gain.value===3.25)
+    window.__micHarness.gainNodes.some(node=>(
+      node.gain.value===3.25 && node.channelCount===1 && node.channelCountMode==='explicit'
+    ))
   ))).toBeTruthy();
   expect(await page.evaluate(()=>window.__micHarness.mediaElementGain)).toBeTruthy();
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/5[01-3]/);
@@ -414,8 +416,11 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
     echoCancellation:false,noiseSuppression:false,autoGainControl:false,
   });
   expect(await page.evaluate(()=>(
-    window.__micHarness.recorderStream===window.__micHarness.inputStream
+    window.__micHarness.recorderStream===window.__micHarness.processedStream
   ))).toBeTruthy();
+  expect(await page.evaluate(()=>window.__micHarness.gainNodes.some(node=>(
+    node.channelCount===1 && node.channelCountMode==='explicit'
+  )))).toBeTruthy();
   await expect.poll(()=>page.locator('#recordLevelFill').evaluate(element=>{
     const transform=getComputedStyle(element).transform;
     return transform==='none'?0:new DOMMatrix(transform).a;
@@ -591,6 +596,20 @@ test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async(
   await page.waitForTimeout(350);
   await expect(jam).toHaveClass(/on/);
   await expect(page.locator('.tab-btn[data-tab="jam"]')).toHaveClass(/sounding/);
+  const backgroundAudio=page.locator('audio[data-olive-background="true"]');
+  await expect.poll(()=>backgroundAudio.evaluate(audio=>Boolean(
+    audio.srcObject && audio.srcObject.getAudioTracks().length
+  ))).toBeTruthy();
+  await expect.poll(()=>page.evaluate(()=>(
+    typeof window.__testMediaActions.play==='undefined' &&
+    typeof window.__testMediaActions.pause==='undefined'
+  ))).toBeTruthy();
+  await backgroundAudio.evaluate(audio=>audio.pause());
+  await expect(jam).toHaveClass(/media-paused/);
+  await expect(jam).not.toHaveClass(/on/);
+  await backgroundAudio.evaluate(audio=>audio.play());
+  await expect(jam).toHaveClass(/on/);
+  await expect(jam).not.toHaveClass(/media-paused/);
   await setVisibility('visible');
   await jam.click();
   await expect(jam).not.toHaveClass(/on/);
