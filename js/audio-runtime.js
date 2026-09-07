@@ -19,6 +19,7 @@ let __backgroundStreamCtx = null;
 let __backgroundUsesStream = false;
 let __backgroundMediaActionMode = '';
 let __audioSessionMode = '';
+let __externalMediaSessionOwner = '';
 
 /* 실제 iPhone 잠금 화면의 원격 명령은 데스크톱 모의 테스트로 재현할 수 없다.
    오디오나 계정 정보 없이 명령 도착 여부와 엔진 상태만 기기 안에 짧게 남겨,
@@ -106,6 +107,15 @@ function setAudioSession(mode){
     __audioSessionMode=mode;
     recordAudioDiagnostic('audio-session:'+mode);
   }catch(e){}
+}
+
+/* 실제 녹음 파일처럼 자체 HTMLAudioElement를 가진 기능은 공용 메트로놈
+   플레이어가 Media Session 핸들러를 지우지 못하도록 소유권을 표시한다. */
+function claimExternalMediaSession(owner){
+  __externalMediaSessionOwner=String(owner||'');
+}
+function releaseExternalMediaSession(owner){
+  if(!owner || __externalMediaSessionOwner===String(owner)) __externalMediaSessionOwner='';
 }
 
 /* 앱의 마스터 출력 앞에 한 번만 두는 라우터다. 평소에는 스피커로 바로 보내고,
@@ -196,6 +206,7 @@ function silentWavUrl(){
    재생 상태만 갱신한다. */
 function configureBackgroundMediaSession(label,usesStream=__backgroundUsesStream){
   try{
+    if(__externalMediaSessionOwner) return;
     if(!navigator.mediaSession) return;
     updateBackgroundMediaMetadata(label);
     navigator.mediaSession.playbackState=__backgroundMediaPaused?'paused':'playing';
@@ -546,7 +557,7 @@ function stopBackgroundMedia(){
     __backgroundAudioUrl='';
   }
   try{
-    if(navigator.mediaSession){
+    if(navigator.mediaSession && !__externalMediaSessionOwner){
       navigator.mediaSession.playbackState='none';
       if(typeof navigator.mediaSession.setActionHandler==='function'){
         for(const action of ['play','pause','stop','seekbackward','seekforward',

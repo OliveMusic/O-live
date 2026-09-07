@@ -1683,14 +1683,17 @@
   }
   .record-row-more:active{ background:var(--key); }
   .record-player-detail{ min-width:0; padding-top:2px; }
+  .record-waveform-wrap{
+    width:100%; height:68px; padding-top:20px; box-sizing:border-box;
+  }
   .record-waveform{
-    --wave-progress:0%; --loop-start:0%; --loop-end:0%; position:relative; width:100%; height:68px; border-radius:6px;
-    cursor:pointer; touch-action:pan-y; outline:none; overflow:hidden; user-select:none; -webkit-user-select:none;
+    --wave-progress:0%; --loop-start:0%; --loop-end:0%; position:relative; width:100%; height:44px; border-radius:6px;
+    cursor:pointer; touch-action:pan-y; outline:none; overflow:visible; user-select:none; -webkit-user-select:none;
   }
   .record-waveform:focus-visible{ box-shadow:0 0 0 2px var(--signal-soft); }
   .record-waveform:active{ background:var(--key-press); }
   .record-waveform.scrubbing{ background:var(--key-press); cursor:grabbing; }
-  .record-waveform-svg{ position:absolute; z-index:1; inset:24px 0 4px; width:100%; height:40px; overflow:visible; }
+  .record-waveform-svg{ position:absolute; z-index:1; inset:2px 0; width:100%; height:40px; overflow:visible; }
   .record-waveform-svg path{
     fill:none; stroke:var(--ink-3); stroke-width:1.1; stroke-linecap:round;
     vector-effect:non-scaling-stroke;
@@ -1701,13 +1704,13 @@
   .record-waveform-svg.played path{ stroke:var(--signal); }
   .record-waveform.loading .record-waveform-svg{ opacity:.32; }
   .record-loop-region{
-    display:none; position:absolute; z-index:0; top:26px; bottom:6px; left:var(--loop-start);
+    display:none; position:absolute; z-index:0; top:4px; bottom:4px; left:var(--loop-start);
     width:calc(var(--loop-end) - var(--loop-start)); background:var(--signal-soft); pointer-events:none;
   }
   .record-waveform.has-loop-start.has-loop-end .record-loop-region{ display:block; opacity:.42; }
   .record-waveform.looping .record-loop-region{ opacity:.72; }
   .record-loop-marker{
-    display:none; position:absolute; z-index:2; top:24px; bottom:4px; width:1px;
+    display:none; position:absolute; z-index:2; top:2px; bottom:2px; width:1px;
     background:var(--signal); color:var(--signal); pointer-events:none;
   }
   .record-loop-marker::before{
@@ -2364,21 +2367,21 @@
   </section>
 </div>
 
-<script src="app-version.js?v=163"></script>
+<script src="app-version.js?v=164"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=163"></script>
-<script src="js/audio-runtime.js?v=163"></script>
-<script src="js/core.js?v=163"></script>
-<script src="js/metronome.js?v=163"></script>
-<script src="js/tuner-engine.js?v=163"></script>
-<script src="js/tuner.js?v=163"></script>
-<script src="js/scales.js?v=163"></script>
-<script src="js/ear-trainer.js?v=163"></script>
-<script src="js/rhythm-trainer.js?v=163"></script>
-<script src="js/recording-cache.js?v=163"></script>
-<script src="js/recorder.js?v=163"></script>
-<script src="js/jam-session.js?v=163"></script>
-<script src="js/app-shell.js?v=163"></script>
+<script src="cloud-sync.js?v=164"></script>
+<script src="js/audio-runtime.js?v=164"></script>
+<script src="js/core.js?v=164"></script>
+<script src="js/metronome.js?v=164"></script>
+<script src="js/tuner-engine.js?v=164"></script>
+<script src="js/tuner.js?v=164"></script>
+<script src="js/scales.js?v=164"></script>
+<script src="js/ear-trainer.js?v=164"></script>
+<script src="js/rhythm-trainer.js?v=164"></script>
+<script src="js/recording-cache.js?v=164"></script>
+<script src="js/recorder.js?v=164"></script>
+<script src="js/jam-session.js?v=164"></script>
+<script src="js/app-shell.js?v=164"></script>
 </body>
 </html>

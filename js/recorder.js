@@ -48,6 +48,7 @@
 
   const draftAudio=new Audio();
   let cloudFallbackAudio=makeCloudFallbackAudio();
+  const cloudNativeAudio=makeCloudNativeAudio();
   let currentUser=null;
   let sessionUserId='';
   let rows=[];
@@ -94,6 +95,11 @@
   let cloudGainNode=null;
   let cloudMediaSource=null;
   let cloudMediaGain=null;
+  let cloudMediaUsesPersistentNative=false;
+  let cloudNativeInternalPause=false;
+  let cloudNativeIgnorePauseUntil=0;
+  let cloudMediaSessionActive=false;
+  let cloudMediaPositionUpdatedAt=0;
   let cloudPlayToken=0;
   let cloudProgressFrame=0;
   let scrubbingRecordingId='';
@@ -115,6 +121,64 @@
     audio.addEventListener('canplay',()=>syncNativePlaybackSettings(audio));
     audio.addEventListener('playing',()=>syncNativePlaybackSettings(audio));
     return audio;
+  }
+
+  /* iPhone에서는 Web Audio에 한 번이라도 연결된 미디어 요소가 재생속도를
+     무시하는 WebKit 문제가 남아 있다. 잠금화면과 배속 재생은 Web Audio에
+     연결하지 않는 하나의 DOM 오디오 요소가 전담한다. */
+  function makeCloudNativeAudio(){
+    const audio=new Audio();
+    audio.preload='auto';
+    audio.playsInline=true;
+    audio.hidden=true;
+    audio.dataset.oliveRecordingPlayback='true';
+    audio.addEventListener('ended',()=>{
+      if(cloudMediaUsesPersistentNative) finishCloudPlayback();
+    });
+    audio.addEventListener('loadedmetadata',()=>{
+      if(!cloudMediaUsesPersistentNative) return;
+      syncNativePlaybackSettings(audio);
+      updateCloudMediaSessionPosition();
+    });
+    audio.addEventListener('canplay',()=>{
+      if(cloudMediaUsesPersistentNative) syncNativePlaybackSettings(audio);
+    });
+    audio.addEventListener('playing',()=>{
+      if(!cloudMediaUsesPersistentNative) return;
+      syncNativePlaybackSettings(audio);
+      updateCloudMediaSessionState();
+    });
+    audio.addEventListener('ratechange',()=>{
+      if(!cloudMediaUsesPersistentNative || !cloudMediaId) return;
+      const row=rows.find(item=>item.id===cloudMediaId);
+      if(!row) return;
+      const expected=rowPlaybackRate(row);
+      if(Math.abs(Number(audio.playbackRate)-expected)>.001){
+        Promise.resolve().then(()=>applyNativePlaybackSettings(row,audio));
+      }
+      updateCloudMediaSessionPosition(row);
+    });
+    audio.addEventListener('timeupdate',()=>{
+      if(!cloudMediaUsesPersistentNative || !cloudPlayingId) return;
+      const now=performance.now();
+      if(now-cloudMediaPositionUpdatedAt<900) return;
+      cloudMediaPositionUpdatedAt=now;
+      updateCloudMediaSessionPosition();
+    });
+    audio.addEventListener('pause',()=>{
+      if(cloudMediaUsesPersistentNative && !cloudNativeInternalPause &&
+         performance.now()>=cloudNativeIgnorePauseUntil){
+        handleCloudNativePauseFromSystem();
+      }
+    });
+    if(document.body) document.body.appendChild(audio);
+    return audio;
+  }
+
+  function preferPersistentNativePlayback(){
+    const agent=String(navigator.userAgent||'');
+    return /iP(?:hone|ad|od)/i.test(agent) ||
+      (navigator.platform==='MacIntel' && Number(navigator.maxTouchPoints)>1);
   }
 
   function makeId(){
@@ -173,7 +237,10 @@
   function isNativePlaybackMode(mode=cloudPlaybackMode){
     return mode==='native-connected' || mode==='native-direct';
   }
-  function applyNativePlaybackSettings(row,audio=cloudFallbackAudio){
+  function activeCloudAudio(){
+    return cloudMediaUsesPersistentNative ? cloudNativeAudio : cloudFallbackAudio;
+  }
+  function applyNativePlaybackSettings(row,audio=activeCloudAudio()){
     const rate=rowPlaybackRate(row);
     try{ audio.defaultPlaybackRate=rate; }catch(error){}
     try{ audio.playbackRate=rate; }catch(error){}
@@ -186,9 +253,115 @@
     }catch(error){}
   }
   function syncNativePlaybackSettings(audio){
-    if(audio!==cloudFallbackAudio || !cloudMediaId) return;
+    if(audio!==activeCloudAudio() || !cloudMediaId) return;
     const row=rows.find(item=>item.id===cloudMediaId);
     if(row) applyNativePlaybackSettings(row,audio);
+  }
+  function updateCloudMediaSessionPosition(row,position){
+    try{
+      if(!cloudMediaSessionActive || !navigator.mediaSession ||
+         typeof navigator.mediaSession.setPositionState!=='function') return;
+      const active=row||rows.find(item=>item.id===cloudMediaId);
+      const duration=rowDurationSeconds(active);
+      if(!(duration>0)) return;
+      const current=clamp(Number.isFinite(position)?position:currentCloudPosition(),0,
+        Math.max(0,duration-.001));
+      navigator.mediaSession.setPositionState({
+        duration,position:current,playbackRate:rowPlaybackRate(active),
+      });
+    }catch(error){}
+  }
+  function updateCloudMediaSessionState(row){
+    try{
+      if(!navigator.mediaSession) return;
+      const active=row||rows.find(item=>item.id===cloudMediaId);
+      if(!active) return;
+      navigator.mediaSession.playbackState=cloudPlayingId===active.id?'playing':'paused';
+      updateCloudMediaSessionPosition(active);
+    }catch(error){}
+  }
+  function seekCloudPlaybackBy(seconds){
+    const row=rows.find(item=>item.id===cloudMediaId);
+    if(!row) return;
+    const duration=rowDurationSeconds(row);
+    const target=clamp(currentCloudPosition()+Number(seconds||0),0,duration);
+    playbackPositions.set(row.id,target);
+    prepareNativeOffset(target,activeCloudAudio());
+    updatePlayerProgress(row.id,target);
+    updateCloudMediaSessionPosition(row,target);
+  }
+  function resumeCloudPlaybackFromMediaSession(){
+    const row=rows.find(item=>item.id===cloudMediaId);
+    if(!row || !cloudMediaUsesPersistentNative) return;
+    const token=++cloudPlayToken;
+    cloudPlayingId=row.id;
+    cloudPlaybackMode='native-direct';
+    setAudioSession('playback');
+    applyNativePlaybackSettings(row,cloudNativeAudio);
+    prepareNativeOffset(Number(playbackPositions.get(row.id))||0,cloudNativeAudio);
+    Promise.resolve(cloudNativeAudio.play()).then(()=>{
+      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+      setTabSounding('trainer',true,'recording-playback');
+      configureCloudMediaSession(row);
+      renderList();
+      startCloudProgress();
+      if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:play');
+    }).catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token));
+  }
+  function configureCloudMediaSession(row){
+    try{
+      if(!navigator.mediaSession || !row || !cloudMediaUsesPersistentNative) return;
+      claimExternalMediaSession('recording-playback');
+      const installActions=!cloudMediaSessionActive;
+      cloudMediaSessionActive=true;
+      setAudioSession('playback');
+      if(typeof MediaMetadata==='function'){
+        navigator.mediaSession.metadata=new MediaMetadata({
+          title:String(row.title||'내 녹음'),artist:"O'live",album:'내 녹음',
+        });
+      }
+      if(installActions && typeof navigator.mediaSession.setActionHandler==='function'){
+        navigator.mediaSession.setActionHandler('play',()=>resumeCloudPlaybackFromMediaSession());
+        navigator.mediaSession.setActionHandler('pause',()=>{
+          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:pause');
+          pauseCloudPlayback();
+        });
+        navigator.mediaSession.setActionHandler('stop',()=>stopCloudPlayback());
+        navigator.mediaSession.setActionHandler('seekbackward',details=>{
+          const amount=Number(details&&details.seekOffset)||10;
+          seekCloudPlaybackBy(-amount);
+        });
+        navigator.mediaSession.setActionHandler('seekforward',details=>{
+          const amount=Number(details&&details.seekOffset)||10;
+          seekCloudPlaybackBy(amount);
+        });
+        for(const action of ['previoustrack','nexttrack']){
+          try{ navigator.mediaSession.setActionHandler(action,null); }catch(error){}
+        }
+      }
+      updateCloudMediaSessionState(row);
+    }catch(error){}
+  }
+  function clearCloudMediaSession(){
+    if(!cloudMediaSessionActive) return;
+    cloudMediaSessionActive=false;
+    try{
+      if(navigator.mediaSession){
+        navigator.mediaSession.playbackState='none';
+        navigator.mediaSession.metadata=null;
+        if(typeof navigator.mediaSession.setActionHandler==='function'){
+          for(const action of ['play','pause','stop','seekbackward','seekforward',
+                                'previoustrack','nexttrack']){
+            try{ navigator.mediaSession.setActionHandler(action,null); }catch(error){}
+          }
+        }
+      }
+    }catch(error){}
+    releaseExternalMediaSession('recording-playback');
+  }
+  function handleCloudNativePauseFromSystem(){
+    if(!cloudPlayingId || !cloudMediaUsesPersistentNative) return;
+    pauseCloudPlayback();
   }
   function normalizeWaveform(values){
     if(!Array.isArray(values) || !values.length || values.length>WAVEFORM_MAX_POINTS) return [];
@@ -345,7 +518,7 @@
     setTimer(0);
     recordState.textContent='새 녹음';
     recordStateDot.hidden=true;
-    recordHint.textContent='최대 5분 · 목록의 반주와 함께 녹음할 수 있습니다';
+    recordHint.textContent='최대 5분 · 메트로놈 또는 잼 세션과 함께 녹음할 수 있습니다';
     recordDraft.hidden=true;
     recordLevel.style.transform='scaleX(0)';
     setButtonMode('idle');
@@ -562,6 +735,9 @@
       setMessage('이 브라우저에서는 녹음을 사용할 수 없습니다',true); return;
     }
     if(draft) discardDraft();
+    // 실제 녹음은 메트로놈·잼과 함께 쓸 수 있지만, 저장된 파일 재생과는
+    // 하나의 오디오 세션을 나눠 쓰지 않는다.
+    if(cloudPlayingId || cloudMediaId) stopCloudPlayback(false);
     const preservePlayback=anySounding();
     const token=++startToken;
     startPending=true;
@@ -695,7 +871,7 @@
   }
   function currentCloudPosition(){
     if(cloudPlayingId && isNativePlaybackMode()){
-      return Math.max(0,Number(cloudFallbackAudio.currentTime)||0);
+      return Math.max(0,Number(activeCloudAudio().currentTime)||0);
     }
     if(cloudPlayingId && cloudPlaybackMode==='decoded' && cloudDecodedContext){
       const position=Math.max(0,cloudStartedOffset+cloudDecodedContext.currentTime-cloudStartedAt);
@@ -737,7 +913,7 @@
       const region=row&&activeLoopFor(row);
       if(region && isNativePlaybackMode() && !region.whole && position>=region.b){
         position=region.a;
-        try{ cloudFallbackAudio.currentTime=region.a; }catch(error){}
+        try{ activeCloudAudio().currentTime=region.a; }catch(error){}
       }
       playbackPositions.set(cloudPlayingId,position);
       if(scrubbingRecordingId!==cloudPlayingId) updatePlayerProgress(cloudPlayingId,position);
@@ -764,11 +940,19 @@
     cloudMediaSource=cloudMediaGain=null;
     cloudFallbackAudio=makeCloudFallbackAudio();
   }
+  function resetCloudNativeElement(){
+    cloudNativeInternalPause=true;
+    cloudNativeIgnorePauseUntil=performance.now()+250;
+    try{ cloudNativeAudio.pause(); }catch(error){}
+    try{ cloudNativeAudio.removeAttribute('src'); cloudNativeAudio.load(); }catch(error){}
+    cloudNativeInternalPause=false;
+  }
   function stopCloudPlayback(resetPosition){
     const mediaId=cloudMediaId||cloudPlayingId;
     ++cloudPlayToken;
     stopCloudProgress();
     resetCloudMediaElement();
+    resetCloudNativeElement();
     releaseCloudSource();
     if(resetPosition!==false && mediaId) playbackPositions.delete(mediaId);
     cloudPlayingId='';
@@ -778,7 +962,9 @@
     cloudStartedOffset=0;
     cloudDecodedBuffer=null;
     cloudDecodedContext=null;
+    cloudMediaUsesPersistentNative=false;
     setTabSounding('trainer',false,'recording-playback');
+    clearCloudMediaSession();
     renderList();
   }
   function pauseCloudPlayback(){
@@ -787,11 +973,20 @@
     playbackPositions.set(id,currentCloudPosition());
     ++cloudPlayToken;
     stopCloudProgress();
-    if(isNativePlaybackMode()) cloudFallbackAudio.pause();
+    if(isNativePlaybackMode()){
+      const audio=activeCloudAudio();
+      cloudNativeInternalPause=cloudMediaUsesPersistentNative;
+      try{ audio.pause(); }catch(error){}
+      cloudNativeInternalPause=false;
+    }
     else releaseCloudSource();
     cloudPlaybackMode=isNativePlaybackMode()?'native-paused':'decoded-paused';
     cloudPlayingId='';
     setTabSounding('trainer',false,'recording-playback');
+    if(cloudMediaUsesPersistentNative){
+      const row=rows.find(item=>item.id===id);
+      if(row) configureCloudMediaSession(row);
+    }
     renderList();
   }
   function finishCloudPlayback(){
@@ -802,6 +997,10 @@
     cloudPlayingId='';
     cloudPlaybackMode=isNativePlaybackMode()?'native-paused':'decoded-paused';
     setTabSounding('trainer',false,'recording-playback');
+    if(cloudMediaUsesPersistentNative){
+      const row=rows.find(item=>item.id===id);
+      if(row) configureCloudMediaSession(row);
+    }
     renderList();
   }
   function clearCloudPlaybackCache(){
@@ -993,13 +1192,13 @@
         ? '이 녹음 파일을 재생할 수 없습니다 · 다운로드로 확인해 주세요'
         : '오디오 재생을 시작하지 못했습니다',true);
   }
-  function prepareNativeOffset(offset){
+  function prepareNativeOffset(offset,audio=activeCloudAudio()){
     const apply=()=>{
-      const duration=Number(cloudFallbackAudio.duration)||0;
-      try{ cloudFallbackAudio.currentTime=clamp(Number(offset)||0,0,Math.max(0,duration-.02)); }catch(e){}
+      const duration=Number(audio.duration)||0;
+      try{ audio.currentTime=clamp(Number(offset)||0,0,Math.max(0,duration-.02)); }catch(e){}
     };
-    if(cloudFallbackAudio.readyState>=1) apply();
-    else cloudFallbackAudio.addEventListener('loadedmetadata',apply,{once:true});
+    if(audio.readyState>=1) apply();
+    else audio.addEventListener('loadedmetadata',apply,{once:true});
   }
   function startNativePlayback(playbackUrl,row,token,offset,refreshList=true){
     resetCloudMediaElement();
@@ -1010,6 +1209,23 @@
     return Promise.resolve(cloudFallbackAudio.play()).then(()=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
       setTabSounding('trainer',true,'recording-playback');
+      setMessage('');
+      if(refreshList) renderList();
+      startCloudProgress();
+    });
+  }
+  function startPersistentNativePlayback(playbackUrl,row,token,offset,refreshList=true){
+    resetCloudNativeElement();
+    cloudMediaUsesPersistentNative=true;
+    cloudNativeAudio.src=playbackUrl;
+    applyNativePlaybackSettings(row,cloudNativeAudio);
+    cloudPlaybackMode='native-direct';
+    prepareNativeOffset(offset,cloudNativeAudio);
+    configureCloudMediaSession(row);
+    return Promise.resolve(cloudNativeAudio.play()).then(()=>{
+      if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+      setTabSounding('trainer',true,'recording-playback');
+      configureCloudMediaSession(row);
       setMessage('');
       if(refreshList) renderList();
       startCloudProgress();
@@ -1031,6 +1247,10 @@
   function playRow(row,requestedOffset){
     const seeking=Number.isFinite(requestedOffset);
     const offset=clamp(seeking?requestedOffset:Number(playbackPositions.get(row.id))||0,0,rowDurationSeconds(row));
+    if(recording || startPending){
+      setMessage('녹음을 정지한 뒤 내 녹음을 재생해 주세요',true);
+      return;
+    }
     if(cloudPlayingId===row.id && seeking){
       playbackPositions.set(row.id,offset);
       updatePlayerProgress(row.id,offset);
@@ -1049,12 +1269,18 @@
     if(cloudPlayingId===row.id) pauseCloudPlayback();
     else if(cloudPlayingId || (cloudMediaId && cloudMediaId!==row.id)) stopCloudPlayback();
     pauseDraftPlayback(false);
-    let playback;
-    try{ playback=beginPlaybackFromGesture(); }
-    catch(error){ setMessage('오디오 재생을 시작하지 못했습니다',true); return; }
-    // 네이티브 재생이 성공하면 Web Audio 준비 결과를 기다리지 않으므로
-    // 그 경로의 실패도 처리된 Promise로 남겨 콘솔 오류를 만들지 않는다.
-    playback.ready.catch(()=>{});
+    const usePersistentNative=preferPersistentNativePlayback();
+    let playback=null;
+    if(usePersistentNative){
+      // 녹음 파일이 잠금화면의 미디어 세션을 소유한다. 메트로놈·잼을 새로
+      // 시작하면 기존 규칙대로 이 foreground transport를 정지한다.
+      stopBackgroundTransports();
+      setAudioSession('playback');
+    }else{
+      try{ playback=beginPlaybackFromGesture(); }
+      catch(error){ setMessage('오디오 재생을 시작하지 못했습니다',true); return; }
+      playback.ready.catch(()=>{});
+    }
     playbackPositions.set(row.id,offset);
     const cached=cloudBlobs.get(row.id);
     const token=++cloudPlayToken;
@@ -1064,15 +1290,24 @@
     const recordingBlob=cached
       ? Promise.resolve({blob:cached.blob,cached:true})
       : findPlaybackBlob(row);
-    // 새 녹음과 기존 녹음을 모두 모노 GainNode로 통과시켜, iPhone이 한쪽 채널에만
-    // 저장한 파일도 양쪽 이어폰의 중앙에서 들리게 한다.
+    // 재생과 동시에 로컬 캐시를 채운다. 데스크톱 fallback은 기존 Web Audio 정규화
+    // 경로를 유지하고, iPhone은 속도·잠금화면 제어를 위해 네이티브 요소를 직접 쓴다.
     recordingBlob.catch(error=>console.warn('[O\'live recording cache fill]',error));
     const playbackUrl=cached ? cached.url : String(row.playback_url||'');
     // WebKit은 MediaElementSource에 연결된 오디오의 playbackRate를 일부 버전에서
-    // 무시한다. 1배속이 아닐 때는 음높이 보존이 되는 네이티브 요소를 직접 써서
-    // 슬라이더의 값이 실제 재생속도에 확실히 반영되게 한다.
+    // 무시한다. iPhone에서는 처음부터 영속 네이티브 요소만 써서 속도와 음높이 보존,
+    // 잠금화면 미디어 세션이 하나의 재생 상태를 공유하게 한다.
     const adjustedRate=rowPlaybackRate(row)!==1;
-    const normalized=adjustedRate && playbackUrl
+    const normalized=usePersistentNative
+      ? (playbackUrl
+        ? startPersistentNativePlayback(playbackUrl,row,token,offset)
+        : recordingBlob.then(result=>{
+          if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+          const entry=cloudBlobs.get(row.id)||rememberCloudBlob(row,result.blob);
+          if(!entry) throw new Error('Recording blob unavailable');
+          return startPersistentNativePlayback(entry.url,row,token,offset);
+        }))
+      : adjustedRate && playbackUrl
       ? startNativePlayback(playbackUrl,row,token,offset)
       : playbackUrl
         ? startNormalizedNative(playbackUrl,playback,row,token,offset)
@@ -1090,7 +1325,14 @@
       });
       // 속도 변경은 네이티브 플레이어의 음높이 보존 기능이 담당한다. 연결된
       // Web Audio 경로만 실패했다면 디코딩보다 네이티브 재생을 먼저 다시 시도한다.
-      if(rowPlaybackRate(row)!==1 && playbackUrl){
+      if(usePersistentNative){
+        recordingBlob.then(result=>{
+          if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+          const entry=cloudBlobs.get(row.id)||rememberCloudBlob(row,result.blob);
+          if(!entry) throw new Error('Recording blob unavailable');
+          return startPersistentNativePlayback(entry.url,row,token,offset);
+        }).catch(fallbackError=>handlePlaybackFailure(playbackStageError('audio',fallbackError),row,token));
+      }else if(rowPlaybackRate(row)!==1 && playbackUrl){
         startNativePlayback(playbackUrl,row,token,offset).catch(decodedFallback);
       }else decodedFallback();
     });
@@ -1286,6 +1528,7 @@
     if(cloudPlayingId===row.id){
       if(isNativePlaybackMode()){
         applyNativePlaybackSettings(row);
+        if(cloudMediaUsesPersistentNative) updateCloudMediaSessionPosition(row);
         // 연결형 Web Audio 경로는 일부 iPhone에서 playbackRate를 무시한다.
         // 슬라이더가 처음 1배속을 벗어나는 즉시 네이티브 오디오로 갈아타야,
         // iOS가 change 이벤트를 생략해도 실제 속도가 바뀐다.
@@ -1294,6 +1537,12 @@
         return;
       }
       if(cloudPlaybackMode==='decoded' && switchActivePlaybackToDirect(row)) return;
+      return;
+    }
+    if(cloudMediaId===row.id && cloudMediaUsesPersistentNative){
+      applyNativePlaybackSettings(row,cloudNativeAudio);
+      updateCloudMediaSessionPosition(row);
+      if(commit) renderList();
       return;
     }
     if(commit) renderList();
@@ -1346,6 +1595,7 @@
     play.innerHTML='<span aria-hidden="true"></span>';
     play.addEventListener('click',()=>playRow(row));
     const detail=document.createElement('div'); detail.className='record-player-detail';
+    const waveformWrap=document.createElement('div'); waveformWrap.className='record-waveform-wrap';
     const waveform=document.createElement('div'); waveform.className='record-waveform';
     waveform.tabIndex=0; waveform.setAttribute('role','slider');
     waveform.setAttribute('aria-label',`${row.title} 재생 위치`);
@@ -1365,6 +1615,7 @@
     const markerA=document.createElement('span'); markerA.className='record-loop-marker start'; markerA.dataset.label='A';
     const markerB=document.createElement('span'); markerB.className='record-loop-marker end'; markerB.dataset.label='B';
     waveform.append(loopShade,createWaveformSvg(shown,'base'),createWaveformSvg(shown,'played'),markerA,markerB);
+    waveformWrap.append(waveform);
     bindWaveformScrubbing(waveform,row);
     waveform.addEventListener('keydown',event=>{
       const duration=rowDurationSeconds(row);
@@ -1416,7 +1667,7 @@
     rateSlider.addEventListener('change',()=>setPlaybackRate(row,rateSlider.value,true));
     bindPlaybackRateReset(rateSlider,row);
     rateLabel.append(rateText,rateSlider,rateValue); tools.append(loopTools,rateLabel);
-    detail.append(waveform,times,tools); player.append(play,detail);
+    detail.append(waveformWrap,times,tools); player.append(play,detail);
     requestAnimationFrame(()=>updatePlayerProgress(row.id,
       cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0));
     if(!values.length) loadRowWaveform(row);
@@ -1667,9 +1918,10 @@
     keepWhenHidden:true,
   });
   registerTransport({
-    isPlaying:()=>draftIsPlaying() || Boolean(cloudPlayingId),
+    isPlaying:()=>draftIsPlaying() || Boolean(cloudPlayingId) || cloudMediaSessionActive,
     stop:()=>{ pauseDraftPlayback(false); stopCloudPlayback(); },
-    // 저장 녹음과 반주는 잠금 상태에서도 이어지며, 실제 녹음과도 동시에 쓸 수 있다.
+    // 저장된 파일은 자체 잠금화면 컨트롤을 유지한다. 실제 녹음을 시작할 때는
+    // 위에서 이 재생 세션을 먼저 닫아 두 기능이 동시에 마이크 세션을 차지하지 않는다.
     keepWhenHidden:true,
   });
   document.addEventListener('visibilitychange',()=>{

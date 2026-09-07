@@ -25,6 +25,7 @@ async function preparePage(page,{
     const mediaSession={
       metadata:null,
       playbackState:'none',
+      positionState:null,
       setActionHandler(action,handler){
         if(handler){
           mediaActions[action]=handler;
@@ -35,6 +36,7 @@ async function preparePage(page,{
           mediaActionClearances[action]=(mediaActionClearances[action]||0)+1;
         }
       },
+      setPositionState(state){ this.positionState=state?{...state}:null; },
     };
     try{ Object.defineProperty(navigator,'mediaSession',{configurable:true,value:mediaSession}); }
     catch(error){}
@@ -325,7 +327,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.33');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.34');
 }
 
 test.afterEach(async({page})=>{
@@ -351,7 +353,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=163');
+  expect(workerUrl).toContain('service-worker.js?v=164');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -368,7 +370,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.33',build:163});
+  expect(payload.release).toEqual({version:'1.3.34',build:164});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -428,16 +430,26 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   const waveformControl=page.locator('.record-waveform');
   const box=await waveformControl.boundingBox();
   expect(box).toBeTruthy();
+  const waveformSvgBox=await page.locator('.record-waveform-svg.base').boundingBox();
+  expect(box.height).toBeCloseTo(44,0);
+  expect(waveformSvgBox.y-box.y).toBeCloseTo(2,0);
+  expect((box.y+box.height)-(waveformSvgBox.y+waveformSvgBox.height)).toBeCloseTo(2,0);
   await waveformControl.click({position:{x:box.width*.75,y:box.height/2}});
   expect(await page.evaluate(()=>window.__mediaPlayCalls||0)).toBeGreaterThan(0);
   await page.evaluate(()=>window.__resolveRecordingDownload());
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
-  await expect.poll(()=>page.evaluate(()=>(
-    window.__micHarness.gainNodes.some(node=>(
-      node.gain.value===3.25 && node.channelCount===1 && node.channelCountMode==='explicit'
-    ))
+  expect(await page.evaluate(()=>Boolean(
+    window.__lastPlayedMedia &&
+    window.__lastPlayedMedia.dataset.oliveRecordingPlayback==='true' &&
+    window.__lastPlayedMedia.isConnected
   ))).toBeTruthy();
-  expect(await page.evaluate(()=>window.__micHarness.mediaElementGain)).toBeTruthy();
+  expect(await page.evaluate(()=>window.__testAudioSession.type)).toBe('playback');
+  expect(await page.evaluate(()=>({
+    play:typeof window.__testMediaActions.play,
+    pause:typeof window.__testMediaActions.pause,
+    backward:typeof window.__testMediaActions.seekbackward,
+    forward:typeof window.__testMediaActions.seekforward,
+  }))).toEqual({play:'function',pause:'function',backward:'function',forward:'function'});
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/5[01-3]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('00:51');
   const playCallsBeforeSeek=await page.evaluate(()=>window.__mediaPlayCalls||0);
@@ -478,6 +490,28 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('1');
   await expect(page.locator('.record-rate-value')).toHaveText('1×');
   await expect.poll(()=>page.evaluate(()=>window.__lastPlayedMedia.playbackRate)).toBe(1);
+  await page.evaluate(()=>{ window.__lastPlayedMedia.currentTime=20; });
+  await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
+  await expect.poll(()=>page.evaluate(()=>window.__lastPlayedMedia.currentTime)).toBe(30);
+  await page.evaluate(()=>window.__testMediaActions.seekbackward({seekOffset:10}));
+  await expect.poll(()=>page.evaluate(()=>window.__lastPlayedMedia.currentTime)).toBe(20);
+  const actionRegistrations=await page.evaluate(()=>({
+    play:window.__testMediaActionRegistrations.play,
+    pause:window.__testMediaActionRegistrations.pause,
+    backward:window.__testMediaActionRegistrations.seekbackward,
+    forward:window.__testMediaActionRegistrations.seekforward,
+  }));
+  await page.evaluate(()=>window.__testMediaActions.pause());
+  await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
+  await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('paused');
+  await page.evaluate(()=>window.__testMediaActions.play());
+  await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
+  expect(await page.evaluate(()=>({
+    play:window.__testMediaActionRegistrations.play,
+    pause:window.__testMediaActionRegistrations.pause,
+    backward:window.__testMediaActionRegistrations.seekbackward,
+    forward:window.__testMediaActionRegistrations.seekforward,
+  }))).toEqual(actionRegistrations);
   await page.evaluate(()=>{
     Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
     document.dispatchEvent(new Event('visibilitychange'));
@@ -588,7 +622,7 @@ test('메트로놈과 잼은 서로 교대하고 진행 중인 녹음은 유지�
   await metro.click();
 });
 
-test('업로드한 반주를 내 녹음에서 재생하며 잠금화면에서도 녹음한다',async({page})=>{
+test('내 녹음 재생은 녹음 시작 시 정지되고 잠금화면에서도 녹음 상태를 유지한다',async({page})=>{
   await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal'});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
@@ -609,9 +643,12 @@ test('업로드한 반주를 내 녹음에서 재생하며 잠금화면에서도
   const recorder=page.locator('#recordToggle');
   await recorder.click();
   await expect(recorder).toHaveClass(/on/);
-  await expect(backingPlay).toHaveClass(/playing/);
+  await expect(backingPlay).not.toHaveClass(/playing/);
   expect(await page.evaluate(()=>window.__micHarness.recorderStream===window.__micHarness.processedStream)).toBeTruthy();
   expect(await page.evaluate(()=>window.__testAudioSession.type)).toBe('play-and-record');
+  await backingPlay.click();
+  await expect(backingPlay).not.toHaveClass(/playing/);
+  await expect(page.locator('#recordMessage')).toHaveText('녹음을 정지한 뒤 내 녹음을 재생해 주세요');
 
   await page.evaluate(()=>{
     Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
@@ -619,7 +656,7 @@ test('업로드한 반주를 내 녹음에서 재생하며 잠금화면에서도
   });
   await page.waitForTimeout(350);
   await expect(recorder).toHaveClass(/on/);
-  await expect(backingPlay).toHaveClass(/playing/);
+  await expect(backingPlay).not.toHaveClass(/playing/);
   expect(await page.evaluate(()=>window.__micHarness.mediaRecorder.state)).toBe('recording');
 
   await page.evaluate(()=>{
