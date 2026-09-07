@@ -18,6 +18,7 @@ let __backgroundStreamDestination = null;
 let __backgroundStreamCtx = null;
 let __backgroundUsesStream = false;
 let __backgroundMediaActionMode = '';
+let __audioSessionMode = '';
 
 /* 실제 iPhone 잠금 화면의 원격 명령은 데스크톱 모의 테스트로 재현할 수 없다.
    오디오나 계정 정보 없이 명령 도착 여부와 엔진 상태만 기기 안에 짧게 남겨,
@@ -99,7 +100,12 @@ window.OliveAudioDiagnostics=Object.freeze({
    playback : 잠금 화면에서도 재생할 메트로놈·잼과 녹음 파일에 쓴다.
    play-and-record : 마이크도 같이 쓴다. 튜너나 녹음을 켤 때 이쪽으로 바꾼다. */
 function setAudioSession(mode){
-  try{ if(navigator.audioSession) navigator.audioSession.type = mode; }catch(e){}
+  if(__audioSessionMode===mode) return;
+  try{
+    if(navigator.audioSession) navigator.audioSession.type = mode;
+    __audioSessionMode=mode;
+    recordAudioDiagnostic('audio-session:'+mode);
+  }catch(e){}
 }
 
 /* 앱의 마스터 출력 앞에 한 번만 두는 라우터다. 평소에는 스피커로 바로 보내고,
@@ -593,9 +599,13 @@ function createCtx(mode='ambient'){
     }
     if(__backgroundMediaPaused &&
        (ctx.state==='interrupted' || ctx.state==='suspended')) return;
-    if((ctx.state==='interrupted' || ctx.state==='suspended') &&
-       __ctxMode==='playback' && hasBackgroundTransportPlaying()){
-      resumeCtx(ctx).catch(()=>{});
+    if((ctx.state==='interrupted' || ctx.state==='suspended' || ctx.state==='closed') &&
+       __ctxMode==='playback' &&
+       (hasBackgroundTransportPlaying() || hasHiddenSafeTransportPlaying())){
+      // 네이티브 오디오 요소는 컨텍스트가 쉬어도 잠금 재생을 이어갈 수 있다.
+      // Web Audio 경로는 같은 컨텍스트의 재개만 시도하고, 실패해도 재생 상태를
+      // 정리하지 않아 잠금 자체가 정지 버튼처럼 동작하지 않게 한다.
+      if(ctx.state!=='closed') resumeCtx(ctx).catch(()=>{});
       return;
     }
     if(ctx.state==='interrupted' || ctx.state==='closed' || ctx.state==='suspended'){
@@ -882,6 +892,7 @@ function setTabSounding(tab,on,source){
   if(btn) btn.classList.toggle('sounding',__sounding[tab].size>0);
   keepAwake(anySounding());
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+  const hiddenSafe=hasHiddenSafeTransportPlaying();
   if(hasBackgroundTransportPlaying()){
     if(!recording){
       setAudioSession('playback');
@@ -891,8 +902,9 @@ function setTabSounding(tab,on,source){
   }else{
     stopBackgroundMedia();
     if(!recording){
-      setAudioSession('ambient');
-      if(audioCtx && audioCtx.state!=='closed') __ctxMode='ambient';
+      const mode=hiddenSafe?'playback':'ambient';
+      setAudioSession(mode);
+      if(audioCtx && audioCtx.state!=='closed') __ctxMode=mode;
     }
   }
   if(!anySounding() && !recording){

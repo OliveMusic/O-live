@@ -85,6 +85,9 @@ assert.match(index,/html\.skip-startup \.startup-splash\{display:none;\}/);
 assert.match(index,/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?\.startup-splash/);
 
 assert.match(index,/function ensureCtx\(mode='ambient', forceFresh=false\)/);
+assert.match(index,/if\(__audioSessionMode===mode\) return/);
+assert.match(index,/const mode=hiddenSafe\?'playback':'ambient'/);
+assert.match(index,/hasBackgroundTransportPlaying\(\) \|\| hasHiddenSafeTransportPlaying\(\)/);
 assert.match(index,/await withTimeout\(resumeCtx\(ctx\),1400\)/);
 assert.match(index,/const latencyHint='interactive'/);
 assert.doesNotMatch(index,/audioCtx\.resume\(\)\.catch\(\(\)=>\{\}\)/);

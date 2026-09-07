@@ -97,6 +97,7 @@
   let cloudPlayToken=0;
   let cloudProgressFrame=0;
   let scrubbingRecordingId='';
+  let recordingInterruptedWhileHidden=false;
   const cloudBlobs=new Map();
   const waveformCache=new Map();
   const waveformLoads=new Map();
@@ -108,6 +109,11 @@
   function makeCloudFallbackAudio(){
     const audio=new Audio();
     audio.addEventListener('ended',finishCloudPlayback);
+    // iOS는 src가 준비되는 동안 playbackRate를 기본값으로 되돌리는 경우가 있다.
+    // 메타데이터와 실제 재생 시작 시점에도 현재 슬라이더 값을 다시 확정한다.
+    audio.addEventListener('loadedmetadata',()=>syncNativePlaybackSettings(audio));
+    audio.addEventListener('canplay',()=>syncNativePlaybackSettings(audio));
+    audio.addEventListener('playing',()=>syncNativePlaybackSettings(audio));
     return audio;
   }
 
@@ -167,17 +173,22 @@
   function isNativePlaybackMode(mode=cloudPlaybackMode){
     return mode==='native-connected' || mode==='native-direct';
   }
-  function applyNativePlaybackSettings(row){
+  function applyNativePlaybackSettings(row,audio=cloudFallbackAudio){
     const rate=rowPlaybackRate(row);
-    try{ cloudFallbackAudio.defaultPlaybackRate=rate; }catch(error){}
-    try{ cloudFallbackAudio.playbackRate=rate; }catch(error){}
-    try{ cloudFallbackAudio.preservesPitch=true; }catch(error){}
-    try{ cloudFallbackAudio.webkitPreservesPitch=true; }catch(error){}
+    try{ audio.defaultPlaybackRate=rate; }catch(error){}
+    try{ audio.playbackRate=rate; }catch(error){}
+    try{ audio.preservesPitch=true; }catch(error){}
+    try{ audio.webkitPreservesPitch=true; }catch(error){}
     const region=loopRegionFor(row);
     try{
-      cloudFallbackAudio.loop=Boolean(region.enabled &&
+      audio.loop=Boolean(region.enabled &&
         (region.a===null || region.b===null || region.b-region.a<MIN_LOOP_SECONDS));
     }catch(error){}
+  }
+  function syncNativePlaybackSettings(audio){
+    if(audio!==cloudFallbackAudio || !cloudMediaId) return;
+    const row=rows.find(item=>item.id===cloudMediaId);
+    if(row) applyNativePlaybackSettings(row,audio);
   }
   function normalizeWaveform(values){
     if(!Array.isArray(values) || !values.length || values.length>WAVEFORM_MAX_POINTS) return [];
@@ -518,10 +529,12 @@
     if(!recording || !stream || document.visibilityState!=='visible') return;
     updateTimer();
     try{
-      let ctx=audioCtx;
-      if(!ctx || ctx.state==='closed' || ctx.state==='interrupted'){
-        ctx=await ensureRecordingCtx(anySounding());
-      }else if(ctx.state!=='running'){
+      const ctx=audioCtx;
+      // MediaRecorder는 이 컨텍스트의 출력 스트림을 계속 기록 중이다.
+      // 잠금 뒤 새 컨텍스트로 교체하면 기존 파일이 잠근 시점에서 끝나므로,
+      // 반드시 같은 컨텍스트만 재개한다.
+      if(!ctx || ctx.state==='closed') throw new Error('RecordingContextClosed');
+      if(ctx.state!=='running'){
         await resumeCtx(ctx);
       }
       if(!recording || !stream || ctx!==audioCtx || ctx.state!=='running') return;
@@ -531,8 +544,16 @@
         cancelAnimationFrame(levelFrame);
         levelFrame=requestAnimationFrame(drawLevel);
       }
+      if(recordingInterruptedWhileHidden){
+        setMessage('화면이 잠긴 동안 iPhone이 마이크 입력을 중단했을 수 있습니다',true);
+        recordingInterruptedWhileHidden=false;
+      }
     }catch(e){
       // 입력 막대 복구 실패가 진행 중인 MediaRecorder를 종료시키지는 않는다.
+      if(recordingInterruptedWhileHidden){
+        setMessage('잠금 중 중단된 마이크를 iPhone이 복구하지 못했습니다',true);
+        recordingInterruptedWhileHidden=false;
+      }
     }
   }
   async function startRecording(){
@@ -569,6 +590,7 @@
       waveformLevels=[];
       recordingPeak=0;
       lastWaveformCaptureAt=0;
+      recordingInterruptedWhileHidden=false;
       recorder.addEventListener('dataavailable',event=>{
         if(event.data && event.data.size) chunks.push(event.data);
       });
@@ -578,6 +600,7 @@
       recorder.addEventListener('stop',finalizeDraft,{once:true});
       stream.getAudioTracks().forEach(track=>{
         track.addEventListener('mute',()=>{
+          if(recording) recordingInterruptedWhileHidden=true;
           if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-track:muted');
         });
         track.addEventListener('unmute',()=>{
@@ -600,7 +623,7 @@
       setTabSounding('trainer',true,'recorder');
       recordState.textContent='녹음 중';
       recordStateDot.hidden=false;
-      recordHint.textContent='화면이 자동으로 꺼지지 않게 유지합니다 · 튜너 또는 앱 종료 시 중지됩니다';
+      recordHint.textContent='자동 화면 꺼짐은 방지합니다 · 녹음 중에는 직접 잠그지 마세요';
       setButtonMode('recording');
     }catch(error){
       if(token!==startToken) return;
@@ -978,7 +1001,7 @@
     if(cloudFallbackAudio.readyState>=1) apply();
     else cloudFallbackAudio.addEventListener('loadedmetadata',apply,{once:true});
   }
-  function startNativePlayback(playbackUrl,row,token,offset){
+  function startNativePlayback(playbackUrl,row,token,offset,refreshList=true){
     resetCloudMediaElement();
     cloudFallbackAudio.src=playbackUrl;
     applyNativePlaybackSettings(row);
@@ -987,8 +1010,23 @@
     return Promise.resolve(cloudFallbackAudio.play()).then(()=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
       setTabSounding('trainer',true,'recording-playback');
-      setMessage(''); renderList(); startCloudProgress();
+      setMessage('');
+      if(refreshList) renderList();
+      startCloudProgress();
     });
+  }
+  function switchActivePlaybackToDirect(row){
+    if(cloudPlayingId!==row.id) return false;
+    const cached=cloudBlobs.get(row.id);
+    const playbackUrl=cached ? cached.url : String(row.playback_url||'');
+    if(!playbackUrl) return false;
+    const position=currentCloudPosition();
+    const token=++cloudPlayToken;
+    stopCloudProgress();
+    releaseCloudSource();
+    startNativePlayback(playbackUrl,row,token,position,false)
+      .catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token));
+    return true;
   }
   function playRow(row,requestedOffset){
     const seeking=Number.isFinite(requestedOffset);
@@ -1248,19 +1286,53 @@
     if(cloudPlayingId===row.id){
       if(isNativePlaybackMode()){
         applyNativePlaybackSettings(row);
-        const needsDirect=rate!==1;
-        const routeMatches=needsDirect ? cloudPlaybackMode==='native-direct'
-          : cloudPlaybackMode==='native-connected';
-        if(!commit || routeMatches) return;
+        // 연결형 Web Audio 경로는 일부 iPhone에서 playbackRate를 무시한다.
+        // 슬라이더가 처음 1배속을 벗어나는 즉시 네이티브 오디오로 갈아타야,
+        // iOS가 change 이벤트를 생략해도 실제 속도가 바뀐다.
+        if(cloudPlaybackMode==='native-connected' && rate!==1 &&
+           switchActivePlaybackToDirect(row)) return;
+        return;
       }
-      if(!commit) return;
-      const position=currentCloudPosition();
-      stopCloudPlayback(false);
-      playbackPositions.set(row.id,position);
-      playRow(row,position);
+      if(cloudPlaybackMode==='decoded' && switchActivePlaybackToDirect(row)) return;
       return;
     }
     if(commit) renderList();
+  }
+  function bindPlaybackRateReset(slider,row){
+    let pointerId=null;
+    let startX=0;
+    let moved=false;
+    let lastTapAt=0;
+    let lastTapX=0;
+    let lastResetAt=0;
+    const reset=event=>{
+      const now=performance.now();
+      if(now-lastResetAt<120) return;
+      lastResetAt=now;
+      if(event) event.preventDefault();
+      slider.value='1';
+      slider.setAttribute('aria-valuetext',formatPlaybackRate(1));
+      setPlaybackRate(row,1,true);
+    };
+    slider.addEventListener('pointerdown',event=>{
+      if(event.isPrimary===false) return;
+      pointerId=event.pointerId;
+      startX=event.clientX;
+      moved=false;
+    });
+    slider.addEventListener('pointermove',event=>{
+      if(event.pointerId===pointerId && Math.abs(event.clientX-startX)>5) moved=true;
+    });
+    slider.addEventListener('pointerup',event=>{
+      if(event.pointerId!==pointerId) return;
+      pointerId=null;
+      if(moved){ lastTapAt=0; return; }
+      const now=performance.now();
+      if(now-lastTapAt<340 && Math.abs(event.clientX-lastTapX)<28) reset(event);
+      else{ lastTapAt=now; lastTapX=event.clientX; }
+    });
+    slider.addEventListener('pointercancel',()=>{ pointerId=null; lastTapAt=0; });
+    slider.addEventListener('dblclick',reset);
   }
   function createExpandedPlayer(row){
     const player=document.createElement('div');
@@ -1342,6 +1414,7 @@
       setPlaybackRate(row,rateSlider.value,false);
     });
     rateSlider.addEventListener('change',()=>setPlaybackRate(row,rateSlider.value,true));
+    bindPlaybackRateReset(rateSlider,row);
     rateLabel.append(rateText,rateSlider,rateValue); tools.append(loopTools,rateLabel);
     detail.append(waveform,times,tools); player.append(play,detail);
     requestAnimationFrame(()=>updatePlayerProgress(row.id,
@@ -1596,7 +1669,11 @@
   registerTransport({
     isPlaying:()=>draftIsPlaying() || Boolean(cloudPlayingId),
     stop:()=>{ pauseDraftPlayback(false); stopCloudPlayback(); },
-    keepWhenHidden:()=>recording || startPending,
+    // 저장 녹음과 반주는 잠금 상태에서도 이어지며, 실제 녹음과도 동시에 쓸 수 있다.
+    keepWhenHidden:true,
+  });
+  document.addEventListener('visibilitychange',()=>{
+    if(recording && document.visibilityState==='hidden') recordingInterruptedWhileHidden=true;
   });
   function stopPlaybackForOtherTool(){
     pauseDraftPlayback(false);

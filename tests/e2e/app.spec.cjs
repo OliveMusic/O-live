@@ -325,7 +325,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.32');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.33');
 }
 
 test.afterEach(async({page})=>{
@@ -351,7 +351,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=162');
+  expect(workerUrl).toContain('service-worker.js?v=163');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -368,7 +368,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.32',build:162});
+  expect(payload.release).toEqual({version:'1.3.33',build:163});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -474,6 +474,19 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     preservesPitch:window.__lastPlayedMedia.preservesPitch,
     webkitPreservesPitch:window.__lastPlayedMedia.webkitPreservesPitch,
   }))).toMatchObject({playbackRate:.75,preservesPitch:true,webkitPreservesPitch:true});
+  await page.locator('.record-rate-control input[type="range"]').dblclick();
+  await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('1');
+  await expect(page.locator('.record-rate-value')).toHaveText('1×');
+  await expect.poll(()=>page.evaluate(()=>window.__lastPlayedMedia.playbackRate)).toBe(1);
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
   await page.locator('.record-player-play').click();
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
 
