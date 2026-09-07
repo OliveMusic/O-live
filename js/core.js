@@ -116,8 +116,8 @@ function makeSplitDropdown(mount, items, selected, onSelect){
   return { set(i){ cur=i; render(); }, get:()=>cur, close };
 }
 
-function playTone(freq, duration=0.6, when=0, type='sine', gainVal=0.43){
-  const ctx = getCtx();
+function playTone(freq, duration=0.6, when=0, type='sine', gainVal=0.43, preparedCtx){
+  const ctx = preparedCtx || getCtx();
   const t0 = ctx.currentTime + Math.max(when,0);
   const osc = ctx.createOscillator();
   osc.type = type;

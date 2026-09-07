@@ -692,21 +692,28 @@ function ensureRecordingCtx(preservePlayback=false){
   });
 }
 
-function ensurePlaybackCtx(){
+/* 청음·리듬처럼 짧은 연습음을 새로 시작할 때, 잠금화면에서 멈춰 둔
+   재생기는 더 이상 출력 대상이 아니다. 재생 중인 메트로놈·잼은 유지하지만
+   일시정지된 백그라운드 재생과 저장된 녹음 재생 세션은 먼저 정리한다. */
+function prepareForegroundPlaybackMode(){
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
-  const background=hasBackgroundTransportPlaying();
-  // 녹음 파일 재생은 iPhone의 playback 세션을 사용한다. 메트로놈·잼처럼
-  // ambient 세션으로 돌아가는 도구가 시작되면 파일 재생 상태도 먼저 정리해야
-  // 닫힌 오디오 연결 위에 재생 버튼만 남지 않는다. 실제 녹음은 건드리지 않는다.
-  if(!recording && __ctxMode==='playback' && window.OliveRecorder &&
+  if(__backgroundMediaPaused && hasBackgroundTransportPlaying()){
+    recordAudioDiagnostic('foreground:replace-paused-background');
+    stopBackgroundTransports();
+  }
+  if(!recording && window.OliveRecorder &&
      typeof window.OliveRecorder.stopPlayback==='function'){
     window.OliveRecorder.stopPlayback();
-    if(audioCtx && audioCtx.state!=='closed'){
-      setAudioSession(background?'playback':'ambient');
-      __ctxMode=background?'playback':'ambient';
-    }
   }
-  return ensureCtx(recording?'play-and-record':background?'playback':'ambient');
+  return recording?'play-and-record':hasBackgroundTransportPlaying()?'playback':'ambient';
+}
+
+function beginForegroundPlaybackFromGesture(){
+  return beginPlaybackFromGesture(prepareForegroundPlaybackMode());
+}
+
+function ensurePlaybackCtx(){
+  return ensureCtx(prepareForegroundPlaybackMode());
 }
 
 /* 메트로놈과 잼은 잠금 화면에서도 이어져야 한다. 녹음 중이면 공유 중인
@@ -728,9 +735,9 @@ function ensureBackgroundPlaybackCtx(label){
 
 /* 파일 재생 탭에서 동기적으로 호출한다. resume()을 사용자 제스처 안에서
    바로 시작하고, 파일 다운로드와 디코딩은 활성화된 컨텍스트에서 이어간다. */
-function beginPlaybackFromGesture(){
+function beginPlaybackFromGesture(preferredMode='playback'){
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
-  const mode=recording?'play-and-record':'playback';
+  const mode=recording?'play-and-record':preferredMode;
   const unusable=!audioCtx || audioCtx.state==='closed' || audioCtx.state==='interrupted';
   if(unusable){
     if(audioCtx) releaseCtx();

@@ -164,9 +164,10 @@ async function preparePage(page,{
       class FakeNode{
         connect(next){
           if(this.gain && this.gain.value===0) harness.zeroGainConnections++;
+          this.lastConnection=next||null;
           return next||this;
         }
-        disconnect(){}
+        disconnect(){ this.lastConnection=null; }
       }
       class FakeAudioContext{
         constructor(){
@@ -239,7 +240,11 @@ async function preparePage(page,{
         createOscillator(){
           const node=new FakeNode();
           node.type='sine';
-          node.frequency={value:0};
+          node.frequency={
+            value:0,
+            setValueAtTime(value){ this.value=value; },
+            exponentialRampToValueAtTime(value){ this.value=value; },
+          };
           node.start=when=>{ harness.scheduledStarts.push(Number(when)||0); };
           node.stop=()=>{};
           return node;
@@ -360,7 +365,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.37');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.38');
 }
 
 test.afterEach(async({page})=>{
@@ -386,7 +391,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=167');
+  expect(workerUrl).toContain('service-worker.js?v=168');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -403,7 +408,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.37',build:167});
+  expect(payload.release).toEqual({version:'1.3.38',build:168});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -521,7 +526,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=167',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=168',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -699,7 +704,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=167');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=168');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -962,6 +967,61 @@ test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다
   await expect(metro).not.toHaveClass(/running|starting|media-paused/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).not.toHaveClass(/sounding/);
   await setVisibility('visible');
+});
+
+test('멈춰 둔 메트로놈 뒤 리듬 트레이너가 일반 출력으로 재생된다',async({page})=>{
+  await preparePage(page,{microphone:'controls'});
+  const metro=page.locator('#metroStart');
+  await metro.click();
+  await expect(metro).toHaveClass(/running/);
+  await page.evaluate(()=>pauseBackgroundPlayback());
+  await expect(metro).toHaveClass(/media-paused/);
+
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'리듬'}).click();
+  await page.locator('#rhyPlay').click();
+
+  await expect(page.locator('#rhyPlay')).toHaveClass(/on/);
+  await expect(metro).not.toHaveClass(/running|media-paused/);
+  await expect(page.locator('audio[data-olive-background="true"]')).toHaveCount(0);
+  await expect.poll(()=>page.evaluate(()=>window.__testAudioSession.type)).toBe('ambient');
+  expect(await page.evaluate(()=>(
+    Boolean(__appOutput && audioCtx && __appOutput.lastConnection===audioCtx.destination)
+  ))).toBeTruthy();
+  await page.locator('#rhyPlay').click();
+});
+
+test('멈춰 둔 내 녹음 뒤 청음 트레이너가 일반 출력으로 재생된다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',microphone:'playback',
+    recordings:[{
+      id:'recording-before-ear',title:'무제',
+      object_path:'recording-browser-user/recording-before-ear.m4a',
+      duration_ms:69000,byte_size:1000,mime_type:'audio/mp4',waveform:[30,55,75,40],
+      playback_gain:3.25,
+      recorded_at:'2026-09-06T09:00:00.000Z',created_at:'2026-09-06T09:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await page.locator('.record-row-open').click();
+  await page.locator('.record-player-play').click();
+  await page.evaluate(()=>window.__resolveRecordingDownload());
+  await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
+  await page.evaluate(()=>window.__recordingTransportMedia.dispatchEvent(new Event('pause')));
+  await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
+
+  const tonesBefore=await page.evaluate(()=>window.__micHarness.scheduledStarts.length);
+  await page.locator('#trainerSeg .seg-btn',{hasText:'청음'}).click();
+  await page.locator('#earPlayBtn').click();
+
+  await expect.poll(()=>page.evaluate(()=>window.__micHarness.scheduledStarts.length))
+    .toBeGreaterThanOrEqual(tonesBefore+2);
+  await expect.poll(()=>page.evaluate(()=>window.__testAudioSession.type)).toBe('ambient');
+  await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('none');
+  expect(await page.evaluate(()=>(
+    Boolean(__appOutput && audioCtx && __appOutput.lastConnection===audioCtx.destination)
+  ))).toBeTruthy();
 });
 
 test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async({page})=>{
