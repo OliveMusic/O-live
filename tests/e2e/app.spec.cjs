@@ -18,17 +18,22 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
     catch(error){}
     window.__testAudioSession=audioSession;
     const mediaActions={};
+    const mediaActionRegistrations={};
     const mediaSession={
       metadata:null,
       playbackState:'none',
       setActionHandler(action,handler){
-        if(handler) mediaActions[action]=handler;
+        if(handler){
+          mediaActions[action]=handler;
+          mediaActionRegistrations[action]=(mediaActionRegistrations[action]||0)+1;
+        }
         else delete mediaActions[action];
       },
     };
     try{ Object.defineProperty(navigator,'mediaSession',{configurable:true,value:mediaSession}); }
     catch(error){}
     window.__testMediaActions=mediaActions;
+    window.__testMediaActionRegistrations=mediaActionRegistrations;
     window.__testMediaSession=mediaSession;
     if(storedPreferences){
       localStorage.setItem('olive-preferences-v1',JSON.stringify(storedPreferences));
@@ -275,7 +280,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.20');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.21');
 }
 
 test.afterEach(async({page})=>{
@@ -301,7 +306,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=150');
+  expect(workerUrl).toContain('service-worker.js?v=151');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -662,6 +667,25 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
   await expect(page.locator('#bpmNum')).toHaveText('95');
   await page.evaluate(()=>window.__testMediaActions.seekforward({}));
   await expect(page.locator('#bpmNum')).toHaveText('105');
+
+  const registrationsBeforeResume=await page.evaluate(()=>(
+    window.__testMediaActionRegistrations.seekforward
+  ));
+  await page.evaluate(()=>window.__testMediaActions.pause());
+  await expect(metro).toHaveClass(/media-paused/);
+  // iOS가 pause→play 전환 중 사이드 명령을 놓친 상태를 재현한다.
+  await page.evaluate(()=>{
+    delete window.__testMediaActions.seekforward;
+    window.__testMediaActions.play();
+  });
+  await expect(metro).toHaveClass(/running/);
+  await expect.poll(()=>page.evaluate(()=>(
+    window.__testMediaActionRegistrations.seekforward
+  ))).toBeGreaterThan(registrationsBeforeResume);
+  await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.seekforward))
+    .toBe('function');
+  await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
+  await expect(page.locator('#bpmNum')).toHaveText('115');
 
   await page.locator('.tab-btn[data-tab="jam"]').click();
   const jam=page.locator('#jamStart');

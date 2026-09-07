@@ -107,6 +107,45 @@ function silentWavUrl(){
   return __backgroundAudioUrl;
 }
 
+/* iOS는 실제 <audio>가 일시정지됐다가 다시 재생될 때
+   사이드 원격 명령을 놓치기도 한다. 초기 연결과 재생 복구가
+   동일한 등록 경로를 쓰게 해 다시 잠금하지 않아도 버튼이 살아난다. */
+function configureBackgroundMediaSession(label,usesStream=__backgroundUsesStream){
+  try{
+    if(!navigator.mediaSession) return;
+    updateBackgroundMediaMetadata(label);
+    navigator.mediaSession.playbackState=__backgroundMediaPaused?'paused':'playing';
+    if(typeof navigator.mediaSession.setActionHandler!=='function') return;
+    if(usesStream){
+      // 실제 소리가 <audio>를 통과하므로 iOS의 기본 원격 제어가 가장 빠르다.
+      // 일시정지는 시스템에 맡기고, 잠든 오디오를 깨우도록 재생만 보강한다.
+      try{ navigator.mediaSession.setActionHandler('play',()=>{
+        resumeBackgroundPlayback().catch(()=>{});
+      }); }catch(e){}
+      for(const action of ['pause','stop']){
+        try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
+      }
+    }else{
+      try{ navigator.mediaSession.setActionHandler('play',()=>{
+        resumeBackgroundPlayback().catch(()=>{});
+      }); }catch(e){}
+      try{ navigator.mediaSession.setActionHandler('pause',pauseBackgroundPlayback); }catch(e){}
+      try{ navigator.mediaSession.setActionHandler('stop',stopBackgroundTransports); }catch(e){}
+    }
+    // iOS가 원형 건너뛰기 버튼에 표시한 초 단위 값을
+    // 그대로 BPM 변화량으로 쓴다. 값을 안 보내는 기기에서는 10을 쓴다.
+    try{ navigator.mediaSession.setActionHandler('seekbackward',details=>{
+      adjustBackgroundTempo(-1,details);
+    }); }catch(e){}
+    try{ navigator.mediaSession.setActionHandler('seekforward',details=>{
+      adjustBackgroundTempo(1,details);
+    }); }catch(e){}
+    for(const action of ['previoustrack','nexttrack']){
+      try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
+    }
+  }catch(e){}
+}
+
 async function startBackgroundMedia(label,preparedCtx){
   if(typeof Audio!=='function' || typeof URL==='undefined' || typeof Blob==='undefined') return;
   if(!__backgroundAudio){
@@ -150,42 +189,7 @@ async function startBackgroundMedia(label,preparedCtx){
      !__backgroundMediaPaused){
     pauseBackgroundPlayback();
   }
-  try{
-    if(navigator.mediaSession){
-      updateBackgroundMediaMetadata(label);
-      navigator.mediaSession.playbackState=__backgroundMediaPaused?'paused':'playing';
-      if(typeof navigator.mediaSession.setActionHandler==='function'){
-        if(usesStream){
-          // 실제 소리가 <audio>를 통과하므로 iOS의 기본 원격 제어가 가장 빠르다.
-          // 일시정지는 시스템이 미디어 요소를 직접 멈추게 두고, 오래 멈춰 웹 오디오가
-          // 잠든 경우를 깨울 수 있도록 재생 명령만 앱에도 전달한다.
-          try{ navigator.mediaSession.setActionHandler('play',()=>{
-            resumeBackgroundPlayback().catch(()=>{});
-          }); }catch(e){}
-          for(const action of ['pause','stop']){
-            try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
-          }
-        }else{
-          try{ navigator.mediaSession.setActionHandler('play',()=>{
-            resumeBackgroundPlayback().catch(()=>{});
-          }); }catch(e){}
-          try{ navigator.mediaSession.setActionHandler('pause',pauseBackgroundPlayback); }catch(e){}
-          try{ navigator.mediaSession.setActionHandler('stop',stopBackgroundTransports); }catch(e){}
-        }
-        // iOS가 원형 건너뛰기 버튼에 표시한 초 단위 값을
-        // 그대로 BPM 변화량으로 쓴다. 값을 안 보내는 기기에서는 10을 쓴다.
-        try{ navigator.mediaSession.setActionHandler('seekbackward',details=>{
-          adjustBackgroundTempo(-1,details);
-        }); }catch(e){}
-        try{ navigator.mediaSession.setActionHandler('seekforward',details=>{
-          adjustBackgroundTempo(1,details);
-        }); }catch(e){}
-        for(const action of ['previoustrack','nexttrack']){
-          try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
-        }
-      }
-    }
-  }catch(e){}
+  configureBackgroundMediaSession(label,usesStream);
   if(__backgroundMediaPaused) return;
   try{
     const result=__backgroundAudio.play();
@@ -294,8 +298,9 @@ function resumeBackgroundPlayback(){
       if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
       __backgroundMediaPaused=false;
       __backgroundMediaArmed=!audio.paused;
-      try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='playing'; }catch(e){}
       setBackgroundTransportsPaused(false);
+      // iOS가 pause→play 전환 중 놓친 BPM 버튼을 즉시 재등록한다.
+      configureBackgroundMediaSession(activeBackgroundLabel(),__backgroundUsesStream);
     }catch(error){
       if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
       // 한 번의 늦은 복구로 기능 자체를 종료하지 않는다. 일시정지 상태를 보존해

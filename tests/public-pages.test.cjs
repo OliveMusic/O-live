@@ -98,6 +98,7 @@ assert.match(index,/setActionHandler\('pause',pauseBackgroundPlayback\)/);
 assert.match(index,/setActionHandler\('stop',stopBackgroundTransports\)/);
 assert.match(index,/setActionHandler\('seekbackward',[\s\S]*?adjustBackgroundTempo\(-1,details\)/);
 assert.match(index,/setActionHandler\('seekforward',[\s\S]*?adjustBackgroundTempo\(1,details\)/);
+assert.match(index,/setBackgroundTransportsPaused\(false\);[\s\S]*?configureBackgroundMediaSession\(activeBackgroundLabel\(\),__backgroundUsesStream\)/);
 assert.match(index,/details && details\.seekOffset/);
 assert.match(index,/Number\.isFinite\(requested\) && requested>0 \? Math\.max\(1,Math\.round\(requested\)\) : 10/);
 assert.match(index,/getTempo:\(\)=>bpm,[\s\S]*?adjustTempo,/);
