@@ -200,9 +200,10 @@
   }
 
   function preferPersistentNativePlayback(){
-    const agent=String(navigator.userAgent||'');
-    return /iP(?:hone|ad|od)/i.test(agent) ||
-      (navigator.platform==='MacIntel' && Number(navigator.maxTouchPoints)>1);
+    // iOS 26 홈 화면 앱에서는 직접 재생하는 HTMLAudioElement가 play() 성공과
+    // 재생 시간 증가를 보고하면서도 실제 출력은 무음이 되는 회귀가 있다.
+    // 기기에서 검증됐던 Web Audio 연결 경로를 사용해 재생 자체를 우선 보장한다.
+    return false;
   }
 
   function makeId(){
@@ -316,14 +317,15 @@
   }
   function resumeCloudPlaybackFromMediaSession(){
     const row=rows.find(item=>item.id===cloudMediaId);
-    if(!row || !cloudMediaUsesPersistentNative) return;
+    if(!row || (!cloudMediaUsesPersistentNative && !cloudMediaSource)) return;
     const token=++cloudPlayToken;
     cloudPlayingId=row.id;
-    cloudPlaybackMode='native-direct';
+    cloudPlaybackMode=cloudMediaUsesPersistentNative?'native-direct':'native-connected';
     setAudioSession('playback');
-    applyNativePlaybackSettings(row,cloudNativeAudio);
-    prepareNativeOffset(Number(playbackPositions.get(row.id))||0,cloudNativeAudio);
-    Promise.resolve(cloudNativeAudio.play()).then(()=>{
+    const audio=activeCloudAudio();
+    applyNativePlaybackSettings(row,audio);
+    prepareNativeOffset(Number(playbackPositions.get(row.id))||0,audio);
+    Promise.resolve(audio.play()).then(()=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
       setTabSounding('trainer',true,'recording-playback');
       configureCloudMediaSession(row);
@@ -334,7 +336,8 @@
   }
   function configureCloudMediaSession(row){
     try{
-      if(!navigator.mediaSession || !row || !cloudMediaUsesPersistentNative) return;
+      if(!navigator.mediaSession || !row ||
+         (!cloudMediaUsesPersistentNative && !cloudMediaSource)) return;
       claimExternalMediaSession('recording-playback');
       const installActions=!cloudMediaSessionActive;
       cloudMediaSessionActive=true;
@@ -1011,7 +1014,7 @@
     cloudPlaybackMode=isNativePlaybackMode()?'native-paused':'decoded-paused';
     cloudPlayingId='';
     setTabSounding('trainer',false,'recording-playback');
-    if(cloudMediaUsesPersistentNative){
+    if(cloudMediaUsesPersistentNative || cloudMediaSource){
       const row=rows.find(item=>item.id===id);
       if(row) configureCloudMediaSession(row);
     }
@@ -1025,7 +1028,7 @@
     cloudPlayingId='';
     cloudPlaybackMode=isNativePlaybackMode()?'native-paused':'decoded-paused';
     setTabSounding('trainer',false,'recording-playback');
-    if(cloudMediaUsesPersistentNative){
+    if(cloudMediaUsesPersistentNative || cloudMediaSource){
       const row=rows.find(item=>item.id===id);
       if(row) configureCloudMediaSession(row);
     }
@@ -1194,6 +1197,7 @@
       ]).then(()=>{
         if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
         setTabSounding('trainer',true,'recording-playback');
+        configureCloudMediaSession(row);
         setMessage(''); renderList(); startCloudProgress();
       });
     }catch(error){
@@ -1354,10 +1358,8 @@
     // 경로를 유지하고, iPhone은 속도·잠금화면 제어를 위해 네이티브 요소를 직접 쓴다.
     recordingBlob.catch(error=>console.warn('[O\'live recording cache fill]',error));
     const playbackUrl=cached ? cached.url : String(row.playback_url||'');
-    // WebKit은 MediaElementSource에 연결된 오디오의 playbackRate를 일부 버전에서
-    // 무시한다. iPhone에서는 처음부터 영속 네이티브 요소만 써서 속도와 음높이 보존,
-    // 잠금화면 미디어 세션이 하나의 재생 상태를 공유하게 한다.
-    const adjustedRate=rowPlaybackRate(row)!==1;
+    // iPhone 홈 화면 앱에서는 직접 재생 경로가 무음이 될 수 있으므로 배속 값과
+    // 관계없이, 실제 기기에서 검증됐던 Web Audio 연결 경로를 우선 사용한다.
     const normalized=usePersistentNative
       ? (playbackUrl
         ? startPersistentNativePlayback(playbackUrl,row,token,offset)
@@ -1367,8 +1369,6 @@
           if(!entry) throw new Error('Recording blob unavailable');
           return startPersistentNativePlayback(entry.url,row,token,offset);
         }))
-      : adjustedRate && playbackUrl
-      ? startNativePlayback(playbackUrl,row,token,offset)
       : playbackUrl
         ? startNormalizedNative(playbackUrl,playback,row,token,offset)
         : playNormalizedBlob(playback,recordingBlob,row,token,offset);
@@ -1394,8 +1394,6 @@
           : playDecodedBlob(playback,recordingBlob,row,token,offset);
         stableFallback.catch(fallbackError=>
           handlePlaybackFailure(playbackStageError('audio',fallbackError),row,token));
-      }else if(rowPlaybackRate(row)!==1 && playbackUrl){
-        startNativePlayback(playbackUrl,row,token,offset).catch(decodedFallback);
       }else decodedFallback();
     });
     renderList();
@@ -1591,14 +1589,8 @@
       if(isNativePlaybackMode()){
         applyNativePlaybackSettings(row);
         if(cloudMediaUsesPersistentNative) updateCloudMediaSessionPosition(row);
-        // 연결형 Web Audio 경로는 일부 iPhone에서 playbackRate를 무시한다.
-        // 슬라이더가 처음 1배속을 벗어나는 즉시 네이티브 오디오로 갈아타야,
-        // iOS가 change 이벤트를 생략해도 실제 속도가 바뀐다.
-        if(cloudPlaybackMode==='native-connected' && rate!==1 &&
-           switchActivePlaybackToDirect(row)) return;
         return;
       }
-      if(cloudPlaybackMode==='decoded' && switchActivePlaybackToDirect(row)) return;
       return;
     }
     if(cloudMediaId===row.id && cloudMediaUsesPersistentNative){

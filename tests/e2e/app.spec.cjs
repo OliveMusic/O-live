@@ -333,7 +333,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.35');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.36');
 }
 
 test.afterEach(async({page})=>{
@@ -359,7 +359,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=165');
+  expect(workerUrl).toContain('service-worker.js?v=166');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -376,7 +376,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.35',build:165});
+  expect(payload.release).toEqual({version:'1.3.36',build:166});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -446,9 +446,9 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   expect(await page.evaluate(()=>Boolean(
     window.__lastPlayedMedia &&
-    window.__lastPlayedMedia.dataset.oliveRecordingPlayback==='true' &&
-    window.__lastPlayedMedia.isConnected
+    window.__lastPlayedMedia.dataset.oliveRecordingPlayback!=='true'
   ))).toBeTruthy();
+  expect(await page.evaluate(()=>Boolean(window.__micHarness.mediaElementGain))).toBeTruthy();
   expect(await page.evaluate(()=>window.__testAudioSession.type)).toBe('playback');
   expect(await page.evaluate(()=>({
     play:typeof window.__testMediaActions.play,
@@ -583,7 +583,7 @@ test('녹음 재생 중 메트로놈을 시작하면 녹음 버튼도 정지 상
   await expect(recordingPlay).toHaveAttribute('aria-label','무제 재생');
 });
 
-test('iPhone PWA 네이티브 재생이 멈추면 검증된 오디오 경로로 복구한다',async({page})=>{
+test('iPhone PWA는 무음이 되는 직접 재생기 대신 검증된 오디오 경로를 쓴다',async({page})=>{
   await preparePage(page,{
     cloudClient:'recordings',
     microphone:'playback-stalled',
@@ -602,7 +602,8 @@ test('iPhone PWA 네이티브 재생이 멈추면 검증된 오디오 경로로 
   await expect.poll(()=>page.evaluate(()=>({
     native:window.__lastPlayedMedia&&window.__lastPlayedMedia.dataset.oliveRecordingPlayback==='true',
     calls:window.__mediaPlayCalls||0,
-  })),{timeout:3000}).toEqual({native:false,calls:2});
+  })),{timeout:3000}).toEqual({native:false,calls:1});
+  expect(await page.evaluate(()=>Boolean(window.__micHarness.mediaElementGain))).toBeTruthy();
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   await expect(page.locator('#recordMessage')).not.toHaveClass(/error/);
 });

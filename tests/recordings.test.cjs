@@ -74,6 +74,7 @@ assert.doesNotMatch(recorder,/rms\*7/);
 assert.match(recorder,/MediaRecorder\.isTypeSupported/);
 assert.match(recorder,/function defaultTitle\(\)\{\s*return '무제';/);
 assert.match(recorder,/function replaceCloudNativeAudio\(\)/);
+assert.match(recorder,/function preferPersistentNativePlayback\(\)\{[\s\S]*?return false;/);
 assert.match(recorder,/function confirmPersistentNativeProgress\(/);
 assert.match(recorder,/const audio=resetCloudNativeElement\(true\)/);
 assert.doesNotMatch(recorder,/cloudNativeAudio\.removeAttribute\('src'\); cloudNativeAudio\.load\(\)/);
