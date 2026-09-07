@@ -387,6 +387,16 @@ function createCtx(mode='ambient'){
   audioCtx=ctx; __ctxMode=mode; __ctxResumePromise=null;
   ctx.addEventListener('statechange', ()=>{
     if(ctx!==audioCtx || !anySounding()) return;
+    const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+    if(recording &&
+       (ctx.state==='interrupted' || ctx.state==='closed' || ctx.state==='suspended')){
+      // 녹음 파일은 원본 마이크 스트림에서 계속 받는다. 잠금 중 화면용
+      // AudioContext가 쉬더라도 녹음 transport까지 함께 종료하지 않는다.
+      if(ctx.state!=='closed' && !__backgroundMediaPaused && hasBackgroundTransportPlaying()){
+        resumeCtx(ctx).catch(()=>{});
+      }
+      return;
+    }
     if(__backgroundMediaPaused &&
        (ctx.state==='interrupted' || ctx.state==='suspended')) return;
     if((ctx.state==='interrupted' || ctx.state==='suspended') &&
@@ -617,6 +627,19 @@ function stopForegroundTransports(){
     try{ if(!transport.background && transport.isPlaying()) transport.stop(); }catch(e){}
   });
 }
+function stopHiddenUnsafeTransports(){
+  __transports.forEach(transport=>{
+    try{
+      if(!transport.background && !transport.keepWhenHidden && transport.isPlaying()) transport.stop();
+    }catch(e){}
+  });
+}
+function hasHiddenSafeTransportPlaying(){
+  return __transports.some(transport=>{
+    try{ return Boolean(transport.keepWhenHidden && transport.isPlaying()); }
+    catch(e){ return false; }
+  });
+}
 function stopBackgroundTransports(){
   __transports.forEach(transport=>{
     try{ if(transport.background && transport.isPlaying()) transport.stop(); }catch(e){}
@@ -669,25 +692,37 @@ function setTabSounding(tab,on,source){
 
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
+    if(window.OliveRecorder && typeof window.OliveRecorder.resumeAfterVisibility==='function'){
+      window.OliveRecorder.resumeAfterVisibility();
+    }
     if(__backgroundMediaPaused) return;
     if(hasBackgroundTransportPlaying() && audioCtx){
-      setAudioSession('playback');
-      __ctxMode='playback';
+      const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+      const mode=recording?'play-and-record':'playback';
+      setAudioSession(mode);
+      __ctxMode=mode;
       startBackgroundMedia(activeBackgroundLabel()).catch(()=>{});
       if(audioCtx.state!=='running') resumeCtx(audioCtx).catch(()=>{});
     }
     return;
   }
-  stopForegroundTransports();
+  stopHiddenUnsafeTransports();
   keepAwake(false);
   if(hasBackgroundTransportPlaying()){
     if(__backgroundMediaPaused) return;
-    setAudioSession('playback');
+    const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+    const mode=recording?'play-and-record':'playback';
+    setAudioSession(mode);
     if(audioCtx && audioCtx.state!=='closed'){
-      __ctxMode='playback';
+      __ctxMode=mode;
       startBackgroundMedia(activeBackgroundLabel()).catch(()=>{});
       if(audioCtx.state!=='running') resumeCtx(audioCtx).catch(()=>{});
     }
+    return;
+  }
+  if(hasHiddenSafeTransportPlaying()){
+    const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+    setAudioSession(recording?'play-and-record':'playback');
     return;
   }
   releaseCtx();

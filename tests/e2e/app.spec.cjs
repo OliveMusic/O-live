@@ -265,9 +265,12 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
       if(micMode==='meter-signal'){
         class FakeMediaRecorder extends EventTarget{
           static isTypeSupported(){ return true; }
-          constructor(input){ super(); this.mimeType='audio/mp4'; harness.recorderStream=input; }
-          start(){}
-          stop(){ this.dispatchEvent(new Event('stop')); }
+          constructor(input){
+            super(); this.mimeType='audio/mp4'; this.state='inactive';
+            harness.recorderStream=input; harness.mediaRecorder=this;
+          }
+          start(){ this.state='recording'; }
+          stop(){ this.state='inactive'; this.dispatchEvent(new Event('stop')); }
         }
         window.MediaRecorder=FakeMediaRecorder;
       }
@@ -280,7 +283,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.22');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.23');
 }
 
 test.afterEach(async({page})=>{
@@ -306,7 +309,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=152');
+  expect(workerUrl).toContain('service-worker.js?v=153');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -468,6 +471,45 @@ test('메트로놈과 잼은 서로 교대하고 진행 중인 녹음은 유지�
   await metro.click();
 });
 
+test('로컬 반주를 재생하며 녹음하고 화면을 잠가도 원본 녹음을 유지한다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal'});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+
+  await page.locator('#recordBackingInput').setInputFiles({
+    name:'연습 반주.m4a',mimeType:'audio/mp4',buffer:Buffer.from('olive backing track'),
+  });
+  await expect(page.locator('#recordBackingPlayer')).toBeVisible();
+  await expect(page.locator('#recordBackingName')).toHaveText('연습 반주.m4a');
+  await page.locator('#recordBackingPlay').click();
+  await expect(page.locator('#recordBackingPlay')).toHaveClass(/playing/);
+
+  const recorder=page.locator('#recordToggle');
+  await recorder.click();
+  await expect(recorder).toHaveClass(/on/);
+  expect(await page.evaluate(()=>window.__micHarness.recorderStream===window.__micHarness.inputStream)).toBeTruthy();
+  expect(await page.evaluate(()=>window.__testAudioSession.type)).toBe('play-and-record');
+
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(350);
+  await expect(recorder).toHaveClass(/on/);
+  await expect(page.locator('#recordBackingPlay')).toHaveClass(/playing/);
+  expect(await page.evaluate(()=>window.__micHarness.mediaRecorder.state)).toBe('recording');
+
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(recorder).toHaveClass(/on/);
+
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  await expect(recorder).not.toHaveClass(/on/);
+  await expect(page.locator('#recordBackingPlay')).not.toHaveClass(/playing/);
+});
+
 test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다',async({page})=>{
   await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal'});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
@@ -478,11 +520,8 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
     echoCancellation:false,noiseSuppression:false,autoGainControl:false,
   });
   expect(await page.evaluate(()=>(
-    window.__micHarness.recorderStream===window.__micHarness.processedStream
+    window.__micHarness.recorderStream===window.__micHarness.inputStream
   ))).toBeTruthy();
-  expect(await page.evaluate(()=>window.__micHarness.gainNodes.some(node=>(
-    node.channelCount===1 && node.channelCountMode==='explicit'
-  )))).toBeTruthy();
   await expect.poll(()=>page.locator('#recordLevelFill').evaluate(element=>{
     const transform=getComputedStyle(element).transform;
     return transform==='none'?0:new DOMMatrix(transform).a;

@@ -1603,6 +1603,65 @@
     background:var(--signal); transition:transform .07s linear;
   }
   .record-hint{ min-height:18px; margin:14px 0 0; }
+  .record-backing{ max-width:330px; margin:18px auto 0; text-align:left; }
+  .record-backing-empty{
+    min-height:44px; display:flex; align-items:center; justify-content:center; gap:10px;
+    padding-top:12px; border-top:1px solid var(--line-soft);
+  }
+  .record-backing-pick{
+    min-height:36px; padding:0 14px; border:1px solid var(--line); border-radius:var(--r-pill);
+    background:var(--key); color:var(--ink); font:500 .7188rem/1 inherit; cursor:pointer;
+  }
+  .record-backing-pick:active{ background:var(--key-press); }
+  .record-backing-note{ color:var(--ink-3); font-size:.625rem; }
+  .record-backing-player{
+    display:grid; grid-template-columns:44px minmax(0,1fr); align-items:center; gap:8px;
+    padding:8px 2px 0; border-top:1px solid var(--line-soft);
+  }
+  .record-backing-play{
+    position:relative; width:44px; height:44px; padding:0; border:0; border-radius:50%;
+    transform:rotate(-11deg); background:transparent; cursor:pointer;
+    transition:transform .12s var(--ease-out);
+  }
+  .record-backing-play::before{
+    content:''; position:absolute; left:50%; top:50%; width:34px; height:28px;
+    border-radius:50%; background:var(--body-hi); border:1px solid var(--line);
+    transform:translate(-50%,-50%);
+    transition:background .12s var(--ease-out),border-color .12s var(--ease-out);
+  }
+  .record-backing-play::after{
+    content:''; position:absolute; left:calc(50% + 7px); top:50%; width:12px; height:12px;
+    border-radius:50%; background:var(--panel); transform:translate(-50%,-50%);
+  }
+  .record-backing-play span{
+    position:absolute; z-index:2; left:calc(50% + 7px); top:50%; width:0; height:0;
+    border-left:4px solid var(--ink-2); border-top:3px solid transparent; border-bottom:3px solid transparent;
+    transform:translate(-50%,-50%) rotate(11deg);
+  }
+  .record-backing-play:active{ transform:rotate(-11deg) scale(.92); }
+  .record-backing-play.playing::before{ background:var(--signal); border-color:var(--signal); }
+  .record-backing-play.playing span{
+    width:5px; height:6px; border:0;
+    background:linear-gradient(90deg,var(--ink-2) 0 1.5px,transparent 1.5px 3.5px,var(--ink-2) 3.5px 5px);
+  }
+  .record-backing-detail{ min-width:0; }
+  .record-backing-head{ display:flex; align-items:center; gap:6px; min-width:0; }
+  .record-backing-name{
+    flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    color:var(--ink); font-size:.7188rem; font-weight:500;
+  }
+  .record-backing-remove{
+    flex:0 0 32px; width:32px; height:32px; padding:0; border:0; border-radius:50%;
+    background:transparent; color:var(--ink-3); font:300 1.1rem/1 inherit; cursor:pointer;
+  }
+  .record-backing-remove:active{ background:var(--key-press); }
+  .record-backing-progress{
+    display:block; width:100%; height:18px; margin:0; accent-color:var(--signal); cursor:pointer;
+  }
+  .record-backing-times{
+    display:flex; justify-content:space-between; margin-top:-3px; color:var(--ink-3);
+    font-size:.5938rem; font-variant-numeric:tabular-nums;
+  }
   .record-draft{ max-width:330px; margin:20px auto 0; }
   .record-title{
     width:100%; min-height:44px; padding:10px 12px; border-radius:var(--r);
@@ -2120,6 +2179,31 @@
             </button>
             <p class="hint record-hint" id="recordHint">최대 5분 · 저장하기 전에 먼저 들어볼 수 있습니다</p>
 
+            <div class="record-backing" id="recordBacking">
+              <input id="recordBackingInput" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.webm,.flac" hidden>
+              <div class="record-backing-empty" id="recordBackingEmpty">
+                <button class="record-backing-pick" id="recordBackingPick" type="button">반주 불러오기</button>
+                <span class="record-backing-note">이 기기에서만 사용</span>
+              </div>
+              <div class="record-backing-player" id="recordBackingPlayer" hidden>
+                <button class="record-backing-play" id="recordBackingPlay" type="button" aria-label="반주 재생">
+                  <span aria-hidden="true"></span>
+                </button>
+                <div class="record-backing-detail">
+                  <div class="record-backing-head">
+                    <strong class="record-backing-name" id="recordBackingName"></strong>
+                    <button class="record-backing-remove" id="recordBackingRemove" type="button" aria-label="반주 제거">×</button>
+                  </div>
+                  <input class="record-backing-progress" id="recordBackingProgress" type="range" min="0" max="1000" value="0" aria-label="반주 재생 위치">
+                  <div class="record-backing-times" aria-hidden="true">
+                    <span id="recordBackingCurrent">00:00</span>
+                    <span id="recordBackingDuration">00:00</span>
+                  </div>
+                </div>
+                <audio id="recordBackingAudio" preload="metadata" playsinline hidden></audio>
+              </div>
+            </div>
+
             <div class="record-draft" id="recordDraft" hidden>
               <input class="record-title" id="recordTitle" type="text" maxlength="80" autocomplete="off" aria-label="녹음 이름">
               <div class="record-draft-actions">
@@ -2284,21 +2368,21 @@
   </section>
 </div>
 
-<script src="app-version.js?v=152"></script>
+<script src="app-version.js?v=153"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=152"></script>
-<script src="js/audio-runtime.js?v=152"></script>
-<script src="js/core.js?v=152"></script>
-<script src="js/metronome.js?v=152"></script>
-<script src="js/tuner-engine.js?v=152"></script>
-<script src="js/tuner.js?v=152"></script>
-<script src="js/scales.js?v=152"></script>
-<script src="js/ear-trainer.js?v=152"></script>
-<script src="js/rhythm-trainer.js?v=152"></script>
-<script src="js/recording-cache.js?v=152"></script>
-<script src="js/recorder.js?v=152"></script>
-<script src="js/jam-session.js?v=152"></script>
-<script src="js/app-shell.js?v=152"></script>
+<script src="cloud-sync.js?v=153"></script>
+<script src="js/audio-runtime.js?v=153"></script>
+<script src="js/core.js?v=153"></script>
+<script src="js/metronome.js?v=153"></script>
+<script src="js/tuner-engine.js?v=153"></script>
+<script src="js/tuner.js?v=153"></script>
+<script src="js/scales.js?v=153"></script>
+<script src="js/ear-trainer.js?v=153"></script>
+<script src="js/rhythm-trainer.js?v=153"></script>
+<script src="js/recording-cache.js?v=153"></script>
+<script src="js/recorder.js?v=153"></script>
+<script src="js/jam-session.js?v=153"></script>
+<script src="js/app-shell.js?v=153"></script>
 </body>
 </html>

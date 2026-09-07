@@ -23,6 +23,17 @@
   const recordStateDot=document.getElementById('recordStateDot');
   const recordLevel=document.getElementById('recordLevelFill');
   const recordHint=document.getElementById('recordHint');
+  const recordBackingInput=document.getElementById('recordBackingInput');
+  const recordBackingEmpty=document.getElementById('recordBackingEmpty');
+  const recordBackingPick=document.getElementById('recordBackingPick');
+  const recordBackingPlayer=document.getElementById('recordBackingPlayer');
+  const recordBackingPlay=document.getElementById('recordBackingPlay');
+  const recordBackingName=document.getElementById('recordBackingName');
+  const recordBackingRemove=document.getElementById('recordBackingRemove');
+  const recordBackingProgress=document.getElementById('recordBackingProgress');
+  const recordBackingCurrent=document.getElementById('recordBackingCurrent');
+  const recordBackingDuration=document.getElementById('recordBackingDuration');
+  const backingAudio=document.getElementById('recordBackingAudio');
   const recordDraft=document.getElementById('recordDraft');
   const recordTitle=document.getElementById('recordTitle');
   const recordDiscard=document.getElementById('recordDiscard');
@@ -58,8 +69,6 @@
   let levelAnalyser=null;
   let levelSource=null;
   let levelSink=null;
-  let captureMixer=null;
-  let captureDestination=null;
   let levelSamples=null;
   let waveformLevels=[];
   let recordingPeak=0;
@@ -87,6 +96,8 @@
   let cloudMediaGain=null;
   let cloudPlayToken=0;
   let cloudProgressFrame=0;
+  let backingUrl='';
+  let backingPlaying=false;
   const cloudBlobs=new Map();
   const waveformCache=new Map();
   const waveformLoads=new Map();
@@ -195,6 +206,94 @@
       'audio/webm',
     ].find(type=>MediaRecorder.isTypeSupported(type))||'';
   }
+  function backingDuration(){
+    const value=Number(backingAudio&&backingAudio.duration);
+    return Number.isFinite(value) && value>0 ? value : 0;
+  }
+  function updateBackingPosition(){
+    if(!backingAudio) return;
+    const duration=backingDuration();
+    const current=Math.max(0,Number(backingAudio.currentTime)||0);
+    recordBackingProgress.value=duration ? String(Math.round(clamp(current/duration,0,1)*1000)) : '0';
+    recordBackingCurrent.textContent=formatDuration(current*1000);
+    recordBackingDuration.textContent=formatDuration(duration*1000);
+  }
+  function renderBackingPlayback(){
+    if(!recordBackingPlay) return;
+    recordBackingPlay.classList.toggle('playing',backingPlaying);
+    recordBackingPlay.setAttribute('aria-label',backingPlaying?'반주 일시정지':'반주 재생');
+  }
+  function setBackingPlaying(on){
+    const next=Boolean(on && backingUrl);
+    if(backingPlaying===next){ renderBackingPlayback(); return; }
+    backingPlaying=next;
+    renderBackingPlayback();
+    setTabSounding('trainer',next,'recording-backing');
+    if(next){
+      const mode=(recording||startPending)?'play-and-record':'playback';
+      setAudioSession(mode);
+      if(audioCtx && audioCtx.state!=='closed') __ctxMode=mode;
+    }
+  }
+  function pauseBacking(resetPosition=false){
+    if(!backingAudio) return;
+    setBackingPlaying(false);
+    try{ backingAudio.pause(); }catch(e){}
+    if(resetPosition){
+      try{ backingAudio.currentTime=0; }catch(e){}
+    }
+    updateBackingPosition();
+  }
+  function removeBacking(){
+    pauseBacking(true);
+    if(backingAudio){
+      try{ backingAudio.removeAttribute('src'); backingAudio.load(); }catch(e){}
+    }
+    if(backingUrl){ try{ URL.revokeObjectURL(backingUrl); }catch(e){} }
+    backingUrl='';
+    if(recordBackingInput) recordBackingInput.value='';
+    recordBackingName.textContent='';
+    recordBackingEmpty.hidden=false;
+    recordBackingPlayer.hidden=true;
+    updateBackingPosition();
+  }
+  function loadBackingFile(file){
+    if(!file || !backingAudio) return;
+    const compatible=String(file.type||'').startsWith('audio/') ||
+      /\.(mp3|m4a|aac|wav|ogg|webm|flac)$/i.test(String(file.name||''));
+    if(!compatible){
+      setMessage('재생할 수 있는 오디오 파일을 선택해 주세요',true);
+      return;
+    }
+    pauseBacking(true);
+    if(backingUrl){ try{ URL.revokeObjectURL(backingUrl); }catch(e){} }
+    backingUrl=URL.createObjectURL(file);
+    backingAudio.src=backingUrl;
+    backingAudio.load();
+    recordBackingName.textContent=file.name||'불러온 반주';
+    recordBackingEmpty.hidden=true;
+    recordBackingPlayer.hidden=false;
+    recordBackingProgress.value='0';
+    recordBackingCurrent.textContent='00:00';
+    recordBackingDuration.textContent='00:00';
+    setMessage('반주를 불러왔습니다');
+  }
+  async function toggleBackingPlayback(){
+    if(!backingUrl){ recordBackingInput.click(); return; }
+    if(backingPlaying){ pauseBacking(false); return; }
+    pauseDraftPlayback(false);
+    stopCloudPlayback();
+    const mode=(recording||startPending)?'play-and-record':'playback';
+    setAudioSession(mode);
+    try{
+      const result=backingAudio.play();
+      if(result && typeof result.then==='function') await result;
+      setBackingPlaying(true);
+    }catch(e){
+      setBackingPlaying(false);
+      setMessage('이 오디오 파일을 재생하지 못했습니다',true);
+    }
+  }
   function setMessage(message,error){
     recordMessage.textContent=message||'';
     recordMessage.classList.toggle('error',Boolean(error));
@@ -213,7 +312,7 @@
     setTimer(0);
     recordState.textContent='새 녹음';
     recordStateDot.hidden=true;
-    recordHint.textContent='최대 5분 · 저장하기 전에 먼저 들어볼 수 있습니다';
+    recordHint.textContent='최대 5분 · 반주와 함께 녹음할 수 있습니다';
     recordDraft.hidden=true;
     recordLevel.style.transform='scaleX(0)';
     setButtonMode('idle');
@@ -231,11 +330,6 @@
   function teardownCaptureGraph(){
     try{ if(levelSource) levelSource.disconnect(); }catch(e){}
     try{ if(levelSink) levelSink.disconnect(); }catch(e){}
-    try{ if(captureMixer) captureMixer.disconnect(); }catch(e){}
-    if(captureDestination){
-      try{ captureDestination.stream.getTracks().forEach(track=>track.stop()); }catch(e){}
-    }
-    captureMixer=captureDestination=null;
     levelSource=levelAnalyser=levelSink=levelSamples=null;
     cancelAnimationFrame(levelFrame); levelFrame=0;
     recordLevel.style.transform='scaleX(0)';
@@ -251,7 +345,11 @@
     stopTracks();
     setTabSounding('trainer',false,'recorder');
     // 메트로놈이나 잼이 계속 울리는 동안에는 공유 컨텍스트를 닫지 않는다.
-    if(anySounding()) return;
+    if(anySounding()){
+      setAudioSession('playback');
+      if(audioCtx && audioCtx.state!=='closed') __ctxMode='playback';
+      return;
+    }
     setAudioSession('ambient');
     releaseCtx();
   }
@@ -371,19 +469,26 @@
   function setupCapture(ctx){
     levelSource=ctx.createMediaStreamSource(stream);
     setupLevel(ctx,levelSource);
-    if(typeof ctx.createMediaStreamDestination!=='function') return stream;
-    try{
-      captureMixer=makeMono(ctx.createGain());
-      captureDestination=makeMono(ctx.createMediaStreamDestination());
-      levelSource.connect(captureMixer).connect(captureDestination);
-      const processed=captureDestination.stream;
-      if(processed && typeof processed.getAudioTracks==='function' &&
-         processed.getAudioTracks().length) return processed;
-    }catch(e){
-      try{ if(captureMixer) captureMixer.disconnect(); }catch(ignore){}
-      captureMixer=captureDestination=null;
-    }
+    // 실제 녹음은 Web Audio 출력이 아니라 마이크 원본을 받는다. iPhone이
+    // 잠금 중 화면용 AudioContext를 쉬게 해도 MediaRecorder 데이터가 끊기지 않는다.
     return stream;
+  }
+  async function resumeAfterVisibility(){
+    if(!recording || !stream || document.visibilityState!=='visible') return;
+    updateTimer();
+    try{
+      let ctx=audioCtx;
+      if(!ctx || ctx.state==='closed' || ctx.state==='interrupted'){
+        ctx=await ensureRecordingCtx(anySounding());
+      }else if(ctx.state!=='running'){
+        await resumeCtx(ctx);
+      }
+      if(!recording || !stream || ctx!==audioCtx || ctx.state!=='running') return;
+      teardownCaptureGraph();
+      setupCapture(ctx);
+    }catch(e){
+      // 입력 막대가 바로 돌아오지 않아도 원본 마이크 녹음은 계속된다.
+    }
   }
   async function startRecording(){
     if(!currentUser){ window.OliveCloud.openAccount(); return; }
@@ -439,7 +544,7 @@
       setTabSounding('trainer',true,'recorder');
       recordState.textContent='녹음 중';
       recordStateDot.hidden=false;
-      recordHint.textContent='메트로놈·잼과 함께 사용할 수 있습니다 · 튜너 또는 앱을 벗어나면 중지됩니다';
+      recordHint.textContent='잠금화면에서도 녹음을 유지합니다 · 튜너 또는 앱 종료 시 중지됩니다';
       setButtonMode('recording');
     }catch(error){
       if(token!==startToken) return;
@@ -490,6 +595,7 @@
       renderDraft();
       return;
     }
+    pauseBacking(false);
     stopCloudPlayback();
     const token=++draftPlayToken;
     let playback;
@@ -825,6 +931,7 @@
     if(cloudPlayingId===row.id && !seeking){ pauseCloudPlayback(); return; }
     if(cloudPlayingId===row.id) pauseCloudPlayback();
     else if(cloudPlayingId || (cloudMediaId && cloudMediaId!==row.id)) stopCloudPlayback();
+    pauseBacking(false);
     pauseDraftPlayback(false);
     let playback;
     try{ playback=beginPlaybackFromGesture(); }
@@ -1125,7 +1232,7 @@
     if(sessionUserId && sessionUserId!==nextId){
       const previousId=sessionUserId;
       if(recording || startPending) stopRecording();
-      discardDraft(); stopCloudPlayback(); clearCloudPlaybackCache();
+      discardDraft(); stopCloudPlayback(); removeBacking(); clearCloudPlaybackCache();
       waveformCache.clear(); waveformLoads.clear(); playbackPositions.clear(); expandedRecordingId='';
       const cache=recordingCache();
       if(cache) cache.clearUser(previousId).catch(error=>console.warn('[O\'live recording cache clear]',error));
@@ -1148,6 +1255,19 @@
   recordDiscard.addEventListener('click',discardDraft);
   recordSave.addEventListener('click',saveDraft);
   recordTitle.addEventListener('input',()=>{ if(draft) draft.title=recordTitle.value; });
+  recordBackingPick.addEventListener('click',()=>recordBackingInput.click());
+  recordBackingInput.addEventListener('change',()=>{
+    const file=recordBackingInput.files&&recordBackingInput.files[0];
+    if(file) loadBackingFile(file);
+  });
+  recordBackingPlay.addEventListener('click',toggleBackingPlayback);
+  recordBackingRemove.addEventListener('click',removeBacking);
+  recordBackingProgress.addEventListener('input',()=>{
+    const duration=backingDuration();
+    if(!duration) return;
+    try{ backingAudio.currentTime=duration*clamp(Number(recordBackingProgress.value)||0,0,1000)/1000; }catch(e){}
+    updateBackingPosition();
+  });
   menuBackdrop.addEventListener('click',event=>{ if(event.target===menuBackdrop) closeMenu(); });
   menuBackdrop.addEventListener('keydown',event=>{ if(event.key==='Escape'){ event.preventDefault(); closeMenu(); } });
   menuRename.addEventListener('click',renameSelected);
@@ -1156,12 +1276,36 @@
   draftAudio.addEventListener('play',()=>{ recordState.textContent='재생 중'; setButtonMode('preview'); setTabSounding('trainer',true,'recording-preview'); });
   draftAudio.addEventListener('pause',()=>{ if(draft){ recordState.textContent='녹음 확인'; setButtonMode('preview'); } setTabSounding('trainer',false,'recording-preview'); });
   draftAudio.addEventListener('ended',()=>{ draftStartedOffset=0; recordState.textContent='녹음 확인'; setButtonMode('preview'); setTabSounding('trainer',false,'recording-preview'); });
+  backingAudio.addEventListener('play',()=>setBackingPlaying(true));
+  backingAudio.addEventListener('playing',()=>setBackingPlaying(true));
+  backingAudio.addEventListener('pause',()=>setBackingPlaying(false));
+  backingAudio.addEventListener('ended',()=>{
+    setBackingPlaying(false);
+    try{ backingAudio.currentTime=0; }catch(e){}
+    updateBackingPosition();
+  });
+  backingAudio.addEventListener('loadedmetadata',updateBackingPosition);
+  backingAudio.addEventListener('durationchange',updateBackingPosition);
+  backingAudio.addEventListener('timeupdate',updateBackingPosition);
+  backingAudio.addEventListener('error',()=>{
+    setBackingPlaying(false);
+    if(backingUrl) setMessage('이 오디오 파일을 재생하지 못했습니다',true);
+  });
   registerTransport({
-    isPlaying:()=>recording || startPending || draftIsPlaying() || Boolean(cloudPlayingId),
+    isPlaying:()=>recording || startPending,
     stop:()=>{
       if(recording || startPending) stopRecording();
-      pauseDraftPlayback(false); stopCloudPlayback();
     },
+    keepWhenHidden:true,
+  });
+  registerTransport({
+    isPlaying:()=>draftIsPlaying() || Boolean(cloudPlayingId),
+    stop:()=>{ pauseDraftPlayback(false); stopCloudPlayback(); },
+  });
+  registerTransport({
+    isPlaying:()=>backingPlaying,
+    stop:()=>pauseBacking(false),
+    keepWhenHidden:true,
   });
   function stopPlaybackForOtherTool(){
     pauseDraftPlayback(false);
@@ -1173,6 +1317,7 @@
   window.OliveRecorder={
     isRecording:()=>recording || startPending,
     stopPlayback:stopPlaybackForOtherTool,
+    resumeAfterVisibility,
   };
   window.OliveCloud.subscribeSession(applySession);
   renderIdle(); renderList();
