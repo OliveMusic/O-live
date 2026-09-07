@@ -108,6 +108,12 @@ async function preparePage(page,{
       Object.defineProperty(HTMLMediaElement.prototype,'readyState',{configurable:true,get(){ return 1; }});
       HTMLMediaElement.prototype.play=function(){
         window.__mediaPlayCalls=(window.__mediaPlayCalls||0)+1;
+        window.__lastPlayedMedia=this;
+        window.__lastMediaSettings={
+          playbackRate:this.playbackRate,
+          preservesPitch:this.preservesPitch,
+          webkitPreservesPitch:this.webkitPreservesPitch,
+        };
         return Promise.resolve();
       };
       HTMLMediaElement.prototype.pause=function(){};
@@ -319,7 +325,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.30');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.31');
 }
 
 test.afterEach(async({page})=>{
@@ -345,7 +351,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=160');
+  expect(workerUrl).toContain('service-worker.js?v=161');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -362,7 +368,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.30',build:160});
+  expect(payload.release).toEqual({version:'1.3.31',build:161});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -413,6 +419,9 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-player-play')).toBeVisible();
   await expect(page.locator('.record-waveform[role="slider"]')).toBeVisible();
   await expect(page.locator('.record-waveform-svg.base path')).toHaveAttribute('d',/M/);
+  await expect(page.locator('.record-player-tool.point')).toHaveCount(2);
+  await expect(page.locator('.record-player-tool.repeat')).toBeDisabled();
+  await expect(page.locator('.record-rate-control select')).toHaveValue('1');
   await expect(page.locator('.record-row-copy small')).toHaveText(/2026\. 09\. 06\. \d{2}:\d{2}/);
 
   const waveformControl=page.locator('.record-waveform');
@@ -436,8 +445,44 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/1[67-8]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('00:17');
   expect(await page.evaluate(()=>window.__mediaPlayCalls||0)).toBe(playCallsBeforeSeek);
+
+  await page.locator('.record-player-tool.point').nth(0).click();
+  await waveformControl.click({position:{x:box.width*.5,y:box.height/2}});
+  await page.locator('.record-player-tool.point').nth(1).click();
+  await expect(page.locator('.record-waveform')).toHaveClass(/has-loop-start/);
+  await expect(page.locator('.record-waveform')).toHaveClass(/has-loop-end/);
+  await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
+  await expect(page.locator('.record-player-tool.repeat')).toHaveAttribute('aria-pressed','true');
+  await page.evaluate(()=>{ window.__lastPlayedMedia.currentTime=35; });
+  await expect(page.locator('.record-player-elapsed')).toHaveText('00:17');
+  await page.locator('.record-player-tool.repeat').click();
+  await expect(page.locator('.record-player-tool.repeat')).not.toHaveClass(/active/);
+  await page.locator('.record-player-tool.repeat').click();
+  await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
+  await page.locator('.record-player-tool.clear').click();
+  await expect(page.locator('.record-waveform')).not.toHaveClass(/has-loop-start/);
+  await expect(page.locator('.record-player-tool.repeat')).toBeDisabled();
+
+  await page.locator('.record-rate-control select').selectOption('0.75');
+  await expect(page.locator('.record-rate-control select')).toHaveValue('0.75');
+  await expect.poll(()=>page.evaluate(()=>({
+    playbackRate:window.__lastPlayedMedia.playbackRate,
+    preservesPitch:window.__lastPlayedMedia.preservesPitch,
+    webkitPreservesPitch:window.__lastPlayedMedia.webkitPreservesPitch,
+  }))).toMatchObject({playbackRate:.75,preservesPitch:true,webkitPreservesPitch:true});
   await page.locator('.record-player-play').click();
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
+
+  const dragWaveform=page.locator('.record-waveform');
+  const dragBox=await dragWaveform.boundingBox();
+  await page.mouse.move(dragBox.x+dragBox.width*.6,dragBox.y+dragBox.height/2);
+  await page.mouse.down();
+  await page.mouse.move(dragBox.x+1,dragBox.y+dragBox.height/2,{steps:4});
+  await page.mouse.up();
+  await expect(page.locator('.record-player-elapsed')).toHaveText('00:00');
+  await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow','0');
+  await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
+
   const playCallsBeforeResume=await page.evaluate(()=>window.__mediaPlayCalls||0);
   await page.locator('.record-player-play').click();
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);

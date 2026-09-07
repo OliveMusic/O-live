@@ -9,6 +9,8 @@
   const MAX_UPLOAD_DURATION_MS=30*60*1000;
   const WAVEFORM_POINTS=160;
   const WAVEFORM_MAX_POINTS=240;
+  const PLAYBACK_RATES=[.5,.75,1,1.25,1.5];
+  const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
   const PLAYBACK_GAIN_MIN=.5;
@@ -89,10 +91,13 @@
   let cloudMediaGain=null;
   let cloudPlayToken=0;
   let cloudProgressFrame=0;
+  let scrubbingRecordingId='';
   const cloudBlobs=new Map();
   const waveformCache=new Map();
   const waveformLoads=new Map();
   const playbackPositions=new Map();
+  const playbackRates=new Map();
+  const loopRegions=new Map();
   let loadingList=false;
 
   function makeCloudFallbackAudio(){
@@ -129,6 +134,31 @@
     return node;
   }
   function rowDurationSeconds(row){ return Math.max(0,Number(row&&row.duration_ms)||0)/1000; }
+  function rowPlaybackRate(row){
+    const value=Number(playbackRates.get(row&&row.id))||1;
+    return PLAYBACK_RATES.includes(value)?value:1;
+  }
+  function loopRegionFor(row){
+    const region=loopRegions.get(row&&row.id);
+    if(!region) return {a:null,b:null,enabled:false};
+    return {
+      a:Number.isFinite(region.a)?clamp(region.a,0,rowDurationSeconds(row)):null,
+      b:Number.isFinite(region.b)?clamp(region.b,0,rowDurationSeconds(row)):null,
+      enabled:Boolean(region.enabled),
+    };
+  }
+  function activeLoopFor(row){
+    const region=loopRegionFor(row);
+    return region.enabled && region.a!==null && region.b!==null &&
+      region.b-region.a>=MIN_LOOP_SECONDS ? region : null;
+  }
+  function applyNativePlaybackSettings(row){
+    const rate=rowPlaybackRate(row);
+    try{ cloudFallbackAudio.defaultPlaybackRate=rate; }catch(error){}
+    try{ cloudFallbackAudio.playbackRate=rate; }catch(error){}
+    try{ cloudFallbackAudio.preservesPitch=true; }catch(error){}
+    try{ cloudFallbackAudio.webkitPreservesPitch=true; }catch(error){}
+  }
   function normalizeWaveform(values){
     if(!Array.isArray(values) || !values.length || values.length>WAVEFORM_MAX_POINTS) return [];
     return values.map(value=>Math.round(clamp(Number(value)||0,0,100)));
@@ -590,7 +620,13 @@
       return Math.max(0,Number(cloudFallbackAudio.currentTime)||0);
     }
     if(cloudPlayingId && cloudPlaybackMode==='decoded' && cloudDecodedContext){
-      return Math.max(0,cloudStartedOffset+cloudDecodedContext.currentTime-cloudStartedAt);
+      const position=Math.max(0,cloudStartedOffset+cloudDecodedContext.currentTime-cloudStartedAt);
+      const row=rows.find(item=>item.id===cloudPlayingId);
+      const region=row&&activeLoopFor(row);
+      if(region && position>=region.b){
+        return region.a+(position-region.b)%(region.b-region.a);
+      }
+      return position;
     }
     return Math.max(0,Number(playbackPositions.get(cloudMediaId))||0);
   }
@@ -618,9 +654,15 @@
     stopCloudProgress();
     const tick=()=>{
       if(!cloudPlayingId) return;
-      const position=currentCloudPosition();
+      let position=currentCloudPosition();
+      const row=rows.find(item=>item.id===cloudPlayingId);
+      const region=row&&activeLoopFor(row);
+      if(region && cloudPlaybackMode==='native' && position>=region.b){
+        position=region.a;
+        try{ cloudFallbackAudio.currentTime=region.a; }catch(error){}
+      }
       playbackPositions.set(cloudPlayingId,position);
-      updatePlayerProgress(cloudPlayingId,position);
+      if(scrubbingRecordingId!==cloudPlayingId) updatePlayerProgress(cloudPlayingId,position);
       cloudProgressFrame=requestAnimationFrame(tick);
     };
     cloudProgressFrame=requestAnimationFrame(tick);
@@ -697,6 +739,8 @@
     });
     waveformCache.forEach((value,id)=>{ if(!ids.has(id)) waveformCache.delete(id); });
     playbackPositions.forEach((value,id)=>{ if(!ids.has(id)) playbackPositions.delete(id); });
+    playbackRates.forEach((value,id)=>{ if(!ids.has(id)) playbackRates.delete(id); });
+    loopRegions.forEach((value,id)=>{ if(!ids.has(id)) loopRegions.delete(id); });
     if(expandedRecordingId && !ids.has(expandedRecordingId)) expandedRecordingId='';
   }
   function rememberCloudBlob(row,blob){
@@ -777,8 +821,15 @@
       const source=ctx.createBufferSource();
       const gain=makeMono(ctx.createGain());
       const duration=Math.max(0,Number(buffer.duration)||rowDurationSeconds(row));
-      const startAt=clamp(Number(offset)||0,0,Math.max(0,duration-.02));
+      const region=activeLoopFor(row);
+      let startAt=clamp(Number(offset)||0,0,Math.max(0,duration-.02));
+      if(region && startAt>=region.b) startAt=region.a;
       source.buffer=buffer;
+      if(region){
+        source.loop=true;
+        source.loopStart=region.a;
+        source.loopEnd=region.b;
+      }
       gain.gain.value=rowPlaybackGain(row);
       source.connect(gain).connect(ctx.destination);
       source.onended=()=>{
@@ -827,6 +878,7 @@
       cloudMediaSource=source;
       cloudMediaGain=gain;
       cloudFallbackAudio.src=playbackUrl;
+      applyNativePlaybackSettings(row);
       cloudPlaybackMode='native';
       prepareNativeOffset(offset);
       // iPhone의 사용자 제스처가 살아 있는 동안 곧바로 play()를 호출한다.
@@ -873,6 +925,7 @@
   }
   function startNativePlayback(playbackUrl,row,token,offset){
     cloudFallbackAudio.src=playbackUrl;
+    applyNativePlaybackSettings(row);
     cloudPlaybackMode='native';
     prepareNativeOffset(offset);
     return Promise.resolve(cloudFallbackAudio.play()).then(()=>{
@@ -929,12 +982,17 @@
       console.warn('[O\'live centered recording playback]',error);
       resetCloudMediaElement();
       cloudPlaybackMode='';
-      playDecodedBlob(playback,recordingBlob,row,token,offset).catch(decodeError=>{
+      const decodedFallback=()=>playDecodedBlob(playback,recordingBlob,row,token,offset).catch(decodeError=>{
         if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
         if(!playbackUrl){ handlePlaybackFailure(decodeError,row,token); return; }
         startNativePlayback(playbackUrl,row,token,offset)
           .catch(fallbackError=>handlePlaybackFailure(playbackStageError('audio',fallbackError),row,token));
       });
+      // 속도 변경은 네이티브 플레이어의 음높이 보존 기능이 담당한다. 연결된
+      // Web Audio 경로만 실패했다면 디코딩보다 네이티브 재생을 먼저 다시 시도한다.
+      if(rowPlaybackRate(row)!==1 && playbackUrl){
+        startNativePlayback(playbackUrl,row,token,offset).catch(decodedFallback);
+      }else decodedFallback();
     });
     renderList();
   }
@@ -1011,6 +1069,129 @@
     updatePlayerProgress(row.id,position);
     if(playAfterSeek || cloudPlayingId===row.id) playRow(row,position);
   }
+  function positionAtWaveformPoint(row,waveform,clientX){
+    const bounds=waveform.getBoundingClientRect();
+    if(!bounds.width) return 0;
+    const edgeSnap=Math.min(12,bounds.width*.04);
+    let x=Number(clientX)-bounds.left;
+    if(x<=edgeSnap) x=0;
+    else if(x>=bounds.width-edgeSnap) x=bounds.width;
+    return clamp(x/bounds.width,0,1)*rowDurationSeconds(row);
+  }
+  function bindWaveformScrubbing(waveform,row){
+    let pointerId=null;
+    let startX=0;
+    let startPosition=0;
+    let previewPosition=0;
+    let moved=false;
+    let wasPlaying=false;
+    const preview=clientX=>{
+      previewPosition=positionAtWaveformPoint(row,waveform,clientX);
+      playbackPositions.set(row.id,previewPosition);
+      updatePlayerProgress(row.id,previewPosition);
+    };
+    const finish=(event,cancelled)=>{
+      if(pointerId===null || event.pointerId!==pointerId) return;
+      try{ waveform.releasePointerCapture(pointerId); }catch(error){}
+      pointerId=null;
+      waveform.classList.remove('scrubbing');
+      scrubbingRecordingId='';
+      if(cancelled){
+        const restored=wasPlaying?currentCloudPosition():startPosition;
+        playbackPositions.set(row.id,restored);
+        updatePlayerProgress(row.id,restored);
+        return;
+      }
+      if(moved){
+        if(wasPlaying) playRow(row,previewPosition);
+        else seekRow(row,rowDurationSeconds(row)?previewPosition/rowDurationSeconds(row):0,false);
+      }else playRow(row,previewPosition);
+    };
+    waveform.addEventListener('pointerdown',event=>{
+      if(event.isPrimary===false || (event.pointerType==='mouse' && event.button!==0)) return;
+      pointerId=event.pointerId;
+      startX=event.clientX;
+      startPosition=Number(playbackPositions.get(row.id))||0;
+      wasPlaying=cloudPlayingId===row.id;
+      moved=false;
+      scrubbingRecordingId=row.id;
+      waveform.classList.add('scrubbing');
+      try{ waveform.setPointerCapture(pointerId); }catch(error){}
+      preview(event.clientX);
+    });
+    waveform.addEventListener('pointermove',event=>{
+      if(event.pointerId!==pointerId) return;
+      if(Math.abs(event.clientX-startX)>=4) moved=true;
+      if(moved) preview(event.clientX);
+    });
+    waveform.addEventListener('pointerup',event=>finish(event,false));
+    waveform.addEventListener('pointercancel',event=>finish(event,true));
+  }
+  function applyLoopToActivePlayback(row,positionBefore){
+    if(cloudPlayingId!==row.id) return;
+    const region=activeLoopFor(row);
+    const position=Number.isFinite(positionBefore)?positionBefore:currentCloudPosition();
+    const target=region && position>=region.b-.01?region.a:position;
+    // AudioBufferSourceNode의 반복을 끈 직후에는 내부 재생 위치와 표시 시간이
+    // 달라질 수 있으므로, 디코딩 경로는 현재 들리던 위치에서 한 번 다시 연다.
+    if(cloudPlaybackMode==='decoded'){ playRow(row,target); return; }
+    if(cloudPlaybackMode==='native' && target!==position) prepareNativeOffset(target);
+  }
+  function setLoopPoint(row,point){
+    const current=clamp(cloudMediaId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0,
+      0,rowDurationSeconds(row));
+    const previous=loopRegionFor(row);
+    const next={a:previous.a,b:previous.b,enabled:previous.enabled};
+    if(point==='a'){
+      next.a=current;
+      if(next.b!==null && next.b-next.a<MIN_LOOP_SECONDS){ next.b=null; next.enabled=false; }
+    }else{
+      if(next.a===null) next.a=0;
+      if(current-next.a<MIN_LOOP_SECONDS){
+        setMessage('B 지점은 A보다 조금 뒤에 지정해 주세요',true);
+        return;
+      }
+      next.b=current;
+      next.enabled=true;
+    }
+    loopRegions.set(row.id,next);
+    applyLoopToActivePlayback(row,current);
+    setMessage('');
+    renderList();
+  }
+  function toggleLoop(row){
+    const region=loopRegionFor(row);
+    if(region.a===null || region.b===null || region.b-region.a<MIN_LOOP_SECONDS) return;
+    const current=cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0;
+    region.enabled=!region.enabled;
+    loopRegions.set(row.id,region);
+    applyLoopToActivePlayback(row,current);
+    renderList();
+  }
+  function clearLoop(row){
+    const current=cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0;
+    loopRegions.delete(row.id);
+    applyLoopToActivePlayback(row,current);
+    renderList();
+  }
+  function setPlaybackRate(row,value){
+    const rate=Number(value);
+    if(!PLAYBACK_RATES.includes(rate)) return;
+    playbackRates.set(row.id,rate);
+    if(cloudPlayingId===row.id){
+      if(cloudPlaybackMode==='native'){
+        applyNativePlaybackSettings(row);
+        renderList();
+        return;
+      }
+      const position=currentCloudPosition();
+      stopCloudPlayback(false);
+      playbackPositions.set(row.id,position);
+      playRow(row,position);
+      return;
+    }
+    renderList();
+  }
   function createExpandedPlayer(row){
     const player=document.createElement('div');
     player.className='record-player';
@@ -1031,11 +1212,18 @@
     const values=waveformCache.get(row.id)||normalizeWaveform(row.waveform);
     const shown=values.length?values:Array(WAVEFORM_POINTS).fill(8);
     if(!values.length) waveform.classList.add('loading');
-    waveform.append(createWaveformSvg(shown,'base'),createWaveformSvg(shown,'played'));
-    waveform.addEventListener('click',event=>{
-      const bounds=waveform.getBoundingClientRect();
-      seekRow(row,bounds.width?(event.clientX-bounds.left)/bounds.width:0,true);
-    });
+    const region=loopRegionFor(row);
+    const duration=rowDurationSeconds(row);
+    if(region.a!==null) waveform.style.setProperty('--loop-start',`${duration?region.a/duration*100:0}%`);
+    if(region.b!==null) waveform.style.setProperty('--loop-end',`${duration?region.b/duration*100:0}%`);
+    waveform.classList.toggle('has-loop-start',region.a!==null);
+    waveform.classList.toggle('has-loop-end',region.b!==null);
+    waveform.classList.toggle('looping',Boolean(activeLoopFor(row)));
+    const loopShade=document.createElement('span'); loopShade.className='record-loop-region';
+    const markerA=document.createElement('span'); markerA.className='record-loop-marker start'; markerA.textContent='A';
+    const markerB=document.createElement('span'); markerB.className='record-loop-marker end'; markerB.textContent='B';
+    waveform.append(loopShade,createWaveformSvg(shown,'base'),createWaveformSvg(shown,'played'),markerA,markerB);
+    bindWaveformScrubbing(waveform,row);
     waveform.addEventListener('keydown',event=>{
       const duration=rowDurationSeconds(row);
       const current=Number(playbackPositions.get(row.id))||0;
@@ -1052,7 +1240,32 @@
     const elapsed=document.createElement('span'); elapsed.className='record-player-elapsed';
     const total=document.createElement('span'); total.textContent=formatDuration(row.duration_ms);
     times.append(elapsed,total);
-    detail.append(waveform,times); player.append(play,detail);
+    const tools=document.createElement('div'); tools.className='record-player-tools';
+    const loopTools=document.createElement('div'); loopTools.className='record-loop-tools';
+    const pointA=document.createElement('button'); pointA.type='button'; pointA.className='record-player-tool point'+(region.a!==null?' active':'');
+    pointA.textContent='A'; pointA.setAttribute('aria-label',region.a===null?'현재 위치를 A 지점으로 지정':`A 지점 ${formatDuration(region.a*1000)}, 다시 지정`);
+    pointA.addEventListener('click',()=>setLoopPoint(row,'a'));
+    const pointB=document.createElement('button'); pointB.type='button'; pointB.className='record-player-tool point'+(region.b!==null?' active':'');
+    pointB.textContent='B'; pointB.setAttribute('aria-label',region.b===null?'현재 위치를 B 지점으로 지정':`B 지점 ${formatDuration(region.b*1000)}, 다시 지정`);
+    pointB.addEventListener('click',()=>setLoopPoint(row,'b'));
+    const repeat=document.createElement('button'); repeat.type='button';
+    repeat.className='record-player-tool repeat'+(region.enabled?' active':''); repeat.textContent='반복';
+    repeat.disabled=region.a===null || region.b===null;
+    repeat.setAttribute('aria-pressed',String(region.enabled));
+    repeat.addEventListener('click',()=>toggleLoop(row));
+    const clear=document.createElement('button'); clear.type='button'; clear.className='record-player-tool clear'; clear.textContent='해제';
+    clear.disabled=region.a===null && region.b===null; clear.addEventListener('click',()=>clearLoop(row));
+    loopTools.append(pointA,pointB,repeat,clear);
+    const rateLabel=document.createElement('label'); rateLabel.className='record-rate-control';
+    const rateText=document.createElement('span'); rateText.textContent='속도';
+    const rateSelect=document.createElement('select'); rateSelect.setAttribute('aria-label',`${row.title} 재생 속도`);
+    PLAYBACK_RATES.forEach(rate=>{
+      const option=document.createElement('option'); option.value=String(rate);
+      option.textContent=`${rate}×`; option.selected=rate===rowPlaybackRate(row); rateSelect.appendChild(option);
+    });
+    rateSelect.addEventListener('change',()=>setPlaybackRate(row,rateSelect.value));
+    rateLabel.append(rateText,rateSelect); tools.append(loopTools,rateLabel);
+    detail.append(waveform,times,tools); player.append(play,detail);
     requestAnimationFrame(()=>updatePlayerProgress(row.id,
       cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0));
     if(!values.length) loadRowWaveform(row);

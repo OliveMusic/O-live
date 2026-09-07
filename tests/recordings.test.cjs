@@ -46,6 +46,9 @@ assert.match(index,/\.record-player-play::before\{[\s\S]*?width:34px; height:28p
 assert.match(index,/\.record-player\{[\s\S]*?grid-template-columns:44px minmax\(0,1fr\)/);
 assert.match(index,/\.record-waveform\{[\s\S]*?height:44px/);
 assert.match(index,/\.record-waveform-svg\.played\{[\s\S]*?clip-path:inset/);
+assert.match(index,/\.record-waveform\{[\s\S]*?touch-action:pan-y/);
+assert.match(index,/\.record-loop-region\{/);
+assert.match(index,/\.record-player-tools\{/);
 
 assert.match(recorder,/const MAX_DURATION_MS=5\*60\*1000/);
 assert.match(recorder,/const MAX_RECORDINGS=50/);
@@ -152,7 +155,17 @@ assert.doesNotMatch(playRow,/cloudPlaybackMode==='native-paused'/);
 assert.match(playRow,/playDecodedBlob\(playback,recordingBlob,row,token/);
 assert.match(recorder,/function createExpandedPlayer\(row\)/);
 assert.match(recorder,/waveform\.setAttribute\('role','slider'\)/);
-assert.match(recorder,/seekRow\(row,bounds\.width\?/);
+assert.match(recorder,/function bindWaveformScrubbing\(waveform,row\)/);
+assert.match(recorder,/waveform\.setPointerCapture\(pointerId\)/);
+assert.match(recorder,/waveform\.addEventListener\('pointermove'/);
+assert.match(recorder,/const edgeSnap=Math\.min\(12,bounds\.width\*\.04\)/);
+assert.match(recorder,/const PLAYBACK_RATES=\[\.5,\.75,1,1\.25,1\.5\]/);
+assert.match(recorder,/cloudFallbackAudio\.preservesPitch=true/);
+assert.match(recorder,/cloudFallbackAudio\.webkitPreservesPitch=true/);
+assert.match(recorder,/source\.loopStart=region\.a/);
+assert.match(recorder,/source\.loopEnd=region\.b/);
+assert.match(recorder,/record-loop-marker start/);
+assert.match(recorder,/record-player-tool repeat/);
 assert.match(recorder,/async function waveformFromBlob\(blob\)/);
 assert.match(recorder,/waveform:compactWaveform\(waveformLevels,WAVEFORM_POINTS\)/);
 assert.match(recorder,/playbackGain:playbackGainForRecording\(waveformLevels,recordingPeak\)/);
