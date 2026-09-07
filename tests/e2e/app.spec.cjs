@@ -313,7 +313,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.28');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.29');
 }
 
 test.afterEach(async({page})=>{
@@ -339,7 +339,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=158');
+  expect(workerUrl).toContain('service-worker.js?v=159');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -356,7 +356,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.28',build:158});
+  expect(payload.release).toEqual({version:'1.3.29',build:159});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -787,34 +787,30 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
   await page.evaluate(()=>window.__testMediaActions.play());
   await expect(metro).toHaveClass(/running/);
   await expect.poll(()=>page.evaluate(()=>(
-    __backgroundAudio!==window.__testBackgroundAudioBeforeResume
+    __backgroundAudio===window.__testBackgroundAudioBeforeResume
   ))).toBe(true);
   await expect(backgroundAudio).toHaveCount(1);
   await expect.poll(()=>page.evaluate(()=>(
     window.__testMediaActionRegistrations.seekforward
-  ))).toBe(registrationsBeforeResume+1);
+  ))).toBe(registrationsBeforeResume);
   await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.seekforward))
     .toBe('function');
   await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
   await expect(page.locator('#bpmNum')).toHaveText('115');
   const resumedTempoTrace=await page.evaluate(()=>window.OliveAudioDiagnostics.read());
   expect(resumedTempoTrace.map(entry=>entry.event)).toEqual(expect.arrayContaining([
-    'media-action:play','media-element:replaced','transport:resume-ready',
+    'media-action:play','media-element:refreshed','transport:resume-ready',
     'media-action:seekforward','tempo:applied',
   ]));
-  const firstReplacementIndex=resumedTempoTrace.findIndex(entry=>entry.event==='media-element:replaced');
-  const firstReinstallIndex=resumedTempoTrace.findIndex((entry,index)=>
-    index>firstReplacementIndex && entry.event==='media-actions:installed'
-  );
+  const firstRefreshIndex=resumedTempoTrace.findIndex(entry=>entry.event==='media-element:refreshed');
   const firstPlayingIndex=resumedTempoTrace.findIndex((entry,index)=>
-    index>firstReplacementIndex && entry.event==='media-element:playing'
+    index>firstRefreshIndex && entry.event==='media-element:playing'
   );
-  expect(firstReinstallIndex).toBeGreaterThan(firstReplacementIndex);
-  expect(firstPlayingIndex).toBeGreaterThan(firstReinstallIndex);
+  expect(firstPlayingIndex).toBeGreaterThan(firstRefreshIndex);
   expect(resumedTempoTrace.filter(entry=>entry.event==='tempo:applied').at(-1).after).toBe(115);
 
-  // 반복 pause→play에서도 매번 하나의 새 플레이어만 남고 BPM 명령이 먼저 설치된다.
-  for(const expectedBpm of [125,135,145]){
+  // 빠르게 반복해도 DOM 플레이어는 하나를 유지하고 내부 리소스 세대만 갱신한다.
+  for(const expectedBpm of [125,135,145,155,165,175,185,195]){
     const before=await backgroundAudio.evaluate(audio=>(
       Number(audio.dataset.oliveBackgroundGeneration)
     ));
@@ -826,15 +822,44 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
     await page.evaluate(()=>window.__testMediaActions.play());
     await expect(metro).toHaveClass(/running/);
     await expect(backgroundAudio).toHaveCount(1);
+    await expect.poll(()=>page.evaluate(()=>(
+      __backgroundAudio===window.__testBackgroundAudioBeforeResume
+    ))).toBe(true);
     await expect.poll(()=>backgroundAudio.evaluate(audio=>(
       Number(audio.dataset.oliveBackgroundGeneration)
     ))).toBe(before+1);
     await expect.poll(()=>page.evaluate(()=>(
       window.__testMediaActionRegistrations.seekforward
-    ))).toBe(registrations+1);
+    ))).toBe(registrations);
     await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
     await expect(page.locator('#bpmNum')).toHaveText(String(expectedBpm));
   }
+
+  // 앞선 resume의 play Promise가 끝나기 전에 pause→play가 다시 들어와도
+  // 최신 사용자 명령이 즉시 새 복구를 시작하고, 과거 결과가 이를 덮지 않는다.
+  await backgroundAudio.evaluate(audio=>audio.pause());
+  await expect(metro).toHaveClass(/media-paused/);
+  await page.evaluate(()=>{
+    const audio=__backgroundAudio;
+    const nativePlay=audio.play.bind(audio);
+    let resolveOldPlay;
+    audio.play=()=>new Promise(resolve=>{ resolveOldPlay=resolve; });
+    window.__testMediaActions.play();
+    audio.dispatchEvent(new Event('pause'));
+    audio.play=nativePlay;
+    window.__testMediaActions.play();
+    resolveOldPlay();
+  });
+  await expect(metro).toHaveClass(/running/);
+  await expect(backgroundAudio).toHaveCount(1);
+  await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.seekforward))
+    .toBe('function');
+  await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
+  await expect(page.locator('#bpmNum')).toHaveText('205');
+  const rapidResumeTrace=await page.evaluate(()=>window.OliveAudioDiagnostics.read());
+  expect(rapidResumeTrace.map(entry=>entry.event)).toEqual(expect.arrayContaining([
+    'transport:resume-cancelled','transport:resume-superseded','transport:resume-ready',
+  ]));
 
   await page.locator('.tab-btn[data-tab="jam"]').click();
   const jam=page.locator('#jamStart');

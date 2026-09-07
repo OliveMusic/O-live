@@ -11,6 +11,7 @@ let __backgroundMediaArmed = false;
 let __backgroundMediaPaused = false;
 let __backgroundSuspendPromise = null;
 let __backgroundResumePromise = null;
+let __backgroundResumeSequence = 0;
 let __appOutput = null;
 let __appOutputCtx = null;
 let __backgroundStreamDestination = null;
@@ -287,7 +288,9 @@ function createBackgroundAudioElement(){
     // 오래 잠근 뒤에는 <audio>가 먼저 playing이 되어도 AudioContext는 아직
     // suspended일 수 있다. 박자를 먼저 열지 말고 엔진 복구가 끝날 때까지 기다린다.
     if(__backgroundMediaPaused){
-      resumeBackgroundPlayback().catch(()=>{});
+      // 현재 원격 play 요청이 이미 복구 중이면 playing 이벤트가 같은 작업을
+      // 한 번 더 만들지 않게 한다. 별도의 새 play 명령은 기존 시도를 교체한다.
+      if(!__backgroundResumePromise) resumeBackgroundPlayback().catch(()=>{});
       return;
     }
     __backgroundMediaArmed=true;
@@ -296,8 +299,19 @@ function createBackgroundAudioElement(){
   // iPhone의 잠금 화면은 Media Session 콜백 대신 실제 <audio>만
   // 일시정지시키는 경우가 있다. 그 이벤트도 앱의 재생 정지로 연결한다.
   audio.addEventListener('pause',()=>{
-    if(__stoppingBackgroundMedia || !__backgroundMediaArmed || audio!==__backgroundAudio ||
+    if(__stoppingBackgroundMedia || audio!==__backgroundAudio ||
        !hasBackgroundTransportPlaying()) return;
+    // 재생 복구가 끝나기 전에 다시 누른 pause도 무시하지 않는다. 현재 시도를
+    // 무효화해 뒤늦은 resume-ready가 사용자의 새 일시정지를 덮지 않게 한다.
+    if(__backgroundResumePromise && __backgroundMediaPaused){
+      __backgroundResumeSequence++;
+      __backgroundMediaArmed=false;
+      setBackgroundTransportsPaused(true);
+      try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+      recordAudioDiagnostic('transport:resume-cancelled');
+      return;
+    }
+    if(!__backgroundMediaArmed) return;
     recordAudioDiagnostic('media-element:pause');
     __backgroundMediaArmed=false;
     pauseBackgroundPlayback();
@@ -306,44 +320,43 @@ function createBackgroundAudioElement(){
   return audio;
 }
 
-/* iOS는 잠금화면에서 실제 <audio>를 일시정지한 뒤 다시 재생해도, 원형
-   건너뛰기 명령을 이전의 휴면 플레이어에 남겨두는 경우가 있다. 같은 Web Audio
-   스트림을 새 미디어 요소에서 재생하면 플랫폼이 활성 플레이어를 새로 선택한다.
-   이전 요소는 load()까지 호출해 네이티브 플레이어도 확실히 반납한다. */
-function replaceBackgroundAudioForResume(ctx){
-  const previous=__backgroundAudio;
+/* iOS는 pause 뒤 원형 건너뛰기 명령을 휴면 네이티브 플레이어에 남겨두기도 한다.
+   DOM 오디오 요소를 계속 새로 만들면 빠른 반복 중 여러 플레이어의 포커스가
+   경쟁한다. 하나의 요소를 유지하고 그 내부 미디어 리소스만 다시 선택해,
+   동일한 플랫폼 대상 위에서 연결을 새로 만든다. */
+function refreshBackgroundAudioForResume(ctx){
+  const audio=__backgroundAudio;
   const destination=__backgroundStreamDestination;
-  if(!previous || !__backgroundUsesStream || !destination || __backgroundStreamCtx!==ctx){
-    return previous;
+  if(!audio || !__backgroundUsesStream || !destination || __backgroundStreamCtx!==ctx){
+    return audio;
   }
   const mediaStream=destination.stream;
   if(!mediaStream || typeof mediaStream.getAudioTracks!=='function' ||
-     !mediaStream.getAudioTracks().length) return previous;
-  const replacement=createBackgroundAudioElement();
+     !mediaStream.getAudioTracks().length) return audio;
+  const previousGeneration=Number(audio.dataset.oliveBackgroundGeneration)||null;
+  __stoppingBackgroundMedia=true;
   try{
-    replacement.srcObject=mediaStream;
-    replacement.loop=false;
+    audio.pause();
+    audio.srcObject=null;
+    audio.removeAttribute('src');
+    audio.load();
+    audio.srcObject=mediaStream;
+    audio.loop=false;
+    audio.dataset.oliveBackgroundGeneration=String(++__backgroundAudioGeneration);
   }catch(error){
-    try{ replacement.remove(); }catch(e){}
-    recordAudioDiagnostic('media-element:replace-failed',{
+    try{ audio.srcObject=mediaStream; }catch(e){}
+    recordAudioDiagnostic('media-element:refresh-failed',{
       error:String(error&&error.name||error&&error.message||error).slice(0,80),
     });
-    return previous;
+  }finally{
+    __stoppingBackgroundMedia=false;
   }
-  __backgroundAudio=replacement;
   __backgroundMediaArmed=false;
-  __stoppingBackgroundMedia=true;
-  try{ previous.pause(); }catch(e){}
-  try{ previous.srcObject=null; }catch(e){}
-  try{ previous.removeAttribute('src'); }catch(e){}
-  try{ previous.load(); }catch(e){}
-  try{ previous.remove(); }catch(e){}
-  __stoppingBackgroundMedia=false;
-  recordAudioDiagnostic('media-element:replaced',{
-    previousGeneration:Number(previous.dataset.oliveBackgroundGeneration)||null,
-    generation:Number(replacement.dataset.oliveBackgroundGeneration)||null,
+  recordAudioDiagnostic('media-element:refreshed',{
+    previousGeneration,
+    generation:Number(audio.dataset.oliveBackgroundGeneration)||null,
   });
-  return replacement;
+  return audio;
 }
 
 function setBackgroundTransportsPaused(paused){
@@ -365,6 +378,7 @@ function pauseBackgroundPlayback(){
     return;
   }
   __backgroundMediaPaused=true;
+  __backgroundResumeSequence++;
   __backgroundMediaArmed=false;
   setBackgroundTransportsPaused(true);
   if(__backgroundAudio && !__backgroundAudio.paused){
@@ -411,14 +425,15 @@ function replaceDormantBackgroundContext(){
 }
 
 function resumeBackgroundPlayback(){
-  if(__backgroundResumePromise){
-    recordAudioDiagnostic('transport:resume-joined');
-    return __backgroundResumePromise;
-  }
   if(!__backgroundMediaPaused || !hasBackgroundTransportPlaying()){
     recordAudioDiagnostic('transport:resume-ignored');
     return Promise.resolve();
   }
+  // 빠른 pause→play 반복으로 앞선 복구가 아직 끝나지 않았더라도 새 원격 play는
+  // 그 사용자 제스처 안에서 즉시 audio.play()를 호출해야 한다. 앞선 Promise에
+  // 합류시키지 않고 세대 번호로 무효화하면, 늦게 끝난 작업이 최신 상태를 덮지 않는다.
+  if(__backgroundResumePromise) recordAudioDiagnostic('transport:resume-superseded');
+  const resumeSequence=++__backgroundResumeSequence;
   recordAudioDiagnostic('transport:resume-start');
   const task=(async()=>{
     let audio=__backgroundAudio;
@@ -430,12 +445,11 @@ function resumeBackgroundPlayback(){
     }
     setAudioSession('playback');
     __ctxMode='playback';
-    audio=replaceBackgroundAudioForResume(ctx);
+    audio=refreshBackgroundAudioForResume(ctx);
     if(!audio) throw new Error('BackgroundAudioUnavailable');
-    // iOS는 새 플레이어가 play()되는 순간의 지원 명령을 잠금화면에 반영한다.
-    // BPM 액션을 그보다 먼저 설치해야 반복 재개 중 기본 되감기 버튼이 끼어들지 않는다.
+    // 동일한 플레이어와 액션 맵을 세션 내내 유지한다. 재개할 때마다 핸들러를
+    // 다시 등록하면 iOS가 잠금화면의 지원 버튼 목록을 재판단할 수 있다.
     if(__backgroundUsesStream){
-      __backgroundMediaActionMode='';
       configureBackgroundMediaSession(activeBackgroundLabel(),true);
     }
     let mediaReady=Promise.resolve(), firstResume=Promise.resolve();
@@ -462,6 +476,7 @@ function resumeBackgroundPlayback(){
       else mediaReady.catch(()=>{});
       await withTimeout(resumeReady,4500);
       if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
+      if(resumeSequence!==__backgroundResumeSequence) return;
       if(__backgroundUsesStream && audio.paused) throw new Error('BackgroundAudioNotPlaying');
       if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
       __backgroundMediaPaused=false;
@@ -472,6 +487,12 @@ function resumeBackgroundPlayback(){
       recordAudioDiagnostic('transport:resume-ready');
     }catch(error){
       if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
+      // 이미 더 최신 play/pause 요청이 있다면 이 실패는 과거 작업의 결과다.
+      // 현재 오디오를 다시 멈추거나 잠금화면 상태를 덮어쓰면 안 된다.
+      if(resumeSequence!==__backgroundResumeSequence){
+        recordAudioDiagnostic('transport:resume-obsolete');
+        return;
+      }
       // 한 번의 늦은 복구로 기능 자체를 종료하지 않는다. 일시정지 상태를 보존해
       // 잠금화면의 재생 버튼을 다시 누르거나 화면을 열어 재시도할 수 있게 한다.
       __backgroundMediaPaused=true;
@@ -499,6 +520,7 @@ function isBackgroundMediaPaused(){ return __backgroundMediaPaused; }
 function stopBackgroundMedia(){
   recordAudioDiagnostic('media-element:stop');
   __backgroundMediaPaused=false;
+  __backgroundResumeSequence++;
   __backgroundResumePromise=null;
   __backgroundMediaActionMode='';
   detachBackgroundStream();
