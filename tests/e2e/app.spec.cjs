@@ -275,7 +275,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.16');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.17');
 }
 
 test.afterEach(async({page})=>{
@@ -301,7 +301,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=146');
+  expect(workerUrl).toContain('service-worker.js?v=147');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -367,6 +367,18 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   expect(await page.evaluate(()=>window.__micHarness.mediaElementGain)).toBeTruthy();
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/5[01-3]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('00:51');
+  const playCallsBeforeSeek=await page.evaluate(()=>window.__mediaPlayCalls||0);
+  await page.mouse.click(box.x+box.width*.25,box.y+box.height/2);
+  await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
+  await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/1[67-8]/);
+  await expect(page.locator('.record-player-elapsed')).toHaveText('00:17');
+  expect(await page.evaluate(()=>window.__mediaPlayCalls||0)).toBe(playCallsBeforeSeek);
+  await page.locator('.record-player-play').click();
+  await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
+  const playCallsBeforeResume=await page.evaluate(()=>window.__mediaPlayCalls||0);
+  await page.locator('.record-player-play').click();
+  await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
+  expect(await page.evaluate(()=>window.__mediaPlayCalls||0)).toBeGreaterThan(playCallsBeforeResume);
   await page.locator('.record-player-play').click();
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
 
@@ -576,7 +588,14 @@ test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다
 });
 
 test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async({page})=>{
-  await preparePage(page);
+  const fastProgression=[1,5,6,4].map(deg=>({deg,beats:1,sev:false,fam:null}));
+  await preparePage(page,{preferences:{
+    data:{jam:{
+      root:0,mode:'major',preset:'custom',bpm:220,seventh:false,style:'rock',
+      tracks:{drum:false,bass:false,chord:false,click:false},progression:fastProgression,
+    }},
+    updatedAt:'2026-09-07T00:00:00.000Z',
+  }});
   const setVisibility=value=>page.evaluate(next=>{
     window.__testVisibility=next;
     if(!Object.prototype.hasOwnProperty.call(document,'visibilityState')){
@@ -592,6 +611,10 @@ test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async(
   await jam.click();
   await expect(jam).toHaveClass(/on/);
   await expect.poll(()=>page.evaluate(()=>window.__testAudioSession.type)).toBe('playback');
+  await expect.poll(()=>page.locator('#progTimeline').evaluate(view=>{
+    const active=view.querySelector('.prog-bar.now');
+    return active?Array.from(active.parentElement.children).indexOf(active):-1;
+  })).toBeGreaterThanOrEqual(0);
   await setVisibility('hidden');
   await page.waitForTimeout(350);
   await expect(jam).toHaveClass(/on/);
@@ -607,12 +630,61 @@ test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async(
   await backgroundAudio.evaluate(audio=>audio.pause());
   await expect(jam).toHaveClass(/media-paused/);
   await expect(jam).not.toHaveClass(/on/);
+  await setVisibility('visible');
+  const pausedState=await page.locator('#progTimeline').evaluate(view=>{
+    const active=view.querySelector('.prog-bar.now');
+    return {
+      bar:Array.from(active.parentElement.children).indexOf(active),
+      scrollLeft:view.scrollLeft,
+    };
+  });
+  await page.waitForTimeout(700);
+  const stillPaused=await page.locator('#progTimeline').evaluate(view=>{
+    const active=view.querySelector('.prog-bar.now');
+    return {
+      bar:Array.from(active.parentElement.children).indexOf(active),
+      scrollLeft:view.scrollLeft,
+    };
+  });
+  expect(stillPaused.bar).toBe(pausedState.bar);
+  expect(Math.abs(stillPaused.scrollLeft-pausedState.scrollLeft)).toBeLessThan(1);
   await backgroundAudio.evaluate(audio=>audio.play());
   await expect(jam).toHaveClass(/on/);
   await expect(jam).not.toHaveClass(/media-paused/);
-  await setVisibility('visible');
   await jam.click();
   await expect(jam).not.toHaveClass(/on/);
+});
+
+test('잠금 해제 후에도 일시정지한 메트로놈 애니메이션이 멈춘다',async({page})=>{
+  await preparePage(page);
+  const setVisibility=value=>page.evaluate(next=>{
+    window.__testVisibility=next;
+    if(!Object.prototype.hasOwnProperty.call(document,'visibilityState')){
+      Object.defineProperty(document,'visibilityState',{
+        configurable:true,
+        get:()=>window.__testVisibility,
+      });
+    }
+    document.dispatchEvent(new Event('visibilitychange'));
+  },value);
+  const metro=page.locator('#metroStart');
+  await metro.click();
+  await expect(metro).toHaveClass(/running/);
+  await setVisibility('hidden');
+  const backgroundAudio=page.locator('audio[data-olive-background="true"]');
+  await expect.poll(()=>backgroundAudio.evaluate(audio=>Boolean(
+    audio.srcObject && audio.srcObject.getAudioTracks().length
+  ))).toBeTruthy();
+  await page.waitForTimeout(250);
+  await backgroundAudio.evaluate(audio=>audio.pause());
+  await expect(metro).toHaveClass(/media-paused/);
+  await setVisibility('visible');
+  const pausedTransform=await page.locator('#mdOlive').getAttribute('transform');
+  await page.waitForTimeout(450);
+  await expect(page.locator('#mdOlive')).toHaveAttribute('transform',pausedTransform);
+  await backgroundAudio.evaluate(audio=>audio.play());
+  await expect(metro).toHaveClass(/running/);
+  await metro.click();
 });
 
 test('튜너가 마이크를 연결하고 정지할 때 트랙을 확실히 놓는다',async({page})=>{

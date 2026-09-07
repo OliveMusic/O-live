@@ -807,6 +807,21 @@
   }
   function playRow(row,requestedOffset){
     const seeking=Number.isFinite(requestedOffset);
+    const offset=clamp(seeking?requestedOffset:Number(playbackPositions.get(row.id))||0,0,rowDurationSeconds(row));
+    if(cloudPlayingId===row.id && seeking){
+      playbackPositions.set(row.id,offset);
+      updatePlayerProgress(row.id,offset);
+      if(cloudPlaybackMode==='native'){
+        prepareNativeOffset(offset);
+        return;
+      }
+      if(cloudPlaybackMode==='decoded' && cloudDecodedBuffer && cloudDecodedContext &&
+         cloudDecodedContext===audioCtx && cloudDecodedContext.state==='running'){
+        const token=++cloudPlayToken;
+        startDecodedSource(cloudDecodedContext,cloudDecodedBuffer,row,token,offset);
+        return;
+      }
+    }
     if(cloudPlayingId===row.id && !seeking){ pauseCloudPlayback(); return; }
     if(cloudPlayingId===row.id) pauseCloudPlayback();
     else if(cloudPlayingId || (cloudMediaId && cloudMediaId!==row.id)) stopCloudPlayback();
@@ -817,26 +832,7 @@
     // 네이티브 재생이 성공하면 Web Audio 준비 결과를 기다리지 않으므로
     // 그 경로의 실패도 처리된 Promise로 남겨 콘솔 오류를 만들지 않는다.
     playback.ready.catch(()=>{});
-    const offset=clamp(seeking?requestedOffset:Number(playbackPositions.get(row.id))||0,0,rowDurationSeconds(row));
     playbackPositions.set(row.id,offset);
-    if(cloudMediaId===row.id && cloudPlaybackMode==='native-paused' && cloudFallbackAudio.getAttribute('src')){
-      const token=++cloudPlayToken;
-      cloudPlayingId=row.id;
-      cloudPlaybackMode='native';
-      prepareNativeOffset(offset);
-      Promise.resolve(cloudFallbackAudio.play()).then(()=>{
-        if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-        setTabSounding('trainer',true,'recording-playback');
-        setMessage(''); renderList(); startCloudProgress();
-      }).catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token));
-      renderList(); return;
-    }
-    if(cloudMediaId===row.id && cloudPlaybackMode==='decoded-paused' && cloudDecodedBuffer && cloudDecodedContext){
-      const token=++cloudPlayToken;
-      cloudPlayingId=row.id;
-      startDecodedSource(cloudDecodedContext,cloudDecodedBuffer,row,token,offset);
-      return;
-    }
     const cached=cloudBlobs.get(row.id);
     const token=++cloudPlayToken;
     setMessage('녹음을 불러오는 중입니다');

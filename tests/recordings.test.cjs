@@ -111,7 +111,10 @@ const playRow=recorder.match(/function playRow\(row,requestedOffset\)\{[\s\S]*?\
 assert.match(playRow,/beginPlaybackFromGesture\(\)/);
 assert.match(playRow,/findPlaybackBlob\(row\)/);
 assert.match(playRow,/row\.playback_url/);
-assert.match(playRow,/cloudFallbackAudio\.play\(\)/);
+assert.match(playRow,/cloudPlayingId===row\.id && seeking/);
+assert.match(playRow,/prepareNativeOffset\(offset\)/);
+assert.match(playRow,/startNormalizedNative\(playbackUrl,playback,row,token,offset\)/);
+assert.doesNotMatch(playRow,/cloudPlaybackMode==='native-paused'/);
 assert.match(playRow,/playDecodedBlob\(playback,recordingBlob,row,token/);
 assert.match(recorder,/function createExpandedPlayer\(row\)/);
 assert.match(recorder,/waveform\.setAttribute\('role','slider'\)/);
@@ -134,6 +137,11 @@ assert.match(recorder,/decodeAudioBlob\(ctx,result\.blob\)/);
 assert.match(recorder,/ctx\.createBufferSource\(\)/);
 assert.match(recorder,/이 녹음 파일을 재생할 수 없습니다 · 다운로드로 확인해 주세요/);
 assert.doesNotMatch(recorder,/const cloudAudio=new Audio\(\)/);
+for(const source of [metronome,jam]){
+  assert.match(source,/function scheduler\(\)\{[\s\S]*?if\(isBackgroundMediaPaused\(\)\)/);
+  assert.match(source,/function visualLoop\(gen\)\{[\s\S]*?if\(isBackgroundMediaPaused\(\)\)/);
+  assert.match(source,/function setMediaPaused\(paused\)\{[\s\S]*?clearTimeout\(timerID\)/);
+}
 
 assert.match(migration,/create table if not exists public\.practice_recordings/);
 assert.match(migration,/status in \('pending','ready'\)/);

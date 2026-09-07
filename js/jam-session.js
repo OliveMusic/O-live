@@ -548,8 +548,12 @@
       stop();
       return;
     }
+    if(isBackgroundMediaPaused()){
+      timerID=setTimeout(scheduler,250);
+      return;
+    }
     if(ctx.state!=='running'){
-      if(isBackgroundMediaPaused() || document.visibilityState!=='visible'){
+      if(document.visibilityState!=='visible'){
         timerID=setTimeout(scheduler,250);
         return;
       }
@@ -602,11 +606,11 @@
   function visualLoop(gen){
     if(!playing || gen!==visualGen) return;
     const ctx=jamCtx;
+    if(isBackgroundMediaPaused()){
+      requestAnimationFrame(()=>visualLoop(gen));
+      return;
+    }
     if(!ctx || ctx!==audioCtx || ctx.state!=='running'){
-      if(ctx && ctx===audioCtx && isBackgroundMediaPaused()){
-        requestAnimationFrame(()=>visualLoop(gen));
-        return;
-      }
       stop();
       return;
     }
@@ -650,6 +654,21 @@
     jamStart.querySelector('svg').innerHTML=paused
       ? '<path d="M8 5.5v13l11-6.5z"/>'
       : '<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
+    clearTimeout(timerID);
+    if(paused){
+      // 활성 코드를 따라가던 부드러운 스크롤도 현재 위치에서 즉시 멈춘다.
+      try{ progTimeline.scrollTo({left:progTimeline.scrollLeft,behavior:'auto'}); }catch(e){}
+      return;
+    }
+    if(!jamCtx || jamCtx!==audioCtx || jamCtx.state!=='running') return;
+    while(scheduledMarks.length && scheduledMarks[0].time<=jamCtx.currentTime){
+      scheduledMarks.shift();
+    }
+    if(nextStepTime<=jamCtx.currentTime+0.01){
+      scheduledMarks=[];
+      nextStepTime=jamCtx.currentTime+0.05;
+    }
+    scheduler();
   }
 
   jamStart.addEventListener('click', async ()=>{

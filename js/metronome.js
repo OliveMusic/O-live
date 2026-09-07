@@ -242,8 +242,12 @@
       stopMetro('재시도');
       return;
     }
+    if(isBackgroundMediaPaused()){
+      timerID=setTimeout(scheduler,250);
+      return;
+    }
     if(ctx.state!=='running'){
-      if(isBackgroundMediaPaused() || document.visibilityState!=='visible'){
+      if(document.visibilityState!=='visible'){
         timerID=setTimeout(scheduler,250);
         return;
       }
@@ -273,11 +277,11 @@
   function visualLoop(gen){
     if(!isPlaying || gen !== visualGen) return;   // 예전 루프는 여기서 끝난다
     const ctx = metroCtx;
+    if(isBackgroundMediaPaused()){
+      requestAnimationFrame(()=>visualLoop(gen));
+      return;
+    }
     if(!ctx || ctx!==audioCtx || ctx.state!=='running'){
-      if(ctx && ctx===audioCtx && isBackgroundMediaPaused()){
-        requestAnimationFrame(()=>visualLoop(gen));
-        return;
-      }
       stopMetro('재시도');
       return;
     }
@@ -382,6 +386,17 @@
     metroStart.classList.toggle('running',!paused);
     metroStart.classList.remove('flash');
     orbLabel.textContent=paused?'재생':'정지';
+    clearTimeout(timerID);
+    if(paused) return;
+    if(!metroCtx || metroCtx!==audioCtx || metroCtx.state!=='running') return;
+    while(scheduledBeats.length && scheduledBeats[0].time<=metroCtx.currentTime){
+      scheduledBeats.shift();
+    }
+    if(nextNoteTime<=metroCtx.currentTime+0.01){
+      scheduledBeats=[];
+      nextNoteTime=metroCtx.currentTime+0.05;
+    }
+    scheduler();
   }
   metroStart.addEventListener('click', ()=>{
     if((isPlaying || startPending) && isBackgroundMediaPaused()){
