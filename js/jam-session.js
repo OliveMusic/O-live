@@ -529,6 +529,7 @@
 
   /* ---------- 스케줄러 ---------- */
   let timerID=null, nextStepTime=0, stepCursor=0;
+  const START_LEAD_TIME=0.01;
   const LOOKAHEAD=25, AHEAD=0.14, BACKGROUND_AHEAD=2.5;
   let scheduledMarks=[];
 
@@ -711,7 +712,7 @@
     scheduledMarks=[];
     visualBarIdx=-1;
     progTimeline.querySelectorAll('.prog-bar').forEach(b=>b.classList.remove('now'));
-    nextStepTime=jamCtx.currentTime+0.05;
+    nextStepTime=jamCtx.currentTime+START_LEAD_TIME;
     scheduler();
   }
 
@@ -737,7 +738,8 @@
       playing=true;
       stepCursor=0; scheduledMarks=[];
       visualBarIdx=-1;
-      nextStepTime=ctx.currentTime+0.06;
+      // 터치 직후 반주가 시작되면서도 첫 스텝이 잘리지 않을 최소 여유만 둔다.
+      nextStepTime=ctx.currentTime+START_LEAD_TIME;
       jamStart.classList.add('on');
       jamStart.classList.remove('media-paused');
       jamStart.setAttribute('aria-label','정지');

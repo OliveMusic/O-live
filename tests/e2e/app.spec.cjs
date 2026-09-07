@@ -133,7 +133,10 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
     }
     if(micMode!=='native'){
       let analyserSampleCursor=0,analyserFrame=0;
-      const harness={requests:0,stops:0,pending:false,contexts:0,zeroGainConnections:0,gainNodes:[]};
+      const harness={
+        requests:0,stops:0,pending:false,contexts:0,zeroGainConnections:0,
+        gainNodes:[],scheduledStarts:[],
+      };
       class FakeNode{
         connect(next){
           if(this.gain && this.gain.value===0) harness.zeroGainConnections++;
@@ -212,7 +215,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           const node=new FakeNode();
           node.type='sine';
           node.frequency={value:0};
-          node.start=()=>{};
+          node.start=when=>{ harness.scheduledStarts.push(Number(when)||0); };
           node.stop=()=>{};
           return node;
         }
@@ -310,7 +313,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.24');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.25');
 }
 
 test.afterEach(async({page})=>{
@@ -336,7 +339,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=154');
+  expect(workerUrl).toContain('service-worker.js?v=155');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -761,19 +764,19 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
   await expect.poll(()=>page.evaluate(()=>([
     typeof window.__testMediaActions.seekbackward,
     typeof window.__testMediaActions.seekforward,
-  ]))).toEqual(['undefined','undefined']);
+  ]))).toEqual(['function','function']);
   await expect.poll(()=>page.evaluate(()=>([
     window.__testMediaActionClearances.seekbackward||0,
     window.__testMediaActionClearances.seekforward||0,
-  ]))).toEqual([1,1]);
-  // pause와 play 사이에서 지원 명령 목록이 실제로 바뀌어야 iOS가 새 원격
-  // 제어 세션으로 인식한다. 재생 전에 두 핸들러가 모두 돌아와야 한다.
+  ]))).toEqual([0,0]);
+  // iOS는 백그라운드의 pause→play 전환 중 액션 맵을 바꾸면 화면의 버튼과
+  // 실제 명령 대상을 서로 다르게 유지할 수 있다. 한 세션에서는 맵을 고정한다.
   await page.evaluate(()=>window.__testMediaActions.play());
   await expect(metro).toHaveClass(/running/);
   await expect.poll(()=>page.evaluate(()=>window.__testSeekReadyWhenResumePlay)).toBe(true);
   await expect.poll(()=>page.evaluate(()=>(
     window.__testMediaActionRegistrations.seekforward
-  ))).toBeGreaterThan(registrationsBeforeResume);
+  ))).toBe(registrationsBeforeResume);
   await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.seekforward))
     .toBe('function');
   await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
@@ -788,6 +791,34 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
   await expect(page.locator('#jamBpmVal')).toHaveText('105');
   await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.metadata.title))
     .toBe('잼 세션 · 105 BPM');
+  await jam.click();
+});
+
+test('메트로놈과 잼 세션은 터치 직후 첫 소리를 예약한다',async({page})=>{
+  const progression=[1,5,6,4].map(deg=>({deg,beats:1,sev:false,fam:null}));
+  await preparePage(page,{
+    microphone:'controls',
+    preferences:{
+      data:{jam:{
+        root:0,mode:'major',preset:'custom',bpm:90,seventh:false,style:'rock',
+        tracks:{drum:false,bass:false,chord:false,click:true},progression,
+      }},
+      updatedAt:'2026-09-07T00:00:00.000Z',
+    },
+  });
+
+  const metro=page.locator('#metroStart');
+  await metro.click();
+  await expect.poll(()=>page.evaluate(()=>Math.min(...window.__micHarness.scheduledStarts)))
+    .toBeLessThanOrEqual(0.01);
+  await metro.click();
+
+  await page.locator('.tab-btn[data-tab="jam"]').click();
+  await page.evaluate(()=>{ window.__micHarness.scheduledStarts=[]; });
+  const jam=page.locator('#jamStart');
+  await jam.click();
+  await expect.poll(()=>page.evaluate(()=>Math.min(...window.__micHarness.scheduledStarts)))
+    .toBeLessThanOrEqual(0.01);
   await jam.click();
 });
 

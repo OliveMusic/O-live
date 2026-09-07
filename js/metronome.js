@@ -41,6 +41,7 @@
   let startPending = false, startToken = 0, metroCtx = null, metroOutput = null;
   let currentStep = 0, nextNoteTime = 0.0, timerID = null;
   let rollBeat = 0;
+  const START_LEAD_TIME = 0.01;
   const scheduleAheadTime = 0.12, backgroundScheduleAheadTime = 2.5, lookahead = 25;
   let scheduledBeats = [];
 
@@ -365,7 +366,8 @@
       currentStep=0;
       rollBeat=0;
       scheduledBeats=[];
-      nextNoteTime=ctx.currentTime+0.05;
+      // 버튼 반응은 즉시 느껴지되 Web Audio가 첫 박을 놓치지 않을 최소 여유만 둔다.
+      nextNoteTime=ctx.currentTime+START_LEAD_TIME;
       orbLabel.textContent='정지';
       metroStart.classList.remove('starting');
       metroStart.classList.remove('media-paused');
@@ -426,7 +428,7 @@
     currentStep=0;
     rollBeat=0;
     scheduledBeats=[];
-    nextNoteTime=metroCtx.currentTime+0.05;
+    nextNoteTime=metroCtx.currentTime+START_LEAD_TIME;
     scheduler();
   }
   metroStart.addEventListener('click', ()=>{

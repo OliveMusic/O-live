@@ -92,8 +92,10 @@ assert.match(audioRuntime,/recording\?'play-and-record':background\?'playback':'
 assert.match(audioRuntime,/function ensureBackgroundPlaybackCtx\(label\)/);
 assert.match(audioRuntime,/function ensureBackgroundPlaybackCtx\(label\)\{[\s\S]*?stopCompetingBackgroundTransports\(label\)/);
 assert.match(audioRuntime,/function resumeBackgroundPlayback\(\)[\s\S]*?await withTimeout\(resumeReady,4500\)[\s\S]*?setBackgroundTransportsPaused\(false\)/);
-assert.match(audioRuntime,/function clearBackgroundTempoActions\(\)[\s\S]*?\['seekbackward','seekforward'\]/);
-assert.match(audioRuntime,/function pauseBackgroundPlayback\(\)[\s\S]*?playbackState='paused'[\s\S]*?clearBackgroundTempoActions\(\)/);
+assert.match(audioRuntime,/let __backgroundMediaActionMode = ''/);
+assert.match(audioRuntime,/if\(__backgroundMediaActionMode===actionMode\) return/);
+assert.doesNotMatch(audioRuntime,/clearBackgroundTempoActions/);
+assert.doesNotMatch(audioRuntime,/function pauseBackgroundPlayback\(\)[\s\S]*?setActionHandler\('seek/);
 assert.match(audioRuntime,/navigator\.audioSession\.type = mode/);
 assert.match(audioRuntime,/function startBackgroundMedia\(label,preparedCtx\)/);
 assert.match(audioRuntime,/function beginPlaybackFromGesture\(\)/);
@@ -106,7 +108,10 @@ assert.match(audioRuntime,/if\(hasHiddenSafeTransportPlaying\(\)\)/);
 assert.match(audioRuntime,/window\.OliveRecorder\.resumeAfterVisibility\(\)/);
 assert.match(audioRuntime,/if\(!anySounding\(\) && !recording\)[\s\S]*?setAudioSession\('ambient'\)/);
 assert.match(rhythm,/await ensurePlaybackCtx\(\)/);
-for(const source of [metronome,jam]) assert.match(source,/await ensureBackgroundPlaybackCtx\(/);
+for(const source of [metronome,jam]){
+  assert.match(source,/await ensureBackgroundPlaybackCtx\(/);
+  assert.match(source,/const START_LEAD_TIME ?= ?0\.01/);
+}
 assert.doesNotMatch(core,/leavingTrainer|stopForNavigation/);
 assert.match(core,/enteringTuner[\s\S]*?stopAllTransports\(\)/);
 assert.doesNotMatch(appShell,/stopForNavigation/);

@@ -15,6 +15,7 @@ let __appOutputCtx = null;
 let __backgroundStreamDestination = null;
 let __backgroundStreamCtx = null;
 let __backgroundUsesStream = false;
+let __backgroundMediaActionMode = '';
 
 /* iOS는 오디오 세션에 '용도'를 붙인다.
    ambient : 다른 앱 소리와 섞인다. 음악을 틀어 놓고 메트로놈을 쓸 수 있다.
@@ -107,15 +108,18 @@ function silentWavUrl(){
   return __backgroundAudioUrl;
 }
 
-/* iOS는 실제 <audio>가 일시정지됐다가 다시 재생될 때
-   사이드 원격 명령을 놓치기도 한다. 초기 연결과 재생 복구가
-   동일한 등록 경로를 쓰게 해 다시 잠금하지 않아도 버튼이 살아난다. */
+/* iOS 잠금 화면은 재생 전환 도중 Media Session의 지원 명령 목록을 바꾸면
+   화면에는 버튼을 남겨도 그 버튼을 새 핸들러에 연결하지 않는 경우가 있다.
+   따라서 한 재생 세션에서는 액션 맵을 한 번만 설치하고, 이후에는 메타데이터와
+   재생 상태만 갱신한다. */
 function configureBackgroundMediaSession(label,usesStream=__backgroundUsesStream){
   try{
     if(!navigator.mediaSession) return;
     updateBackgroundMediaMetadata(label);
     navigator.mediaSession.playbackState=__backgroundMediaPaused?'paused':'playing';
     if(typeof navigator.mediaSession.setActionHandler!=='function') return;
+    const actionMode=usesStream?'stream':'fallback';
+    if(__backgroundMediaActionMode===actionMode) return;
     if(usesStream){
       // 실제 소리가 <audio>를 통과하므로 iOS의 기본 원격 제어가 가장 빠르다.
       // 일시정지는 시스템에 맡기고, 잠든 오디오를 깨우도록 재생만 보강한다.
@@ -143,19 +147,7 @@ function configureBackgroundMediaSession(label,usesStream=__backgroundUsesStream
     for(const action of ['previoustrack','nexttrack']){
       try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
     }
-  }catch(e){}
-}
-
-/* iOS는 실제 <audio>가 멈춘 뒤에도 이전 seek 명령을 잠금화면에 남겨 두지만,
-   그 버튼을 새 재생 세션으로 전달하지 않는 경우가 있다. 일시정지 상태에서
-   명령을 먼저 제거해 두면 다음 play 콜백의 등록을 새 상태 변경으로 인식한다. */
-function clearBackgroundTempoActions(){
-  try{
-    if(!navigator.mediaSession ||
-       typeof navigator.mediaSession.setActionHandler!=='function') return;
-    for(const action of ['seekbackward','seekforward']){
-      try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
-    }
+    __backgroundMediaActionMode=actionMode;
   }catch(e){}
 }
 
@@ -234,7 +226,6 @@ function pauseBackgroundPlayback(){
     __stoppingBackgroundMedia=false;
   }
   try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
-  clearBackgroundTempoActions();
   if(!__backgroundUsesStream && audioCtx && audioCtx.state==='running'){
     const ctx=audioCtx;
     try{
@@ -284,9 +275,6 @@ function resumeBackgroundPlayback(){
     }
     setAudioSession('playback');
     __ctxMode='playback';
-    // iOS가 원격 play 명령을 처리하며 활성 명령 목록을 다시 만들기 전에
-    // pause와 양쪽 BPM 명령을 한 묶음으로 먼저 전달한다.
-    configureBackgroundMediaSession(activeBackgroundLabel(),__backgroundUsesStream);
     let mediaReady=Promise.resolve(), firstResume=Promise.resolve();
     try{
       const result=audio.play();
@@ -316,7 +304,7 @@ function resumeBackgroundPlayback(){
       __backgroundMediaPaused=false;
       __backgroundMediaArmed=!audio.paused;
       setBackgroundTransportsPaused(false);
-      // iOS가 pause→play 전환 중 놓친 BPM 버튼을 즉시 재등록한다.
+      // 지원 명령 목록은 건드리지 않고 표시 상태만 playing으로 맞춘다.
       configureBackgroundMediaSession(activeBackgroundLabel(),__backgroundUsesStream);
     }catch(error){
       if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
@@ -344,6 +332,7 @@ function isBackgroundMediaPaused(){ return __backgroundMediaPaused; }
 function stopBackgroundMedia(){
   __backgroundMediaPaused=false;
   __backgroundResumePromise=null;
+  __backgroundMediaActionMode='';
   detachBackgroundStream();
   if(__backgroundAudio){
     const audio=__backgroundAudio;
@@ -722,6 +711,9 @@ document.addEventListener('visibilitychange',()=>{
       const mode=recording?'play-and-record':'playback';
       setAudioSession(mode);
       __ctxMode=mode;
+      // iOS가 세션 연결을 잃었을 때 화면을 연 동작은 안전한 복구 지점이다.
+      // 백그라운드 재개 중에는 액션 맵을 고정하고, 포그라운드 복귀 때만 재확인한다.
+      __backgroundMediaActionMode='';
       startBackgroundMedia(activeBackgroundLabel()).catch(()=>{});
       if(audioCtx.state!=='running') resumeCtx(audioCtx).catch(()=>{});
     }
