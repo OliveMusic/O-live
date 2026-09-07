@@ -313,7 +313,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.25');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.26');
 }
 
 test.afterEach(async({page})=>{
@@ -339,7 +339,25 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=155');
+  expect(workerUrl).toContain('service-worker.js?v=156');
+});
+
+test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
+  await preparePage(page);
+  await page.evaluate(()=>{
+    Object.defineProperty(navigator,'clipboard',{
+      configurable:true,
+      value:{writeText:async text=>{ window.__testCopiedDiagnostics=text; }},
+    });
+  });
+  const version=page.locator('#appVersion');
+  await version.dispatchEvent('pointerdown',{clientX:10,clientY:10});
+  await page.waitForTimeout(720);
+  await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
+  await expect(version).toHaveText('진단 기록 복사됨');
+  const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
+  expect(payload.release).toEqual({version:'1.3.26',build:156});
+  expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -781,6 +799,11 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
     .toBe('function');
   await page.evaluate(()=>window.__testMediaActions.seekforward({seekOffset:10}));
   await expect(page.locator('#bpmNum')).toHaveText('115');
+  const resumedTempoTrace=await page.evaluate(()=>window.OliveAudioDiagnostics.read());
+  expect(resumedTempoTrace.map(entry=>entry.event)).toEqual(expect.arrayContaining([
+    'media-action:play','transport:resume-ready','media-action:seekforward','tempo:applied',
+  ]));
+  expect(resumedTempoTrace.filter(entry=>entry.event==='tempo:applied').at(-1).after).toBe(115);
 
   await page.locator('.tab-btn[data-tab="jam"]').click();
   const jam=page.locator('#jamStart');

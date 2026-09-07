@@ -132,6 +132,7 @@ vm.runInContext(
   sounding=false;
   const background=await runtime.ensureBackgroundPlaybackCtx('메트로놈');
   assert.equal(background.state,'running');
+  assert.equal(background.options.latencyHint,'interactive','background tools request low latency');
   assert.equal(runtime.getMode(),'playback');
   assert.equal(sandbox.navigator.audioSession.type,'playback');
   assert.equal(stopForegroundCalls,1,'background playback stops only foreground transports');

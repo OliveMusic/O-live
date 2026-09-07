@@ -52,9 +52,13 @@ assert.match(worker,new RegExp(`importScripts\\('\\.\\/app-version\\.js\\?v=${re
 assert.match(worker,/const VERSION='v'\+RELEASE\.build/);
 assert.match(worker,new RegExp(`'\\.\\/cloud-sync\\.js\\?v=${release.build}'`));
 assert.match(index,new RegExp(`js/audio-runtime\\.js\\?v=${release.build}`));
-assert.match(index,/class="app-version"/);
-assert.match(index,/appVersion\.textContent='버전 '\+release\.version/);
-assert.match(index,/appVersion\.setAttribute\('aria-label','현재 앱 버전 '\+release\.version\)/);
+assert.match(index,/<button class="app-version" id="appVersion" type="button"><\/button>/);
+assert.match(index,/const versionText='버전 '\+release\.version/);
+assert.match(index,/길게 눌러 오디오 진단 기록 복사/);
+assert.match(index,/window\.OliveAudioDiagnostics\.exportText\(\)/);
+assert.match(index,/olive-audio-diagnostics-v1/);
+assert.match(index,/media-action:seekforward/);
+assert.match(index,/tempo:applied/);
 assert.doesNotMatch(index,new RegExp(`빌드 ${release.build}`));
 assert.match(worker,/url\.origin !== self\.location\.origin/);
 assert.match(worker,/documentUrl\.search = ''/);
@@ -82,7 +86,7 @@ assert.match(index,/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?\.startup-
 
 assert.match(index,/function ensureCtx\(mode='ambient', forceFresh=false\)/);
 assert.match(index,/await withTimeout\(resumeCtx\(ctx\),1400\)/);
-assert.match(index,/const latencyHint=mode==='playback' \? 'playback' : 'interactive'/);
+assert.match(index,/const latencyHint='interactive'/);
 assert.doesNotMatch(index,/audioCtx\.resume\(\)\.catch\(\(\)=>\{\}\)/);
 assert.match(index,/function ensureBackgroundPlaybackCtx\(label\)/);
 assert.match(index,/stopCompetingBackgroundTransports\(label\)/);
@@ -95,8 +99,8 @@ assert.match(index,/function attachBackgroundStream\(audio,ctx\)/);
 assert.match(index,/audio\.srcObject=mediaStream/);
 assert.match(index,/routeAppOutput\(__backgroundStreamDestination\)/);
 assert.match(index,/setActionHandler\('play',[\s\S]*?resumeBackgroundPlayback/);
-assert.match(index,/setActionHandler\('pause',pauseBackgroundPlayback\)/);
-assert.match(index,/setActionHandler\('stop',stopBackgroundTransports\)/);
+assert.match(index,/setActionHandler\('pause',\(\)=>\{[\s\S]*?pauseBackgroundPlayback\(\)/);
+assert.match(index,/setActionHandler\('stop',\(\)=>\{[\s\S]*?stopBackgroundTransports\(\)/);
 assert.match(index,/setActionHandler\('seekbackward',[\s\S]*?adjustBackgroundTempo\(-1,details\)/);
 assert.match(index,/setActionHandler\('seekforward',[\s\S]*?adjustBackgroundTempo\(1,details\)/);
 assert.match(index,/setBackgroundTransportsPaused\(false\);[\s\S]*?configureBackgroundMediaSession\(activeBackgroundLabel\(\),__backgroundUsesStream\)/);

@@ -17,6 +17,79 @@ let __backgroundStreamCtx = null;
 let __backgroundUsesStream = false;
 let __backgroundMediaActionMode = '';
 
+/* 실제 iPhone 잠금 화면의 원격 명령은 데스크톱 모의 테스트로 재현할 수 없다.
+   오디오나 계정 정보 없이 명령 도착 여부와 엔진 상태만 기기 안에 짧게 남겨,
+   화면을 연 뒤 원인을 구분할 수 있게 한다. */
+const AUDIO_DIAGNOSTICS_KEY='olive-audio-diagnostics-v1';
+const AUDIO_DIAGNOSTICS_LIMIT=100;
+function readAudioDiagnostics(){
+  try{
+    if(typeof localStorage==='undefined') return [];
+    const stored=JSON.parse(localStorage.getItem(AUDIO_DIAGNOSTICS_KEY)||'[]');
+    return Array.isArray(stored) ? stored : [];
+  }catch(e){ return []; }
+}
+function currentAudioDiagnosticState(){
+  let transport=null, tempo=null;
+  try{ transport=activeBackgroundTransport(); }catch(e){}
+  try{
+    if(transport && typeof transport.getTempo==='function'){
+      const value=Number(transport.getTempo());
+      if(Number.isFinite(value)) tempo=Math.round(value);
+    }
+  }catch(e){}
+  const ctx=audioCtx;
+  const media=__backgroundAudio;
+  return {
+    visibility:typeof document==='undefined' ? 'unknown' : document.visibilityState,
+    context:ctx ? ctx.state : 'none',
+    contextMode:__ctxMode||'none',
+    baseLatency:ctx && Number.isFinite(Number(ctx.baseLatency))
+      ? Number(Number(ctx.baseLatency).toFixed(4)) : null,
+    outputLatency:ctx && Number.isFinite(Number(ctx.outputLatency))
+      ? Number(Number(ctx.outputLatency).toFixed(4)) : null,
+    media:media ? (media.paused?'paused':'playing') : 'none',
+    mediaPaused:__backgroundMediaPaused,
+    mediaArmed:__backgroundMediaArmed,
+    stream:__backgroundUsesStream,
+    actionMode:__backgroundMediaActionMode||'none',
+    transport:transport ? transport.label : 'none',
+    tempo,
+  };
+}
+function recordAudioDiagnostic(event,details={}){
+  try{
+    if(typeof localStorage==='undefined') return;
+    const entries=readAudioDiagnostics();
+    entries.push(Object.assign({
+      at:new Date().toISOString(),
+      event:String(event||'unknown'),
+    },currentAudioDiagnosticState(),details));
+    localStorage.setItem(AUDIO_DIAGNOSTICS_KEY,JSON.stringify(entries.slice(-AUDIO_DIAGNOSTICS_LIMIT)));
+  }catch(e){}
+}
+function clearAudioDiagnostics(){
+  try{ if(typeof localStorage!=='undefined') localStorage.removeItem(AUDIO_DIAGNOSTICS_KEY); }catch(e){}
+}
+function exportAudioDiagnostics(){
+  const release=window.OLIVE_RELEASE||{version:'unknown',build:'unknown'};
+  return JSON.stringify({
+    format:'olive-audio-diagnostics-v1',
+    release:{version:release.version,build:release.build},
+    device:{
+      userAgent:typeof navigator==='undefined' ? '' : navigator.userAgent,
+      standalone:typeof navigator!=='undefined' && Boolean(navigator.standalone),
+    },
+    entries:readAudioDiagnostics(),
+  },null,2);
+}
+window.OliveAudioDiagnostics=Object.freeze({
+  read:readAudioDiagnostics,
+  clear:clearAudioDiagnostics,
+  exportText:exportAudioDiagnostics,
+  mark:recordAudioDiagnostic,
+});
+
 /* iOS는 오디오 세션에 '용도'를 붙인다.
    ambient : 다른 앱 소리와 섞인다. 음악을 틀어 놓고 메트로놈을 쓸 수 있다.
              잠금화면 위젯도 뜨지 않는다. 대신 무음 스위치를 따른다.
@@ -124,6 +197,7 @@ function configureBackgroundMediaSession(label,usesStream=__backgroundUsesStream
       // 실제 소리가 <audio>를 통과하므로 iOS의 기본 원격 제어가 가장 빠르다.
       // 일시정지는 시스템에 맡기고, 잠든 오디오를 깨우도록 재생만 보강한다.
       try{ navigator.mediaSession.setActionHandler('play',()=>{
+        recordAudioDiagnostic('media-action:play');
         resumeBackgroundPlayback().catch(()=>{});
       }); }catch(e){}
       for(const action of ['pause','stop']){
@@ -131,23 +205,37 @@ function configureBackgroundMediaSession(label,usesStream=__backgroundUsesStream
       }
     }else{
       try{ navigator.mediaSession.setActionHandler('play',()=>{
+        recordAudioDiagnostic('media-action:play');
         resumeBackgroundPlayback().catch(()=>{});
       }); }catch(e){}
-      try{ navigator.mediaSession.setActionHandler('pause',pauseBackgroundPlayback); }catch(e){}
-      try{ navigator.mediaSession.setActionHandler('stop',stopBackgroundTransports); }catch(e){}
+      try{ navigator.mediaSession.setActionHandler('pause',()=>{
+        recordAudioDiagnostic('media-action:pause');
+        pauseBackgroundPlayback();
+      }); }catch(e){}
+      try{ navigator.mediaSession.setActionHandler('stop',()=>{
+        recordAudioDiagnostic('media-action:stop');
+        stopBackgroundTransports();
+      }); }catch(e){}
     }
     // iOS가 원형 건너뛰기 버튼에 표시한 초 단위 값을
     // 그대로 BPM 변화량으로 쓴다. 값을 안 보내는 기기에서는 10을 쓴다.
     try{ navigator.mediaSession.setActionHandler('seekbackward',details=>{
+      recordAudioDiagnostic('media-action:seekbackward',{
+        seekOffset:Number(details&&details.seekOffset)||null,
+      });
       adjustBackgroundTempo(-1,details);
     }); }catch(e){}
     try{ navigator.mediaSession.setActionHandler('seekforward',details=>{
+      recordAudioDiagnostic('media-action:seekforward',{
+        seekOffset:Number(details&&details.seekOffset)||null,
+      });
       adjustBackgroundTempo(1,details);
     }); }catch(e){}
     for(const action of ['previoustrack','nexttrack']){
       try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
     }
     __backgroundMediaActionMode=actionMode;
+    recordAudioDiagnostic('media-actions:installed',{label,actionMode});
   }catch(e){}
 }
 
@@ -161,6 +249,7 @@ async function startBackgroundMedia(label,preparedCtx){
     audio.dataset.oliveBackground='true';
     audio.addEventListener('playing',()=>{
       if(audio!==__backgroundAudio) return;
+      recordAudioDiagnostic('media-element:playing');
       // 오래 잠근 뒤에는 <audio>가 먼저 playing이 되어도 AudioContext는 아직
       // suspended일 수 있다. 박자를 먼저 열지 말고 엔진 복구가 끝날 때까지 기다린다.
       if(__backgroundMediaPaused){
@@ -175,6 +264,7 @@ async function startBackgroundMedia(label,preparedCtx){
     audio.addEventListener('pause',()=>{
       if(__stoppingBackgroundMedia || !__backgroundMediaArmed || audio!==__backgroundAudio ||
          !hasBackgroundTransportPlaying()) return;
+      recordAudioDiagnostic('media-element:pause');
       __backgroundMediaArmed=false;
       pauseBackgroundPlayback();
     });
@@ -195,12 +285,18 @@ async function startBackgroundMedia(label,preparedCtx){
     pauseBackgroundPlayback();
   }
   configureBackgroundMediaSession(label,usesStream);
+  recordAudioDiagnostic('media-element:start',{label,usesStream});
   if(__backgroundMediaPaused) return;
   try{
     const result=__backgroundAudio.play();
     if(result && typeof result.then==='function') await withTimeout(result,1400);
     if(__backgroundAudio && !__backgroundAudio.paused) __backgroundMediaArmed=true;
-  }catch(e){ /* playback 오디오 세션만으로 이어갈 수 있으므로 실제 재생은 막지 않는다. */ }
+  }catch(e){
+    recordAudioDiagnostic('media-element:start-failed',{
+      error:String(e&&e.name||e&&e.message||e).slice(0,80),
+    });
+    /* playback 오디오 세션만으로 이어갈 수 있으므로 실제 재생은 막지 않는다. */
+  }
 }
 
 function setBackgroundTransportsPaused(paused){
@@ -216,7 +312,11 @@ function setBackgroundTransportsPaused(paused){
    미디어 요소를 통과하면 그 요소만 멈추고, 구형 무음 WAV 경로에서만 공유
    AudioContext의 시계를 잠시 멈춘다. */
 function pauseBackgroundPlayback(){
-  if(__backgroundMediaPaused || !hasBackgroundTransportPlaying()) return;
+  recordAudioDiagnostic('transport:pause-request');
+  if(__backgroundMediaPaused || !hasBackgroundTransportPlaying()){
+    recordAudioDiagnostic('transport:pause-ignored');
+    return;
+  }
   __backgroundMediaPaused=true;
   __backgroundMediaArmed=false;
   setBackgroundTransportsPaused(true);
@@ -238,6 +338,7 @@ function pauseBackgroundPlayback(){
       __backgroundSuspendPromise=tracked;
     }catch(e){ stopBackgroundTransports(); }
   }
+  recordAudioDiagnostic('transport:paused');
 }
 
 function replaceDormantBackgroundContext(){
@@ -263,8 +364,15 @@ function replaceDormantBackgroundContext(){
 }
 
 function resumeBackgroundPlayback(){
-  if(__backgroundResumePromise) return __backgroundResumePromise;
-  if(!__backgroundMediaPaused || !hasBackgroundTransportPlaying()) return Promise.resolve();
+  if(__backgroundResumePromise){
+    recordAudioDiagnostic('transport:resume-joined');
+    return __backgroundResumePromise;
+  }
+  if(!__backgroundMediaPaused || !hasBackgroundTransportPlaying()){
+    recordAudioDiagnostic('transport:resume-ignored');
+    return Promise.resolve();
+  }
+  recordAudioDiagnostic('transport:resume-start');
   const task=(async()=>{
     const audio=__backgroundAudio;
     if(!audio) throw new Error('BackgroundAudioUnavailable');
@@ -306,6 +414,7 @@ function resumeBackgroundPlayback(){
       setBackgroundTransportsPaused(false);
       // 지원 명령 목록은 건드리지 않고 표시 상태만 playing으로 맞춘다.
       configureBackgroundMediaSession(activeBackgroundLabel(),__backgroundUsesStream);
+      recordAudioDiagnostic('transport:resume-ready');
     }catch(error){
       if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
       // 한 번의 늦은 복구로 기능 자체를 종료하지 않는다. 일시정지 상태를 보존해
@@ -317,6 +426,9 @@ function resumeBackgroundPlayback(){
       try{ audio.pause(); }catch(e){}
       __stoppingBackgroundMedia=false;
       try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+      recordAudioDiagnostic('transport:resume-failed',{
+        error:String(error&&error.name||error&&error.message||error).slice(0,80),
+      });
       throw error;
     }
   })();
@@ -330,6 +442,7 @@ function resumeBackgroundPlayback(){
 function isBackgroundMediaPaused(){ return __backgroundMediaPaused; }
 
 function stopBackgroundMedia(){
+  recordAudioDiagnostic('media-element:stop');
   __backgroundMediaPaused=false;
   __backgroundResumePromise=null;
   __backgroundMediaActionMode='';
@@ -381,14 +494,15 @@ function createCtx(mode='ambient'){
   setAudioSession(mode);
   const Ctx=window.AudioContext||window.webkitAudioContext;
   if(!Ctx) throw new Error('WebAudioUnavailable');
-  // 메트로놈·잼·녹음 재생은 작은 지연보다 끊김 없는 연속 출력이 중요하다.
-  // 특히 iPhone의 잠금 화면·Bluetooth 경로를 거칠 때 너무 작은 버퍼를
-  // 요구하지 않도록 playback 힌트를 사용한다. 튜너·녹음 입력은 그대로
-  // interactive를 써서 반응성을 유지한다.
-  const latencyHint=mode==='playback' ? 'playback' : 'interactive';
+  // 메트로놈과 잼은 사용자의 탭에 즉시 반응해야 하는 실시간 도구다. 잠금 중
+  // 연속성은 미리 예약하는 스케줄러가 담당하므로, 큰 버퍼를 요청하는 playback
+  // 힌트 대신 모든 모드에서 저지연 interactive 힌트를 쓴다.
+  const latencyHint='interactive';
   const ctx=new Ctx({latencyHint});
   audioCtx=ctx; __ctxMode=mode; __ctxResumePromise=null;
+  recordAudioDiagnostic('audio-context:created',{mode,latencyHint});
   ctx.addEventListener('statechange', ()=>{
+    recordAudioDiagnostic('audio-context:'+ctx.state,{mode:__ctxMode||mode});
     if(ctx!==audioCtx || !anySounding()) return;
     const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
     if(recording &&
@@ -528,6 +642,7 @@ function beginPlaybackFromGesture(){
     __ctxMode=mode;
   }
   const ctx=audioCtx;
+  recordAudioDiagnostic('playback:gesture',{mode,reused:!unusable});
   let ready;
   try{
     ready=ctx.state==='running' ? Promise.resolve(ctx) : Promise.resolve(ctx.resume()).then(()=>{
@@ -613,12 +728,23 @@ function updateBackgroundMediaMetadata(fallbackLabel=''){
 }
 function adjustBackgroundTempo(direction,details){
   const transport=activeBackgroundTransport();
-  if(!transport || typeof transport.adjustTempo!=='function') return;
+  if(!transport || typeof transport.adjustTempo!=='function'){
+    recordAudioDiagnostic('tempo:ignored',{direction});
+    return;
+  }
   const requested=Number(details && details.seekOffset);
   const step=Number.isFinite(requested) && requested>0 ? Math.max(1,Math.round(requested)) : 10;
+  const before=typeof transport.getTempo==='function' ? Number(transport.getTempo()) : null;
+  recordAudioDiagnostic('tempo:request',{direction,step,before});
   try{
     transport.adjustTempo(direction<0 ? -step : step);
-  }catch(e){}
+    const after=typeof transport.getTempo==='function' ? Number(transport.getTempo()) : null;
+    recordAudioDiagnostic('tempo:applied',{direction,step,before,after});
+  }catch(e){
+    recordAudioDiagnostic('tempo:failed',{
+      direction,step,before,error:String(e&&e.name||e&&e.message||e).slice(0,80),
+    });
+  }
 }
 function stopAllTransports(){
   __transports.forEach(transport=>{
@@ -701,6 +827,7 @@ function setTabSounding(tab,on,source){
 }
 
 document.addEventListener('visibilitychange',()=>{
+  recordAudioDiagnostic('visibility:'+document.visibilityState);
   if(document.visibilityState==='visible'){
     if(window.OliveRecorder && typeof window.OliveRecorder.resumeAfterVisibility==='function'){
       window.OliveRecorder.resumeAfterVisibility();

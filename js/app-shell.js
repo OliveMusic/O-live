@@ -77,8 +77,84 @@
 const release=window.OLIVE_RELEASE||{version:'0.0.0',build:'dev'};
 const appVersion=document.getElementById('appVersion');
 if(appVersion){
-  appVersion.textContent='버전 '+release.version;
-  appVersion.setAttribute('aria-label','현재 앱 버전 '+release.version);
+  const versionText='버전 '+release.version;
+  const versionLabel='현재 앱 버전 '+release.version+', 길게 눌러 오디오 진단 기록 복사';
+  let holdStartedAt=0, holdX=0, holdY=0, holdMoved=false, restoreTimer=0;
+  appVersion.textContent=versionText;
+  appVersion.setAttribute('aria-label',versionLabel);
+  appVersion.title='길게 눌러 오디오 진단 기록 복사';
+  if(window.OliveAudioDiagnostics){
+    window.OliveAudioDiagnostics.mark('app:ready');
+  }
+  function restoreVersionText(){
+    clearTimeout(restoreTimer);
+    appVersion.textContent=versionText;
+    appVersion.setAttribute('aria-label',versionLabel);
+  }
+  function fallbackCopy(text){
+    try{
+      const field=document.createElement('textarea');
+      field.value=text;
+      field.setAttribute('readonly','');
+      field.style.position='fixed';
+      field.style.opacity='0';
+      document.body.appendChild(field);
+      field.select();
+      field.setSelectionRange(0,field.value.length);
+      const copied=document.execCommand('copy');
+      field.remove();
+      return copied;
+    }catch(e){ return false; }
+  }
+  async function copyAudioDiagnostics(){
+    if(!window.OliveAudioDiagnostics) return;
+    const text=window.OliveAudioDiagnostics.exportText();
+    let copied=false;
+    try{
+      if(navigator.clipboard && typeof navigator.clipboard.writeText==='function'){
+        await navigator.clipboard.writeText(text);
+        copied=true;
+      }
+    }catch(e){}
+    if(!copied) copied=fallbackCopy(text);
+    if(!copied){
+      window.prompt('아래 진단 기록을 복사해 주세요.',text);
+      return;
+    }
+    appVersion.textContent='진단 기록 복사됨';
+    appVersion.setAttribute('aria-label','오디오 진단 기록 복사됨');
+    restoreTimer=setTimeout(restoreVersionText,1800);
+  }
+  appVersion.addEventListener('pointerdown',event=>{
+    holdStartedAt=Date.now();
+    holdX=event.clientX; holdY=event.clientY; holdMoved=false;
+    appVersion.classList.add('is-holding');
+  });
+  appVersion.addEventListener('pointermove',event=>{
+    if(!holdStartedAt) return;
+    if(Math.hypot(event.clientX-holdX,event.clientY-holdY)>12){
+      holdMoved=true;
+      appVersion.classList.remove('is-holding');
+    }
+  });
+  appVersion.addEventListener('pointerup',()=>{
+    const heldFor=Date.now()-holdStartedAt;
+    appVersion.classList.remove('is-holding');
+    holdStartedAt=0;
+    if(!holdMoved && heldFor>=700) copyAudioDiagnostics();
+  });
+  for(const eventName of ['pointercancel','lostpointercapture']){
+    appVersion.addEventListener(eventName,()=>{
+      holdStartedAt=0; holdMoved=false;
+      appVersion.classList.remove('is-holding');
+    });
+  }
+  appVersion.addEventListener('contextmenu',event=>event.preventDefault());
+  appVersion.addEventListener('keydown',event=>{
+    if(event.key!=='Enter' && event.key!==' ') return;
+    event.preventDefault();
+    copyAudioDiagnostics();
+  });
 }
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
