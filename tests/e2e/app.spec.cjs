@@ -111,6 +111,12 @@ async function preparePage(page,{
       HTMLMediaElement.prototype.play=function(){
         window.__mediaPlayCalls=(window.__mediaPlayCalls||0)+1;
         window.__lastPlayedMedia=this;
+        const media=this;
+        if(micMode!=='playback-stalled' || media.dataset.oliveRecordingPlayback!=='true'){
+          setTimeout(()=>{
+            if(window.__lastPlayedMedia===media) media.currentTime=(Number(media.currentTime)||0)+.1;
+          },80);
+        }
         window.__lastMediaSettings={
           playbackRate:this.playbackRate,
           preservesPitch:this.preservesPitch,
@@ -327,7 +333,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.34');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.35');
 }
 
 test.afterEach(async({page})=>{
@@ -353,7 +359,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=164');
+  expect(workerUrl).toContain('service-worker.js?v=165');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -370,7 +376,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.34',build:164});
+  expect(payload.release).toEqual({version:'1.3.35',build:165});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -575,6 +581,30 @@ test('녹음 재생 중 메트로놈을 시작하면 녹음 버튼도 정지 상
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(recordingPlay).not.toHaveClass(/playing/);
   await expect(recordingPlay).toHaveAttribute('aria-label','무제 재생');
+});
+
+test('iPhone PWA 네이티브 재생이 멈추면 검증된 오디오 경로로 복구한다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    microphone:'playback-stalled',
+    recordings:[{
+      id:'recording-stalled',title:'무제',
+      object_path:'recording-browser-user/recording-stalled.m4a',
+      duration_ms:69000,byte_size:1000,mime_type:'audio/mp4',waveform:[30,55,75,40],
+      playback_gain:3.25,
+      recorded_at:'2026-09-06T09:00:00.000Z',created_at:'2026-09-06T09:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await page.locator('.record-row-open').click();
+  await page.locator('.record-player-play').click();
+  await expect.poll(()=>page.evaluate(()=>({
+    native:window.__lastPlayedMedia&&window.__lastPlayedMedia.dataset.oliveRecordingPlayback==='true',
+    calls:window.__mediaPlayCalls||0,
+  })),{timeout:3000}).toEqual({native:false,calls:2});
+  await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
+  await expect(page.locator('#recordMessage')).not.toHaveClass(/error/);
 });
 
 test('메트로놈과 잼은 서로 교대하고 진행 중인 녹음은 유지한다',async({page})=>{

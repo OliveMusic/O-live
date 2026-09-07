@@ -48,7 +48,7 @@
 
   const draftAudio=new Audio();
   let cloudFallbackAudio=makeCloudFallbackAudio();
-  const cloudNativeAudio=makeCloudNativeAudio();
+  let cloudNativeAudio=makeCloudNativeAudio();
   let currentUser=null;
   let sessionUserId='';
   let rows=[];
@@ -130,7 +130,11 @@
     const audio=new Audio();
     audio.preload='auto';
     audio.playsInline=true;
-    audio.hidden=true;
+    // iOS 26 홈 화면 앱은 완전히 숨긴 미디어 요소를 다시 열었을 때 play()가
+    // 성공했다고 응답하면서도 소리를 내지 않는 경우가 있다. 화면에는 보이지
+    // 않되 렌더 트리에는 남겨, 잠금화면 재생기가 실제 미디어 요소를 유지하게 한다.
+    audio.setAttribute('aria-hidden','true');
+    audio.style.cssText='position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:.001;pointer-events:none';
     audio.dataset.oliveRecordingPlayback='true';
     audio.addEventListener('ended',()=>{
       if(cloudMediaUsesPersistentNative) finishCloudPlayback();
@@ -145,6 +149,7 @@
     });
     audio.addEventListener('playing',()=>{
       if(!cloudMediaUsesPersistentNative) return;
+      if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:playing');
       syncNativePlaybackSettings(audio);
       updateCloudMediaSessionState();
     });
@@ -171,8 +176,27 @@
         handleCloudNativePauseFromSystem();
       }
     });
+    audio.addEventListener('error',()=>{
+      if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:error',{
+        code:audio.error&&audio.error.code||null,
+        networkState:audio.networkState,
+        readyState:audio.readyState,
+      });
+    });
     if(document.body) document.body.appendChild(audio);
     return audio;
+  }
+
+  function replaceCloudNativeAudio(){
+    const previous=cloudNativeAudio;
+    if(previous){
+      cloudNativeInternalPause=true;
+      try{ previous.pause(); }catch(error){}
+      try{ previous.removeAttribute('src'); previous.remove(); }catch(error){}
+      cloudNativeInternalPause=false;
+    }
+    cloudNativeAudio=makeCloudNativeAudio();
+    return cloudNativeAudio;
   }
 
   function preferPersistentNativePlayback(){
@@ -940,12 +964,16 @@
     cloudMediaSource=cloudMediaGain=null;
     cloudFallbackAudio=makeCloudFallbackAudio();
   }
-  function resetCloudNativeElement(){
+  function resetCloudNativeElement(recreate=false){
     cloudNativeInternalPause=true;
     cloudNativeIgnorePauseUntil=performance.now()+250;
     try{ cloudNativeAudio.pause(); }catch(error){}
-    try{ cloudNativeAudio.removeAttribute('src'); cloudNativeAudio.load(); }catch(error){}
+    // iOS에서는 load()를 반복 호출하면 정상 요소도 무음 상태에 빠질 수 있다.
+    // 새 재생을 준비할 때는 요소 자체를 교체하고, 단순 정지에서는 src만 비운다.
+    try{ cloudNativeAudio.removeAttribute('src'); }catch(error){}
     cloudNativeInternalPause=false;
+    if(recreate) return replaceCloudNativeAudio();
+    return cloudNativeAudio;
   }
   function stopCloudPlayback(resetPosition){
     const mediaId=cloudMediaId||cloudPlayingId;
@@ -1214,21 +1242,41 @@
       startCloudProgress();
     });
   }
+  function confirmPersistentNativeProgress(audio,row,token,startedAt){
+    return new Promise((resolve,reject)=>{
+      setTimeout(()=>{
+        if(token!==cloudPlayToken || cloudPlayingId!==row.id || audio!==cloudNativeAudio){
+          resolve(); return;
+        }
+        const position=Number(audio.currentTime)||0;
+        if(audio.ended || position>startedAt+.025){ resolve(); return; }
+        if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:stalled',{
+          networkState:audio.networkState,
+          readyState:audio.readyState,
+        });
+        reject(playbackStageError('native-stalled',new Error('Native audio did not advance')));
+      },800);
+    });
+  }
   function startPersistentNativePlayback(playbackUrl,row,token,offset,refreshList=true){
-    resetCloudNativeElement();
+    // iOS 26 PWA에서 이전 생명주기의 HTMLAudioElement가 무음 상태로 남는
+    // 회귀를 피하기 위해, 새 파일을 시작할 때마다 사용자 탭 안에서 교체한다.
+    const audio=resetCloudNativeElement(true);
     cloudMediaUsesPersistentNative=true;
-    cloudNativeAudio.src=playbackUrl;
-    applyNativePlaybackSettings(row,cloudNativeAudio);
+    audio.src=playbackUrl;
+    applyNativePlaybackSettings(row,audio);
     cloudPlaybackMode='native-direct';
-    prepareNativeOffset(offset,cloudNativeAudio);
-    configureCloudMediaSession(row);
-    return Promise.resolve(cloudNativeAudio.play()).then(()=>{
+    prepareNativeOffset(offset,audio);
+    // play()는 Media Session 설정보다 먼저, 사용자 제스처가 살아 있는 동안 호출한다.
+    return Promise.resolve(audio.play()).then(()=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+      const progressStartedAt=Math.max(0,Number(audio.currentTime)||0);
       setTabSounding('trainer',true,'recording-playback');
       configureCloudMediaSession(row);
       setMessage('');
       if(refreshList) renderList();
       startCloudProgress();
+      return confirmPersistentNativeProgress(audio,row,token,progressStartedAt);
     });
   }
   function switchActivePlaybackToDirect(row){
@@ -1270,12 +1318,24 @@
     else if(cloudPlayingId || (cloudMediaId && cloudMediaId!==row.id)) stopCloudPlayback();
     pauseDraftPlayback(false);
     const usePersistentNative=preferPersistentNativePlayback();
+    if(usePersistentNative && cloudMediaUsesPersistentNative && cloudMediaId===row.id &&
+       cloudNativeAudio.src){
+      playbackPositions.set(row.id,offset);
+      prepareNativeOffset(offset,cloudNativeAudio);
+      resumeCloudPlaybackFromMediaSession();
+      renderList();
+      return;
+    }
     let playback=null;
     if(usePersistentNative){
       // 녹음 파일이 잠금화면의 미디어 세션을 소유한다. 메트로놈·잼을 새로
       // 시작하면 기존 규칙대로 이 foreground transport를 정지한다.
       stopBackgroundTransports();
-      setAudioSession('playback');
+      // 네이티브 요소가 iOS PWA 회귀로 멈출 경우를 대비해, 같은 사용자 탭에서
+      // 기존의 검증된 Web Audio 재생 경로도 미리 활성화해 둔다.
+      try{ playback=beginPlaybackFromGesture(); }
+      catch(error){ setMessage('오디오 재생을 시작하지 못했습니다',true); return; }
+      playback.ready.catch(()=>{});
     }else{
       try{ playback=beginPlaybackFromGesture(); }
       catch(error){ setMessage('오디오 재생을 시작하지 못했습니다',true); return; }
@@ -1323,15 +1383,17 @@
         startNativePlayback(playbackUrl,row,token,offset)
           .catch(fallbackError=>handlePlaybackFailure(playbackStageError('audio',fallbackError),row,token));
       });
-      // 속도 변경은 네이티브 플레이어의 음높이 보존 기능이 담당한다. 연결된
-      // Web Audio 경로만 실패했다면 디코딩보다 네이티브 재생을 먼저 다시 시도한다.
+      // iOS의 네이티브 요소가 파일을 거부하거나 재생 시간이 진행되지 않으면,
+      // 같은 사용자 탭에서 미리 깨워 둔 기존 Web Audio 경로로 즉시 복구한다.
       if(usePersistentNative){
-        recordingBlob.then(result=>{
-          if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-          const entry=cloudBlobs.get(row.id)||rememberCloudBlob(row,result.blob);
-          if(!entry) throw new Error('Recording blob unavailable');
-          return startPersistentNativePlayback(entry.url,row,token,offset);
-        }).catch(fallbackError=>handlePlaybackFailure(playbackStageError('audio',fallbackError),row,token));
+        resetCloudNativeElement();
+        cloudMediaUsesPersistentNative=false;
+        clearCloudMediaSession();
+        const stableFallback=playbackUrl
+          ? startNormalizedNative(playbackUrl,playback,row,token,offset)
+          : playDecodedBlob(playback,recordingBlob,row,token,offset);
+        stableFallback.catch(fallbackError=>
+          handlePlaybackFailure(playbackStageError('audio',fallbackError),row,token));
       }else if(rowPlaybackRate(row)!==1 && playbackUrl){
         startNativePlayback(playbackUrl,row,token,offset).catch(decodedFallback);
       }else decodedFallback();
