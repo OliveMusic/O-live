@@ -313,7 +313,12 @@ function createCtx(mode='ambient'){
   setAudioSession(mode);
   const Ctx=window.AudioContext||window.webkitAudioContext;
   if(!Ctx) throw new Error('WebAudioUnavailable');
-  const ctx=new Ctx({latencyHint:'interactive'});
+  // 메트로놈·잼·녹음 재생은 작은 지연보다 끊김 없는 연속 출력이 중요하다.
+  // 특히 iPhone의 잠금 화면·Bluetooth 경로를 거칠 때 너무 작은 버퍼를
+  // 요구하지 않도록 playback 힌트를 사용한다. 튜너·녹음 입력은 그대로
+  // interactive를 써서 반응성을 유지한다.
+  const latencyHint=mode==='playback' ? 'playback' : 'interactive';
+  const ctx=new Ctx({latencyHint});
   audioCtx=ctx; __ctxMode=mode; __ctxResumePromise=null;
   ctx.addEventListener('statechange', ()=>{
     if(ctx!==audioCtx || !anySounding()) return;

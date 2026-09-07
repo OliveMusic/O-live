@@ -82,6 +82,7 @@ assert.match(index,/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?\.startup-
 
 assert.match(index,/function ensureCtx\(mode='ambient', forceFresh=false\)/);
 assert.match(index,/await withTimeout\(resumeCtx\(ctx\),1400\)/);
+assert.match(index,/const latencyHint=mode==='playback' \? 'playback' : 'interactive'/);
 assert.doesNotMatch(index,/audioCtx\.resume\(\)\.catch\(\(\)=>\{\}\)/);
 assert.match(index,/function ensureBackgroundPlaybackCtx\(label\)/);
 assert.match(index,/visibilitychange[\s\S]*?stopForegroundTransports\(\);[\s\S]*?hasBackgroundTransportPlaying\(\)/);
@@ -97,6 +98,9 @@ assert.match(index,/ctx\.suspend\(\)/);
 assert.match(index,/__master\.connect\(comp\)\.connect\(getAppOutput\(ctx\)\)/);
 assert.match(index,/playClick\(time - metroCtx\.currentTime, level, metroCtx, metroOutput\)/);
 assert.match(index,/metroOutput\.disconnect\(\)/);
+assert.match(index,/if\(paused\)\{[\s\S]*?releaseMetroOutput\(\)[\s\S]*?return;[\s\S]*?createMetroOutput\(metroCtx\)[\s\S]*?currentStep=0/);
+assert.match(index,/function createJamOutputs\(ctx\)\{[\s\S]*?jamOutput\.connect\(getMaster\(ctx\)\)[\s\S]*?sendTo\(jamChordOutput,0\.3\)/);
+assert.match(index,/if\(paused\)\{[\s\S]*?releaseJamOutputs\(\)[\s\S]*?return;[\s\S]*?createJamOutputs\(jamCtx\)[\s\S]*?stepCursor=0/);
 assert.match(index,/orbLabel\.textContent='시작 중'/);
 assert.equal((index.match(/const ctx=await ensurePlaybackCtx\(\)/g)||[]).length,1);
 assert.equal((index.match(/const ctx=await ensureBackgroundPlaybackCtx\(/g)||[]).length,2);

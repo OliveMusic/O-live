@@ -136,6 +136,7 @@
   let styleKey = 'rock';
   let tracks = {drum:true, bass:true, chord:true, click:false};
   let playing = false, startPending = false, startToken = 0, jamCtx = null;
+  let jamOutput = null, jamChordOutput = null;
 
   /* ---------- DOM ---------- */
   const jamKeyEl      = document.getElementById('jamKey');
@@ -153,6 +154,26 @@
   const jamBpmBox     = document.getElementById('jamBpmBox');
   const jamMinus      = document.getElementById('jamMinus');
   const jamPlus       = document.getElementById('jamPlus');
+
+  function releaseJamOutputs(){
+    for(const output of [jamChordOutput,jamOutput]){
+      if(!output) continue;
+      try{ output.gain.value=0; }catch(e){}
+      try{ output.disconnect(); }catch(e){}
+    }
+    jamChordOutput=null;
+    jamOutput=null;
+  }
+  function createJamOutputs(ctx){
+    releaseJamOutputs();
+    jamOutput=ctx.createGain();
+    jamOutput.connect(getMaster(ctx));
+    // 코드의 공간감은 유지하되, 일시정지할 때 드라이·리버브 입력을
+    // 한꺼번에 끊을 수 있도록 별도 버스에 모은다.
+    jamChordOutput=ctx.createGain();
+    jamChordOutput.connect(jamOutput);
+    sendTo(jamChordOutput,0.3);
+  }
   const jamTap        = document.getElementById('jamTap');
   const JAM_BPM_DEFAULT = 90;
   let jamBpm = JAM_BPM_DEFAULT;
@@ -408,14 +429,14 @@
     o.frequency.exponentialRampToValueAtTime(44,t+0.09);   // 피치 엔벨로프
     g.gain.setValueAtTime(0.60,t);
     g.gain.exponentialRampToValueAtTime(0.0001,t+0.30);
-    o.connect(g).connect(getMaster(ctx));
+    o.connect(g).connect(jamOutput);
     o.start(t); o.stop(t+0.32);
     // 비터 클릭 — 작은 스피커에서 킥이 들리게 하는 성분
     const c=ctx.createOscillator(), cg=ctx.createGain();
     c.type='triangle'; c.frequency.setValueAtTime(1100,t);
     cg.gain.setValueAtTime(0.10,t);
     cg.gain.exponentialRampToValueAtTime(0.0001,t+0.022);
-    c.connect(cg).connect(getMaster(ctx));
+    c.connect(cg).connect(jamOutput);
     c.start(t); c.stop(t+0.03);
   }
 
@@ -425,14 +446,14 @@
     const g=ctx.createGain();
     g.gain.setValueAtTime(0.50,t);
     g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
-    src.connect(bp).connect(g).connect(getMaster(ctx));
+    src.connect(bp).connect(g).connect(jamOutput);
     src.start(t); src.stop(t+0.18);
     // 몸통
     const o=ctx.createOscillator(), og=ctx.createGain();
     o.type='triangle'; o.frequency.setValueAtTime(190,t);
     og.gain.setValueAtTime(0.26,t);
     og.gain.exponentialRampToValueAtTime(0.0001,t+0.09);
-    o.connect(og).connect(getMaster(ctx));
+    o.connect(og).connect(jamOutput);
     o.start(t); o.stop(t+0.1);
   }
   function hat(ctx, t, open){
@@ -442,7 +463,7 @@
     const d = open?0.16:0.045;
     g.gain.setValueAtTime(0.20,t);
     g.gain.exponentialRampToValueAtTime(0.0001,t+d);
-    src.connect(hp).connect(g).connect(getMaster(ctx));
+    src.connect(hp).connect(g).connect(jamOutput);
     src.start(t); src.stop(t+d+0.02);
   }
   function bassNote(ctx, t, midi, dur){
@@ -450,7 +471,7 @@
     // 서브 사인을 아래에 깔아 두께를 준다.
     const f=midiToFreq(midi);
     const bus=ctx.createGain(); bus.gain.value=1;
-    bus.connect(getMaster(ctx));
+    bus.connect(jamOutput);
 
     const lp=ctx.createBiquadFilter();
     lp.type='lowpass'; lp.Q.value=6;
@@ -476,7 +497,8 @@
   }
 
   function chordVoice(ctx, t, midis, dur){
-    pianoChord(midis, t, dur, 0.28);
+    // 잼 전용 코드 버스에서 한 번만 리버브를 보내 예약음을 완전히 지울 수 있다.
+    pianoChord(midis, t, dur, 0.28, jamChordOutput, 0);
   }
 
   function previewChord(deg, sev, fam){
@@ -522,7 +544,7 @@
       if(st.hat.includes(s))   hat(ctx, when, s%8===4 && styleKey==='ballad');
     }
     if(tracks.click && s%4===0){
-      playClick(when - ctx.currentTime, cell.stepInBar===0, ctx);
+      playClick(when - ctx.currentTime, cell.stepInBar===0, ctx, jamOutput);
     }
     const secPerStep = (60/jamBpm)/4;
     if(tracks.bass){
@@ -634,6 +656,7 @@
     startToken++;
     startPending=false;
     playing=false;
+    releaseJamOutputs();
     jamCtx=null;
     clearTimeout(timerID);
     scheduledMarks=[];
@@ -656,18 +679,20 @@
       : '<rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/>';
     clearTimeout(timerID);
     if(paused){
+      // 잠금 전에 미리 예약된 반주를 버린다. 재개할 때 첫 마디와 섞이지 않는다.
+      releaseJamOutputs();
+      scheduledMarks=[];
       // 활성 코드를 따라가던 부드러운 스크롤도 현재 위치에서 즉시 멈춘다.
       try{ progTimeline.scrollTo({left:progTimeline.scrollLeft,behavior:'auto'}); }catch(e){}
       return;
     }
     if(!jamCtx || jamCtx!==audioCtx || jamCtx.state!=='running') return;
-    while(scheduledMarks.length && scheduledMarks[0].time<=jamCtx.currentTime){
-      scheduledMarks.shift();
-    }
-    if(nextStepTime<=jamCtx.currentTime+0.01){
-      scheduledMarks=[];
-      nextStepTime=jamCtx.currentTime+0.05;
-    }
+    createJamOutputs(jamCtx);
+    stepCursor=0;
+    scheduledMarks=[];
+    visualBarIdx=-1;
+    progTimeline.querySelectorAll('.prog-bar').forEach(b=>b.classList.remove('now'));
+    nextStepTime=jamCtx.currentTime+0.05;
     scheduler();
   }
 
@@ -689,6 +714,7 @@
         return;
       }
       jamCtx=ctx;
+      createJamOutputs(ctx);
       playing=true;
       stepCursor=0; scheduledMarks=[];
       visualBarIdx=-1;

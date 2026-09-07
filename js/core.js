@@ -297,7 +297,7 @@ function referenceTone(midi, dur=2.6){ guitarPluck(midi, dur, 0.78); }
    실제 피아노는 한 음에 현이 2~3개이고 서로 미세하게 어긋나 있다.
    그 맥놀이가 '두껍고 살아있는' 소리를 만든다. 여기에
    현 강성에 의한 비조화성과, 고차 배음이 먼저 사라지는 감쇠를 더한다. */
-function pianoNote(midi, when, dur, vol=0.19){
+function pianoNote(midi, when, dur, vol=0.19, destination, reverbAmount=0.3){
   const ctx=getCtx();
   const t=(when!=null?when:ctx.currentTime)+0.004;
   const f0=midiToFreq(midi);
@@ -311,8 +311,8 @@ function pianoNote(midi, when, dur, vol=0.19){
   tone.frequency.exponentialRampToValueAtTime(Math.max(700, f0*5), t+0.7); // 밝기가 가라앉는다
   tone.Q.value=0.5;
   tone.connect(bus);
-  bus.connect(getMaster());
-  sendTo(bus, 0.3);
+  bus.connect(destination || getMaster());
+  sendTo(bus, reverbAmount);
 
   // 현 2개를 미세하게 어긋나게 (맥놀이)
   [-1, 1].forEach(side=>{
@@ -347,8 +347,10 @@ function pianoNote(midi, when, dur, vol=0.19){
   ns.connect(nf).connect(ng).connect(tone);
   ns.start(t); ns.stop(t+0.06);
 }
-function pianoChord(midis, when, dur, vol=0.28){
-  midis.forEach((m,i)=> pianoNote(m,(when||getCtx().currentTime)+i*0.010, dur, vol));
+function pianoChord(midis, when, dur, vol=0.28, destination, reverbAmount=0.3){
+  midis.forEach((m,i)=> pianoNote(
+    m,(when||getCtx().currentTime)+i*0.010,dur,vol,destination,reverbAmount
+  ));
 }
 
 /* ===== 템포 조작 공통 =====

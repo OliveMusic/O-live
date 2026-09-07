@@ -275,7 +275,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
   },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.17');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.18');
 }
 
 test.afterEach(async({page})=>{
@@ -301,7 +301,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=147');
+  expect(workerUrl).toContain('service-worker.js?v=148');
 });
 
 test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{
@@ -651,6 +651,10 @@ test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async(
   await backgroundAudio.evaluate(audio=>audio.play());
   await expect(jam).toHaveClass(/on/);
   await expect(jam).not.toHaveClass(/media-paused/);
+  await expect.poll(()=>page.locator('#progTimeline').evaluate(view=>{
+    const active=view.querySelector('.prog-bar.now');
+    return active?Array.from(active.parentElement.children).indexOf(active):-1;
+  })).toBe(0);
   await jam.click();
   await expect(jam).not.toHaveClass(/on/);
 });
@@ -684,6 +688,9 @@ test('잠금 해제 후에도 일시정지한 메트로놈 애니메이션이 �
   await expect(page.locator('#mdOlive')).toHaveAttribute('transform',pausedTransform);
   await backgroundAudio.evaluate(audio=>audio.play());
   await expect(metro).toHaveClass(/running/);
+  await expect.poll(()=>page.locator('.beat-dot').first().evaluate(dot=>
+    dot.classList.contains('accent-on')
+  )).toBeTruthy();
   await metro.click();
 });
 

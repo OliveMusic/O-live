@@ -49,6 +49,18 @@
   const metroStart = document.getElementById('metroStart');
   const orbLabel   = document.getElementById('orbLabel');
 
+  function releaseMetroOutput(){
+    if(!metroOutput) return;
+    try{ metroOutput.gain.value=0; }catch(e){}
+    try{ metroOutput.disconnect(); }catch(e){}
+    metroOutput=null;
+  }
+  function createMetroOutput(ctx){
+    releaseMetroOutput();
+    metroOutput=ctx.createGain();
+    metroOutput.connect(getMaster(ctx));
+  }
+
   /* ---------- 오브 안 올리브 ----------
      올리브가 오브 안쪽 곡면을 따라 좌우로 굴러간다.
      한쪽 끝에서 반대쪽까지 딱 한 박이 걸리므로, 끝에 닿는 순간이 곧 소리가 나는 순간이다.
@@ -327,8 +339,7 @@
       }
       if(document.visibilityState!=='visible') throw new Error('PageNotVisible');
       metroCtx=ctx;
-      metroOutput=ctx.createGain();
-      metroOutput.connect(getMaster(ctx));
+      createMetroOutput(ctx);
       isPlaying=true;
       currentStep=0;
       rollBeat=0;
@@ -346,10 +357,7 @@
       if(token!==startToken) return;
       startPending=false;
       metroCtx=null;
-      if(metroOutput){
-        try{ metroOutput.disconnect(); }catch(e){}
-        metroOutput=null;
-      }
+      releaseMetroOutput();
       orbLabel.textContent='재시도';
       metroStart.classList.remove('starting','running','flash');
       metroStart.setAttribute('aria-busy','false');
@@ -366,11 +374,7 @@
     isPlaying=false;
     // 백그라운드에서 미리 예약해 둔 클릭음도 이 출력 버스를 끊는 순간
     // 바로 무음이 된다. 다른 반주가 같은 AudioContext를 써도 영향을 주지 않는다.
-    if(metroOutput){
-      try{ metroOutput.gain.value=0; }catch(e){}
-      try{ metroOutput.disconnect(); }catch(e){}
-      metroOutput=null;
-    }
+    releaseMetroOutput();
     metroCtx=null;
     clearTimeout(timerID);
     orbLabel.textContent=label;
@@ -387,15 +391,21 @@
     metroStart.classList.remove('flash');
     orbLabel.textContent=paused?'재생':'정지';
     clearTimeout(timerID);
-    if(paused) return;
-    if(!metroCtx || metroCtx!==audioCtx || metroCtx.state!=='running') return;
-    while(scheduledBeats.length && scheduledBeats[0].time<=metroCtx.currentTime){
-      scheduledBeats.shift();
-    }
-    if(nextNoteTime<=metroCtx.currentTime+0.01){
+    if(paused){
+      // 잠금 전에 예약해 둔 클릭음을 출력에서 떼어 재개 때 겹치지 않게 한다.
+      releaseMetroOutput();
       scheduledBeats=[];
-      nextNoteTime=metroCtx.currentTime+0.05;
+      beatDotsEl.querySelectorAll('.beat-dot')
+        .forEach(d=>d.classList.remove('on','mid-on','accent-on'));
+      rollRight=false; parkOlive();
+      return;
     }
+    if(!metroCtx || metroCtx!==audioCtx || metroCtx.state!=='running') return;
+    createMetroOutput(metroCtx);
+    currentStep=0;
+    rollBeat=0;
+    scheduledBeats=[];
+    nextNoteTime=metroCtx.currentTime+0.05;
     scheduler();
   }
   metroStart.addEventListener('click', ()=>{
