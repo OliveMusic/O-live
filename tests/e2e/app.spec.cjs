@@ -2,7 +2,9 @@ const {test,expect}=require('playwright/test');
 
 const pageErrors=new WeakMap();
 
-async function preparePage(page,{cloudClient=false,preferences=null,microphone='native',recordings=[]}={}){
+async function preparePage(page,{
+  cloudClient=false,preferences=null,microphone='native',recordings=[],cloudUploadError='',
+}={}){
   const errors=[];
   pageErrors.set(page,errors);
   page.on('pageerror',error=>errors.push(error.message));
@@ -11,7 +13,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
     contentType:'application/javascript',
     body:'',
   }));
-  await page.addInitScript(({withCloud,storedPreferences,micMode,recordingRows})=>{
+  await page.addInitScript(({withCloud,storedPreferences,micMode,recordingRows,recordingUploadError})=>{
     sessionStorage.setItem('olive-startup-state-v2','shown');
     const audioSession={type:'auto'};
     try{ Object.defineProperty(navigator,'audioSession',{configurable:true,value:audioSession}); }
@@ -56,7 +58,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           async getSession(){ return {data:{session:{user}},error:null}; },
         },
         async rpc(name,args){
-          if(name==='olive_schema_version') return {data:10,error:null};
+          if(name==='olive_schema_version') return {data:11,error:null};
           if(name==='reserve_practice_recording') pendingRecording=args;
           if(name==='finalize_practice_recording' && pendingRecording &&
              pendingRecording.p_recording_id===args.p_recording_id){
@@ -84,6 +86,7 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
         },
         storage:{from(){ return {
           async upload(path,blob,options){
+            if(recordingUploadError) return {data:null,error:{message:recordingUploadError}};
             window.__uploadedRecording={path,size:blob.size,type:blob.type,options};
             return {data:{path},error:null};
           },
@@ -310,10 +313,13 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
         value:{getUserMedia},
       });
     }
-  },{withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,recordingRows:recordings});
+  },{
+    withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,
+    recordingRows:recordings,recordingUploadError:cloudUploadError,
+  });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.29');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.30');
 }
 
 test.afterEach(async({page})=>{
@@ -339,7 +345,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=159');
+  expect(workerUrl).toContain('service-worker.js?v=160');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -356,7 +362,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.29',build:159});
+  expect(payload.release).toEqual({version:'1.3.30',build:160});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -563,6 +569,44 @@ test('업로드한 반주를 내 녹음에서 재생하며 잠금화면에서도
   await page.locator('.tab-btn[data-tab="tuner"]').click();
   await expect(recorder).not.toHaveClass(/on/);
   await expect(backingPlay).not.toHaveClass(/playing/);
+});
+
+test('MP3 메타데이터 판독이 실패하면 오디오 디코더로 길이를 다시 확인한다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings',microphone:'controls'});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await page.evaluate(()=>{
+    Object.defineProperty(HTMLMediaElement.prototype,'duration',{
+      configurable:true,get(){ return Number.NaN; },
+    });
+    Object.defineProperty(HTMLMediaElement.prototype,'readyState',{
+      configurable:true,get(){ return 0; },
+    });
+    HTMLMediaElement.prototype.load=function(){
+      Promise.resolve().then(()=>this.dispatchEvent(new Event('error')));
+    };
+  });
+  await page.locator('#recordUploadInput').setInputFiles({
+    name:'Paper Hearts.mp3',mimeType:'audio/mpeg',buffer:Buffer.from('mp3 with metadata fallback'),
+  });
+  await expect(page.locator('.record-row-copy strong')).toHaveText('Paper Hearts');
+  expect(await page.evaluate(()=>window.__uploadedRecording)).toMatchObject({
+    type:'audio/mpeg',options:{contentType:'audio/mpeg'},
+  });
+});
+
+test('Storage가 MP3 MIME을 거절하면 DB 업데이트 안내를 표시한다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    cloudUploadError:'mime type audio/mpeg is not supported',
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await page.locator('#recordUploadInput').setInputFiles({
+    name:'Paper Hearts.mp3',mimeType:'audio/mpeg',buffer:Buffer.from('mp3 upload'),
+  });
+  await expect(page.locator('#recordMessage'))
+    .toHaveText('MP3 업로드를 위한 저장소 업데이트가 필요합니다 · DB-011');
 });
 
 test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다',async({page})=>{
@@ -1175,8 +1219,8 @@ test('클라우드 스키마가 오래되면 저장 대신 구체적인 업데�
   await preparePage(page,{cloudClient:true});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(page.locator('#earCloudTitle')).toHaveText('클라우드 업데이트 필요');
-  await expect(page.locator('#earCloudStatus')).toContainText('DB-010');
+  await expect(page.locator('#earCloudStatus')).toContainText('DB-011');
   await page.locator('#earCloudAction').evaluate(element=>element.click());
   await page.locator('#cloudSyncNow').click();
-  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-010');
+  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-011');
 });

@@ -212,7 +212,7 @@
     const name=String(file&&file.name||'업로드').replace(/\.[^.]+$/,'').trim();
     return (name||'업로드').slice(0,80);
   }
-  function audioFileDuration(file){
+  function mediaElementAudioDuration(file){
     return new Promise((resolve,reject)=>{
       const audio=document.createElement('audio');
       const url=URL.createObjectURL(file);
@@ -235,6 +235,36 @@
       try{ audio.load(); }catch(error){ finish(error); }
       if(audio.readyState>=1) Promise.resolve().then(()=>finish());
     });
+  }
+  async function decodedAudioFileDuration(file){
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx) throw new Error('Audio decoder unavailable');
+    const ctx=new Ctx({latencyHint:'playback'});
+    try{
+      const decoded=await withTimeout(decodeAudioBlob(ctx,file),15000);
+      const duration=Number(decoded&&decoded.duration);
+      if(!Number.isFinite(duration) || duration<=0) throw new Error('Invalid decoded audio duration');
+      return Math.round(duration*1000);
+    }finally{
+      try{
+        const closing=ctx.close();
+        if(closing && typeof closing.catch==='function') closing.catch(()=>{});
+      }catch(e){}
+    }
+  }
+  async function audioFileDuration(file){
+    try{
+      return await mediaElementAudioDuration(file);
+    }catch(metadataError){
+      // 일부 브라우저는 재생 가능한 MP3도 ID3/VBR 메타데이터 단계에서 먼저
+      // 오류를 낸다. 실제 디코더가 읽을 수 있으면 정상 파일로 받아들인다.
+      try{ return await decodedAudioFileDuration(file); }
+      catch(decodeError){
+        const error=new Error('Audio metadata and decode failed');
+        error.cause={metadataError,decodeError};
+        throw error;
+      }
+    }
   }
   function setMessage(message,error){
     recordMessage.textContent=message||'';
@@ -1102,8 +1132,18 @@
     recordUpload.disabled=true;
     recordUpload.textContent='확인 중…';
     setMessage('오디오 정보를 확인하는 중입니다');
+    let durationMs=0;
     try{
-      const durationMs=await audioFileDuration(file);
+      durationMs=await audioFileDuration(file);
+    }catch(error){
+      console.warn('[O\'live recording upload metadata]',error);
+      setMessage('이 오디오 파일을 확인할 수 없습니다',true);
+      recordUpload.disabled=false;
+      recordUpload.textContent='업로드';
+      recordUploadInput.value='';
+      return;
+    }
+    try{
       if(durationMs<1000 || durationMs>MAX_UPLOAD_DURATION_MS){
         setMessage('업로드 파일은 1초 이상 30분 이하여야 합니다',true); return;
       }
@@ -1121,9 +1161,13 @@
       await cacheRowBlob(savedRow,file);
       setMessage('내 녹음에 추가했습니다');
     }catch(error){
-      const message=/count limit/i.test(error&&error.message||'') ? '내 녹음에는 최대 50개까지 저장할 수 있습니다'
-        : /storage limit|too large/i.test(error&&error.message||'') ? '녹음 저장 용량이 가득 찼습니다'
-        : /duration|metadata|unsupported|decode/i.test(error&&error.message||'') ? '이 오디오 파일을 확인할 수 없습니다'
+      const detail=String(error&&error.message||'');
+      const code=String(error&&error.code||'');
+      console.warn('[O\'live recording upload cloud]',code,detail);
+      const message=/count limit/i.test(detail) ? '내 녹음에는 최대 50개까지 저장할 수 있습니다'
+        : /storage limit|too large|payload.*large|maximum.*size/i.test(detail) ? '녹음 저장 용량이 가득 찼습니다'
+        : /^DB-|schema/i.test(code+' '+detail) ? '클라우드 저장소 업데이트가 필요합니다 · DB-011'
+        : /mime|unsupported|not supported/i.test(detail) ? 'MP3 업로드를 위한 저장소 업데이트가 필요합니다 · DB-011'
         : !navigator.onLine ? '인터넷에 연결한 뒤 다시 업로드해 주세요'
         : '파일을 업로드하지 못했습니다. 다시 시도해 주세요';
       setMessage(message,true);

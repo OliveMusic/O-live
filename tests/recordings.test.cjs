@@ -16,7 +16,8 @@ const waveformMigration=fs.readFileSync('supabase/007_recording_waveforms.sql','
 const timestampMigration=fs.readFileSync('supabase/008_recording_timestamps.sql','utf8');
 const playbackGainMigration=fs.readFileSync('supabase/009_recording_playback_gain.sql','utf8');
 const uploadMigration=fs.readFileSync('supabase/010_recording_uploads.sql','utf8');
-const migration=baseMigration+'\n'+waveformMigration+'\n'+timestampMigration+'\n'+playbackGainMigration+'\n'+uploadMigration;
+const mimeMigration=fs.readFileSync('supabase/011_recording_mime_types.sql','utf8');
+const migration=baseMigration+'\n'+waveformMigration+'\n'+timestampMigration+'\n'+playbackGainMigration+'\n'+uploadMigration+'\n'+mimeMigration;
 const edge=fs.readFileSync('supabase/functions/delete-account/index.ts','utf8');
 
 assert.match(index,/grid-template-columns:repeat\(3,1fr\)/);
@@ -81,6 +82,10 @@ assert.match(recorder,/잠금화면에서도 녹음을 유지합니다 · 튜너
 assert.match(recorder,/function uploadExternalFile\(file\)/);
 assert.match(recorder,/MAX_UPLOAD_BYTES=15\*1024\*1024/);
 assert.match(recorder,/MAX_UPLOAD_DURATION_MS=30\*60\*1000/);
+assert.match(recorder,/function decodedAudioFileDuration\(file\)/);
+assert.match(recorder,/return await mediaElementAudioDuration\(file\)/);
+assert.match(recorder,/return await decodedAudioFileDuration\(file\)/);
+assert.match(recorder,/MP3 업로드를 위한 저장소 업데이트가 필요합니다 · DB-011/);
 assert.match(recorder,/sourceType:'upload'/);
 assert.match(recorder,/await window\.OliveCloud\.uploadRecording\(uploaded\)/);
 assert.doesNotMatch(recorder,/recordBacking|backingAudio|backingPlaying/);
@@ -197,6 +202,8 @@ assert.match(uploadMigration,/source_type in \('recording','upload'\)/);
 assert.match(uploadMigration,/source_type='upload' and duration_ms between 1000 and 1800000/);
 assert.match(uploadMigration,/p_source_type text/);
 assert.match(uploadMigration,/select 10::integer/);
+assert.match(mimeMigration,/allowed_mime_types=excluded\.allowed_mime_types/);
+assert.match(mimeMigration,/select 11::integer/);
 
 assert.match(edge,/from\("practice-recordings"\)/);
 assert.match(edge,/\.remove\(recordingPaths\)/);
