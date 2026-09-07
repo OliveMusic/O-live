@@ -39,6 +39,8 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
       localStorage.setItem('olive-preferences-v1',JSON.stringify(storedPreferences));
     }
     if(withCloud==='recordings'){
+      const serverRows=recordingRows.slice();
+      let pendingRecording=null;
       const user={
         id:'recording-browser-user',email:'recording@example.com',
         app_metadata:{provider:'google'},user_metadata:{full_name:'Recording Test'},
@@ -48,10 +50,26 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           onAuthStateChange(){ return {data:{subscription:{unsubscribe(){}}}}; },
           async getSession(){ return {data:{session:{user}},error:null}; },
         },
-        async rpc(name){ return {data:name==='olive_schema_version'?9:true,error:null}; },
+        async rpc(name,args){
+          if(name==='olive_schema_version') return {data:10,error:null};
+          if(name==='reserve_practice_recording') pendingRecording=args;
+          if(name==='finalize_practice_recording' && pendingRecording &&
+             pendingRecording.p_recording_id===args.p_recording_id){
+            serverRows.unshift({
+              id:pendingRecording.p_recording_id,title:pendingRecording.p_title,
+              object_path:pendingRecording.p_object_path,duration_ms:pendingRecording.p_duration_ms,
+              byte_size:pendingRecording.p_byte_size,mime_type:pendingRecording.p_mime_type,
+              waveform:pendingRecording.p_waveform,playback_gain:pendingRecording.p_playback_gain,
+              source_type:pendingRecording.p_source_type,recorded_at:pendingRecording.p_recorded_at,
+              created_at:pendingRecording.p_recorded_at,
+            });
+            pendingRecording=null;
+          }
+          return {data:true,error:null};
+        },
         from(table){
           if(table==='practice_recordings') return {
-            select(){ return {eq(){ return {order(){ return {async limit(){ return {data:recordingRows,error:null}; }}; }}; }}; },
+            select(){ return {eq(){ return {order(){ return {async limit(){ return {data:serverRows,error:null}; }}; }}; }}; },
           };
           if(table==='user_preferences') return {
             select(){ return {eq(){ return {async maybeSingle(){ return {data:null,error:null}; }}; }}; },
@@ -60,6 +78,10 @@ async function preparePage(page,{cloudClient=false,preferences=null,microphone='
           return {select(){ return {async order(){ return {data:[],error:null}; }}; }};
         },
         storage:{from(){ return {
+          async upload(path,blob,options){
+            window.__uploadedRecording={path,size:blob.size,type:blob.type,options};
+            return {data:{path},error:null};
+          },
           async createSignedUrls(paths){
             return {data:paths.map(path=>({path,signedUrl:`https://storage.example.com/${path}?token=test`})),error:null};
           },
@@ -361,9 +383,10 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-waveform-svg.base path')).toHaveAttribute('d',/M/);
   await expect(page.locator('.record-row-copy small')).toHaveText(/2026\. 09\. 06\. \d{2}:\d{2}/);
 
-  const box=await page.locator('.record-waveform').boundingBox();
+  const waveformControl=page.locator('.record-waveform');
+  const box=await waveformControl.boundingBox();
   expect(box).toBeTruthy();
-  await page.mouse.click(box.x+box.width*.75,box.y+box.height/2);
+  await waveformControl.click({position:{x:box.width*.75,y:box.height/2}});
   expect(await page.evaluate(()=>window.__mediaPlayCalls||0)).toBeGreaterThan(0);
   await page.evaluate(()=>window.__resolveRecordingDownload());
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
@@ -376,7 +399,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/5[01-3]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('00:51');
   const playCallsBeforeSeek=await page.evaluate(()=>window.__mediaPlayCalls||0);
-  await page.mouse.click(box.x+box.width*.25,box.y+box.height/2);
+  await page.locator('.record-waveform').click({position:{x:box.width*.25,y:box.height/2}});
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/1[67-8]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('00:17');
@@ -471,22 +494,28 @@ test('메트로놈과 잼은 서로 교대하고 진행 중인 녹음은 유지�
   await metro.click();
 });
 
-test('로컬 반주를 재생하며 녹음하고 화면을 잠가도 원본 녹음을 유지한다',async({page})=>{
+test('업로드한 반주를 내 녹음에서 재생하며 잠금화면에서도 녹음한다',async({page})=>{
   await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal'});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
 
-  await page.locator('#recordBackingInput').setInputFiles({
-    name:'연습 반주.m4a',mimeType:'audio/mp4',buffer:Buffer.from('olive backing track'),
+  await expect(page.locator('#recordUpload')).toBeVisible();
+  await page.locator('#recordUploadInput').setInputFiles({
+    name:'연습 반주.mp3',mimeType:'audio/mpeg',buffer:Buffer.from('olive backing track'),
   });
-  await expect(page.locator('#recordBackingPlayer')).toBeVisible();
-  await expect(page.locator('#recordBackingName')).toHaveText('연습 반주.m4a');
-  await page.locator('#recordBackingPlay').click();
-  await expect(page.locator('#recordBackingPlay')).toHaveClass(/playing/);
+  await expect(page.locator('.record-row-copy strong')).toHaveText('연습 반주');
+  expect(await page.evaluate(()=>window.__uploadedRecording)).toMatchObject({
+    type:'audio/mpeg',options:{contentType:'audio/mpeg'},
+  });
+  await page.locator('.record-row-open').click();
+  const backingPlay=page.locator('.record-player-play');
+  await backingPlay.click();
+  await expect(backingPlay).toHaveClass(/playing/);
 
   const recorder=page.locator('#recordToggle');
   await recorder.click();
   await expect(recorder).toHaveClass(/on/);
+  await expect(backingPlay).toHaveClass(/playing/);
   expect(await page.evaluate(()=>window.__micHarness.recorderStream===window.__micHarness.inputStream)).toBeTruthy();
   expect(await page.evaluate(()=>window.__testAudioSession.type)).toBe('play-and-record');
 
@@ -496,7 +525,7 @@ test('로컬 반주를 재생하며 녹음하고 화면을 잠가도 원본 녹�
   });
   await page.waitForTimeout(350);
   await expect(recorder).toHaveClass(/on/);
-  await expect(page.locator('#recordBackingPlay')).toHaveClass(/playing/);
+  await expect(backingPlay).toHaveClass(/playing/);
   expect(await page.evaluate(()=>window.__micHarness.mediaRecorder.state)).toBe('recording');
 
   await page.evaluate(()=>{
@@ -507,7 +536,7 @@ test('로컬 반주를 재생하며 녹음하고 화면을 잠가도 원본 녹�
 
   await page.locator('.tab-btn[data-tab="tuner"]').click();
   await expect(recorder).not.toHaveClass(/on/);
-  await expect(page.locator('#recordBackingPlay')).not.toHaveClass(/playing/);
+  await expect(backingPlay).not.toHaveClass(/playing/);
 });
 
 test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다',async({page})=>{
@@ -1024,8 +1053,8 @@ test('클라우드 스키마가 오래되면 저장 대신 구체적인 업데�
   await preparePage(page,{cloudClient:true});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(page.locator('#earCloudTitle')).toHaveText('클라우드 업데이트 필요');
-  await expect(page.locator('#earCloudStatus')).toContainText('DB-009');
+  await expect(page.locator('#earCloudStatus')).toContainText('DB-010');
   await page.locator('#earCloudAction').evaluate(element=>element.click());
   await page.locator('#cloudSyncNow').click();
-  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-009');
+  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-010');
 });

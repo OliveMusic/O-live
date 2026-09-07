@@ -627,16 +627,23 @@ function stopForegroundTransports(){
     try{ if(!transport.background && transport.isPlaying()) transport.stop(); }catch(e){}
   });
 }
+function transportKeepsWhenHidden(transport){
+  try{
+    return Boolean(typeof transport.keepWhenHidden==='function'
+      ? transport.keepWhenHidden()
+      : transport.keepWhenHidden);
+  }catch(e){ return false; }
+}
 function stopHiddenUnsafeTransports(){
   __transports.forEach(transport=>{
     try{
-      if(!transport.background && !transport.keepWhenHidden && transport.isPlaying()) transport.stop();
+      if(!transport.background && !transportKeepsWhenHidden(transport) && transport.isPlaying()) transport.stop();
     }catch(e){}
   });
 }
 function hasHiddenSafeTransportPlaying(){
   return __transports.some(transport=>{
-    try{ return Boolean(transport.keepWhenHidden && transport.isPlaying()); }
+    try{ return Boolean(transportKeepsWhenHidden(transport) && transport.isPlaying()); }
     catch(e){ return false; }
   });
 }

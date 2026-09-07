@@ -5,6 +5,8 @@
 
   const MAX_DURATION_MS=5*60*1000;
   const MAX_RECORDINGS=50;
+  const MAX_UPLOAD_BYTES=15*1024*1024;
+  const MAX_UPLOAD_DURATION_MS=30*60*1000;
   const WAVEFORM_POINTS=160;
   const WAVEFORM_MAX_POINTS=240;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
@@ -23,23 +25,14 @@
   const recordStateDot=document.getElementById('recordStateDot');
   const recordLevel=document.getElementById('recordLevelFill');
   const recordHint=document.getElementById('recordHint');
-  const recordBackingInput=document.getElementById('recordBackingInput');
-  const recordBackingEmpty=document.getElementById('recordBackingEmpty');
-  const recordBackingPick=document.getElementById('recordBackingPick');
-  const recordBackingPlayer=document.getElementById('recordBackingPlayer');
-  const recordBackingPlay=document.getElementById('recordBackingPlay');
-  const recordBackingName=document.getElementById('recordBackingName');
-  const recordBackingRemove=document.getElementById('recordBackingRemove');
-  const recordBackingProgress=document.getElementById('recordBackingProgress');
-  const recordBackingCurrent=document.getElementById('recordBackingCurrent');
-  const recordBackingDuration=document.getElementById('recordBackingDuration');
-  const backingAudio=document.getElementById('recordBackingAudio');
   const recordDraft=document.getElementById('recordDraft');
   const recordTitle=document.getElementById('recordTitle');
   const recordDiscard=document.getElementById('recordDiscard');
   const recordSave=document.getElementById('recordSave');
   const recordMessage=document.getElementById('recordMessage');
   const recordUsage=document.getElementById('recordUsage');
+  const recordUpload=document.getElementById('recordUpload');
+  const recordUploadInput=document.getElementById('recordUploadInput');
   const recordList=document.getElementById('recordList');
   const menuBackdrop=document.getElementById('recordMenuBackdrop');
   const menuTitle=document.getElementById('recordMenuTitle');
@@ -96,8 +89,6 @@
   let cloudMediaGain=null;
   let cloudPlayToken=0;
   let cloudProgressFrame=0;
-  let backingUrl='';
-  let backingPlaying=false;
   const cloudBlobs=new Map();
   const waveformCache=new Map();
   const waveformLoads=new Map();
@@ -191,6 +182,9 @@
   }
   function extensionFor(mime){
     const type=String(mime||'').toLowerCase();
+    if(type.includes('mpeg')) return 'mp3';
+    if(type.includes('aac')) return 'aac';
+    if(type.includes('flac')) return 'flac';
     if(type.includes('webm')) return 'webm';
     if(type.includes('ogg')) return 'ogg';
     if(type.includes('wav')) return 'wav';
@@ -206,93 +200,41 @@
       'audio/webm',
     ].find(type=>MediaRecorder.isTypeSupported(type))||'';
   }
-  function backingDuration(){
-    const value=Number(backingAudio&&backingAudio.duration);
-    return Number.isFinite(value) && value>0 ? value : 0;
+  function uploadMimeType(file){
+    const type=String(file&&file.type||'').toLowerCase().split(';')[0];
+    const allowed=['audio/mpeg','audio/mp4','audio/x-m4a','audio/aac','audio/wav','audio/x-wav','audio/ogg','audio/webm','audio/flac'];
+    if(allowed.includes(type)) return type;
+    const extension=String(file&&file.name||'').split('.').pop().toLowerCase();
+    return ({mp3:'audio/mpeg',m4a:'audio/mp4',mp4:'audio/mp4',aac:'audio/aac',wav:'audio/wav',
+      ogg:'audio/ogg',webm:'audio/webm',flac:'audio/flac'})[extension]||'';
   }
-  function updateBackingPosition(){
-    if(!backingAudio) return;
-    const duration=backingDuration();
-    const current=Math.max(0,Number(backingAudio.currentTime)||0);
-    recordBackingProgress.value=duration ? String(Math.round(clamp(current/duration,0,1)*1000)) : '0';
-    recordBackingCurrent.textContent=formatDuration(current*1000);
-    recordBackingDuration.textContent=formatDuration(duration*1000);
+  function uploadTitle(file){
+    const name=String(file&&file.name||'업로드').replace(/\.[^.]+$/,'').trim();
+    return (name||'업로드').slice(0,80);
   }
-  function renderBackingPlayback(){
-    if(!recordBackingPlay) return;
-    recordBackingPlay.classList.toggle('playing',backingPlaying);
-    recordBackingPlay.setAttribute('aria-label',backingPlaying?'반주 일시정지':'반주 재생');
-  }
-  function setBackingPlaying(on){
-    const next=Boolean(on && backingUrl);
-    if(backingPlaying===next){ renderBackingPlayback(); return; }
-    backingPlaying=next;
-    renderBackingPlayback();
-    setTabSounding('trainer',next,'recording-backing');
-    if(next){
-      const mode=(recording||startPending)?'play-and-record':'playback';
-      setAudioSession(mode);
-      if(audioCtx && audioCtx.state!=='closed') __ctxMode=mode;
-    }
-  }
-  function pauseBacking(resetPosition=false){
-    if(!backingAudio) return;
-    setBackingPlaying(false);
-    try{ backingAudio.pause(); }catch(e){}
-    if(resetPosition){
-      try{ backingAudio.currentTime=0; }catch(e){}
-    }
-    updateBackingPosition();
-  }
-  function removeBacking(){
-    pauseBacking(true);
-    if(backingAudio){
-      try{ backingAudio.removeAttribute('src'); backingAudio.load(); }catch(e){}
-    }
-    if(backingUrl){ try{ URL.revokeObjectURL(backingUrl); }catch(e){} }
-    backingUrl='';
-    if(recordBackingInput) recordBackingInput.value='';
-    recordBackingName.textContent='';
-    recordBackingEmpty.hidden=false;
-    recordBackingPlayer.hidden=true;
-    updateBackingPosition();
-  }
-  function loadBackingFile(file){
-    if(!file || !backingAudio) return;
-    const compatible=String(file.type||'').startsWith('audio/') ||
-      /\.(mp3|m4a|aac|wav|ogg|webm|flac)$/i.test(String(file.name||''));
-    if(!compatible){
-      setMessage('재생할 수 있는 오디오 파일을 선택해 주세요',true);
-      return;
-    }
-    pauseBacking(true);
-    if(backingUrl){ try{ URL.revokeObjectURL(backingUrl); }catch(e){} }
-    backingUrl=URL.createObjectURL(file);
-    backingAudio.src=backingUrl;
-    backingAudio.load();
-    recordBackingName.textContent=file.name||'불러온 반주';
-    recordBackingEmpty.hidden=true;
-    recordBackingPlayer.hidden=false;
-    recordBackingProgress.value='0';
-    recordBackingCurrent.textContent='00:00';
-    recordBackingDuration.textContent='00:00';
-    setMessage('반주를 불러왔습니다');
-  }
-  async function toggleBackingPlayback(){
-    if(!backingUrl){ recordBackingInput.click(); return; }
-    if(backingPlaying){ pauseBacking(false); return; }
-    pauseDraftPlayback(false);
-    stopCloudPlayback();
-    const mode=(recording||startPending)?'play-and-record':'playback';
-    setAudioSession(mode);
-    try{
-      const result=backingAudio.play();
-      if(result && typeof result.then==='function') await result;
-      setBackingPlaying(true);
-    }catch(e){
-      setBackingPlaying(false);
-      setMessage('이 오디오 파일을 재생하지 못했습니다',true);
-    }
+  function audioFileDuration(file){
+    return new Promise((resolve,reject)=>{
+      const audio=document.createElement('audio');
+      const url=URL.createObjectURL(file);
+      let settled=false;
+      const finish=(error)=>{
+        if(settled) return;
+        settled=true; clearTimeout(timer);
+        const duration=Number(audio.duration);
+        audio.removeAttribute('src');
+        try{ audio.load(); }catch(e){}
+        URL.revokeObjectURL(url);
+        if(error || !Number.isFinite(duration) || duration<=0) reject(error||new Error('Invalid audio duration'));
+        else resolve(Math.round(duration*1000));
+      };
+      const timer=setTimeout(()=>finish(new Error('Audio metadata timeout')),10000);
+      audio.preload='metadata';
+      audio.addEventListener('loadedmetadata',()=>finish(),{once:true});
+      audio.addEventListener('error',()=>finish(new Error('Unsupported audio file')),{once:true});
+      audio.src=url;
+      try{ audio.load(); }catch(error){ finish(error); }
+      if(audio.readyState>=1) Promise.resolve().then(()=>finish());
+    });
   }
   function setMessage(message,error){
     recordMessage.textContent=message||'';
@@ -312,7 +254,7 @@
     setTimer(0);
     recordState.textContent='새 녹음';
     recordStateDot.hidden=true;
-    recordHint.textContent='최대 5분 · 반주와 함께 녹음할 수 있습니다';
+    recordHint.textContent='최대 5분 · 목록의 반주와 함께 녹음할 수 있습니다';
     recordDraft.hidden=true;
     recordLevel.style.transform='scaleX(0)';
     setButtonMode('idle');
@@ -496,7 +438,6 @@
       setMessage('이 브라우저에서는 녹음을 사용할 수 없습니다',true); return;
     }
     if(draft) discardDraft();
-    stopCloudPlayback();
     const preservePlayback=anySounding();
     const token=++startToken;
     startPending=true;
@@ -595,7 +536,6 @@
       renderDraft();
       return;
     }
-    pauseBacking(false);
     stopCloudPlayback();
     const token=++draftPlayToken;
     let playback;
@@ -931,7 +871,6 @@
     if(cloudPlayingId===row.id && !seeking){ pauseCloudPlayback(); return; }
     if(cloudPlayingId===row.id) pauseCloudPlayback();
     else if(cloudPlayingId || (cloudMediaId && cloudMediaId!==row.id)) stopCloudPlayback();
-    pauseBacking(false);
     pauseDraftPlayback(false);
     let playback;
     try{ playback=beginPlaybackFromGesture(); }
@@ -1150,6 +1089,50 @@
     catch(error){ rows=[]; setMessage('녹음 저장소를 준비한 뒤 다시 시도해 주세요',true); }
     finally{ loadingList=false; renderList(); }
   }
+  async function uploadExternalFile(file){
+    if(!currentUser || !file || recordUpload.disabled) return;
+    if(rows.length>=MAX_RECORDINGS){
+      setMessage('내 녹음에는 최대 50개까지 저장할 수 있습니다',true); return;
+    }
+    const mimeType=uploadMimeType(file);
+    if(!mimeType){ setMessage('지원하는 오디오 파일을 선택해 주세요',true); return; }
+    if(!file.size || file.size>MAX_UPLOAD_BYTES){
+      setMessage('업로드 파일은 15MB 이하여야 합니다',true); return;
+    }
+    recordUpload.disabled=true;
+    recordUpload.textContent='확인 중…';
+    setMessage('오디오 정보를 확인하는 중입니다');
+    try{
+      const durationMs=await audioFileDuration(file);
+      if(durationMs<1000 || durationMs>MAX_UPLOAD_DURATION_MS){
+        setMessage('업로드 파일은 1초 이상 30분 이하여야 합니다',true); return;
+      }
+      const uploaded={
+        id:makeId(),blob:file,title:uploadTitle(file),durationMs,mimeType,
+        extension:extensionFor(mimeType),waveform:[],playbackGain:1,
+        recordedAt:new Date().toISOString(),sourceType:'upload',
+      };
+      recordUpload.textContent='업로드 중…';
+      setMessage('클라우드에 업로드하는 중입니다');
+      await window.OliveCloud.uploadRecording(uploaded);
+      rememberCloudBlob(uploaded,file);
+      await loadRecordings();
+      const savedRow=rows.find(row=>row.id===uploaded.id)||uploaded;
+      await cacheRowBlob(savedRow,file);
+      setMessage('내 녹음에 추가했습니다');
+    }catch(error){
+      const message=/count limit/i.test(error&&error.message||'') ? '내 녹음에는 최대 50개까지 저장할 수 있습니다'
+        : /storage limit|too large/i.test(error&&error.message||'') ? '녹음 저장 용량이 가득 찼습니다'
+        : /duration|metadata|unsupported|decode/i.test(error&&error.message||'') ? '이 오디오 파일을 확인할 수 없습니다'
+        : !navigator.onLine ? '인터넷에 연결한 뒤 다시 업로드해 주세요'
+        : '파일을 업로드하지 못했습니다. 다시 시도해 주세요';
+      setMessage(message,true);
+    }finally{
+      recordUpload.disabled=false;
+      recordUpload.textContent='업로드';
+      recordUploadInput.value='';
+    }
+  }
   async function saveDraft(){
     if(!draft || recordSave.disabled) return;
     const title=recordTitle.value.trim();
@@ -1232,7 +1215,7 @@
     if(sessionUserId && sessionUserId!==nextId){
       const previousId=sessionUserId;
       if(recording || startPending) stopRecording();
-      discardDraft(); stopCloudPlayback(); removeBacking(); clearCloudPlaybackCache();
+      discardDraft(); stopCloudPlayback(); clearCloudPlaybackCache();
       waveformCache.clear(); waveformLoads.clear(); playbackPositions.clear(); expandedRecordingId='';
       const cache=recordingCache();
       if(cache) cache.clearUser(previousId).catch(error=>console.warn('[O\'live recording cache clear]',error));
@@ -1255,18 +1238,10 @@
   recordDiscard.addEventListener('click',discardDraft);
   recordSave.addEventListener('click',saveDraft);
   recordTitle.addEventListener('input',()=>{ if(draft) draft.title=recordTitle.value; });
-  recordBackingPick.addEventListener('click',()=>recordBackingInput.click());
-  recordBackingInput.addEventListener('change',()=>{
-    const file=recordBackingInput.files&&recordBackingInput.files[0];
-    if(file) loadBackingFile(file);
-  });
-  recordBackingPlay.addEventListener('click',toggleBackingPlayback);
-  recordBackingRemove.addEventListener('click',removeBacking);
-  recordBackingProgress.addEventListener('input',()=>{
-    const duration=backingDuration();
-    if(!duration) return;
-    try{ backingAudio.currentTime=duration*clamp(Number(recordBackingProgress.value)||0,0,1000)/1000; }catch(e){}
-    updateBackingPosition();
+  recordUpload.addEventListener('click',()=>recordUploadInput.click());
+  recordUploadInput.addEventListener('change',()=>{
+    const file=recordUploadInput.files&&recordUploadInput.files[0];
+    if(file) uploadExternalFile(file);
   });
   menuBackdrop.addEventListener('click',event=>{ if(event.target===menuBackdrop) closeMenu(); });
   menuBackdrop.addEventListener('keydown',event=>{ if(event.key==='Escape'){ event.preventDefault(); closeMenu(); } });
@@ -1276,21 +1251,6 @@
   draftAudio.addEventListener('play',()=>{ recordState.textContent='재생 중'; setButtonMode('preview'); setTabSounding('trainer',true,'recording-preview'); });
   draftAudio.addEventListener('pause',()=>{ if(draft){ recordState.textContent='녹음 확인'; setButtonMode('preview'); } setTabSounding('trainer',false,'recording-preview'); });
   draftAudio.addEventListener('ended',()=>{ draftStartedOffset=0; recordState.textContent='녹음 확인'; setButtonMode('preview'); setTabSounding('trainer',false,'recording-preview'); });
-  backingAudio.addEventListener('play',()=>setBackingPlaying(true));
-  backingAudio.addEventListener('playing',()=>setBackingPlaying(true));
-  backingAudio.addEventListener('pause',()=>setBackingPlaying(false));
-  backingAudio.addEventListener('ended',()=>{
-    setBackingPlaying(false);
-    try{ backingAudio.currentTime=0; }catch(e){}
-    updateBackingPosition();
-  });
-  backingAudio.addEventListener('loadedmetadata',updateBackingPosition);
-  backingAudio.addEventListener('durationchange',updateBackingPosition);
-  backingAudio.addEventListener('timeupdate',updateBackingPosition);
-  backingAudio.addEventListener('error',()=>{
-    setBackingPlaying(false);
-    if(backingUrl) setMessage('이 오디오 파일을 재생하지 못했습니다',true);
-  });
   registerTransport({
     isPlaying:()=>recording || startPending,
     stop:()=>{
@@ -1301,11 +1261,7 @@
   registerTransport({
     isPlaying:()=>draftIsPlaying() || Boolean(cloudPlayingId),
     stop:()=>{ pauseDraftPlayback(false); stopCloudPlayback(); },
-  });
-  registerTransport({
-    isPlaying:()=>backingPlaying,
-    stop:()=>pauseBacking(false),
-    keepWhenHidden:true,
+    keepWhenHidden:()=>recording || startPending,
   });
   function stopPlaybackForOtherTool(){
     pauseDraftPlayback(false);
