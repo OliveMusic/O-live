@@ -31,7 +31,9 @@
   const urlGo=document.getElementById('linkUrlGo');
   const message=document.getElementById('linkMessage');
   const results=document.getElementById('linkResults');
-  const list=document.getElementById('recordLinkList');
+  /* 녹음본과 같은 목록에 섞여 날짜순으로 정렬된다. 컨테이너는 recorder.js가 소유하고
+     이 모듈은 자기 행만 만들어 넘긴다. */
+  const list=document.getElementById('recordList');
   const listCard=document.getElementById('recordListCard');
   const menuBackdrop=document.getElementById('linkMenuBackdrop');
   const menuTitle=document.getElementById('linkMenuTitle');
@@ -601,53 +603,52 @@
     renderList();
   }
 
-  function renderList(){
-    list.textContent='';
-    notifyCountChanged();
-    if(!currentUser) return;
-    if(loading && !rows.length){
-      const state=document.createElement('p');
-      state.className='record-empty';
-      state.textContent='연습 링크를 불러오는 중입니다';
-      list.appendChild(state);
-      return;
-    }
-    rows.forEach(row=>{
-      const entry=document.createElement('div');
-      entry.className='record-entry';
-      const item=document.createElement('div');
-      item.className='record-row';
-      const open=document.createElement('button');
-      open.type='button';
-      open.className='record-row-open';
-      open.setAttribute('aria-expanded',expandedId===row.id?'true':'false');
-      open.setAttribute('aria-controls',`link-player-${row.id}`);
-      open.setAttribute('aria-label',`${row.title} 링크 ${expandedId===row.id?'접기':'열기'}`);
-      const copy=document.createElement('span');
-      copy.className='record-row-copy';
-      const title=document.createElement('strong');
-      title.textContent=row.title;
-      const source=document.createElement('small');
-      source.textContent='YouTube';
-      copy.append(title,source);
-      const duration=document.createElement('span');
-      duration.className='record-row-duration';
-      duration.textContent=Number(row.duration_ms)>0?formatDuration(row.duration_ms):'';
-      open.append(copy,duration);
-      open.addEventListener('click',()=>toggleExpanded(row));
-      const more=document.createElement('button');
-      more.type='button';
-      more.className='record-row-more';
-      more.textContent='•••';
-      more.setAttribute('aria-label',`${row.title} 메뉴`);
-      more.addEventListener('click',()=>openMenu(row,more));
-      item.append(open,more);
-      entry.appendChild(item);
-      if(expandedId===row.id) entry.appendChild(createPlayer(row));
-      list.appendChild(entry);
-    });
+  function createEntry(row){
+    const entry=document.createElement('div');
+    entry.className='record-entry';
+    const item=document.createElement('div');
+    item.className='record-row';
+    const open=document.createElement('button');
+    open.type='button';
+    open.className='record-row-open';
+    open.setAttribute('aria-expanded',expandedId===row.id?'true':'false');
+    open.setAttribute('aria-controls',`link-player-${row.id}`);
+    open.setAttribute('aria-label',`${row.title} 링크 ${expandedId===row.id?'접기':'열기'}`);
+    const copy=document.createElement('span');
+    copy.className='record-row-copy';
+    const title=document.createElement('strong');
+    title.textContent=row.title;
+    const source=document.createElement('small');
+    source.textContent='YouTube';
+    copy.append(title,source);
+    const duration=document.createElement('span');
+    duration.className='record-row-duration';
+    duration.textContent=Number(row.duration_ms)>0?formatDuration(row.duration_ms):'';
+    open.append(copy,duration);
+    open.addEventListener('click',()=>toggleExpanded(row));
+    const more=document.createElement('button');
+    more.type='button';
+    more.className='record-row-more';
+    more.textContent='•••';
+    more.setAttribute('aria-label',`${row.title} 메뉴`);
+    more.addEventListener('click',()=>openMenu(row,more));
+    item.append(open,more);
+    entry.appendChild(item);
+    if(expandedId===row.id) entry.appendChild(createPlayer(row));
+    return entry;
   }
-
+  /* recorder.js가 녹음본과 합쳐 정렬한다. 정렬 기준은 추가한 시각이다. */
+  function entries(){
+    if(!currentUser) return [];
+    return rows.map(row=>({
+      at:Date.parse(row.created_at)||0,
+      node:()=>createEntry(row),
+    }));
+  }
+  /* 목록 DOM은 recorder.js가 그린다. 여기서는 다시 그려 달라고 알리기만 한다. */
+  function renderList(){
+    notifyCountChanged();
+  }
   function notifyCountChanged(){
     document.dispatchEvent(new CustomEvent('olive-practice-links-change'));
   }
@@ -882,6 +883,7 @@
 
   window.OlivePracticeLinks={
     count:()=>rows.length,
+    entries,
     isPlaying,
     stopPlayback,
     collapse,

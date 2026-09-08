@@ -389,7 +389,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.54');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.55');
 }
 
 async function expandRecordList(page){
@@ -421,7 +421,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=184');
+  expect(workerUrl).toContain('service-worker.js?v=185');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -438,7 +438,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.54',build:184});
+  expect(payload.release).toEqual({version:'1.3.55',build:185});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -645,6 +645,35 @@ test('목록에서는 녹음본과 YouTube 중 하나만 펼쳐진다',async({pa
   await expect(page.locator('.link-player')).toHaveCount(0);
 });
 
+test('목록은 녹음본과 YouTube를 섞어 최신 항목부터 보여준다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    recordings:[
+      {id:'older-recording',title:'오래된 녹음',object_path:'recording-browser-user/older-recording.m4a',
+        duration_ms:30000,byte_size:1000,mime_type:'audio/mp4',waveform:[],playback_gain:1,
+        recorded_at:'2026-09-05T09:00:00.000Z',created_at:'2026-09-05T09:00:00.000Z'},
+      {id:'newest-recording',title:'방금 녹음',object_path:'recording-browser-user/newest-recording.m4a',
+        duration_ms:30000,byte_size:1000,mime_type:'audio/mp4',waveform:[],playback_gain:1,
+        recorded_at:'2026-09-09T09:00:00.000Z',created_at:'2026-09-09T09:00:00.000Z'},
+    ],
+    practiceLinks:[{
+      id:'middle-link',provider:'youtube',video_id:'dQw4w9WgXcQ',
+      title:'중간 링크',duration_ms:200000,last_position_ms:0,
+      loop_a_ms:null,loop_b_ms:null,loop_enabled:false,playback_rate:1,
+      created_at:'2026-09-07T09:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+
+  /* 종류와 무관하게 최신 항목이 위에 온다. */
+  await expect(page.locator('#recordList .record-entry')).toHaveCount(3);
+  const titles=await page.locator('#recordList .record-entry .record-row-copy strong').allTextContents();
+  expect(titles).toEqual(['방금 녹음','중간 링크','오래된 녹음']);
+  await expect(page.locator('#recordList .record-entry').first()).toContainText('방금 녹음');
+});
+
 test('A/B 없이 반복을 켜면 처음부터 끝까지 반복한다',async({page})=>{
   await preparePage(page,{
     cloudClient:'recordings',
@@ -785,7 +814,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=184',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=185',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -965,7 +994,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=184');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=185');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),

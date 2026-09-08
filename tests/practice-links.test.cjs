@@ -24,7 +24,17 @@ assert.match(index,/id="linkModeUrl"[^>]*>URL</);
 assert.match(index,/id="linkSearchInput"/);
 assert.match(index,/placeholder="곡명 또는 아티스트 검색"/);
 assert.match(index,/id="linkUrlInput"/);
-assert.match(index,/id="recordLinkList"/);
+/* 링크는 녹음본과 같은 목록에 섞여 최신순으로 정렬된다. 별도 컨테이너를 두지 않는다. */
+assert.doesNotMatch(index,/id="recordLinkList"/);
+assert.match(links,/const list=document\.getElementById\('recordList'\)/);
+assert.match(links,/function entries\(\)/);
+assert.match(links,/\n    entries,\n/,'entries를 공개 API로 노출');
+assert.match(links,/at:Date\.parse\(row\.created_at\)\|\|0/);
+assert.match(recorder,/function practiceLinkEntries\(\)/);
+assert.match(recorder,/\.concat\(practiceLinkEntries\(\)\)/);
+assert.match(recorder,/entries\.sort\(\(a,b\)=>b\.at-a\.at\)/,'최신 항목이 위에 온다');
+assert.match(recorder,/at:Date\.parse\(row\.recorded_at\)\|\|0/);
+assert.match(recorder,/addEventListener\('olive-practice-links-change',renderList\)/);
 /* 링크 메뉴에는 다운로드가 없고, 녹음과 마찬가지로 취소 항목도 두지 않는다. */
 assert.match(index,/id="linkMenuRename"[^>]*>이름 변경</);
 assert.match(index,/id="linkMenuDelete"[^>]*>삭제</);
