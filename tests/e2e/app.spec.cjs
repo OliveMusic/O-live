@@ -3,7 +3,7 @@ const {test,expect}=require('playwright/test');
 const pageErrors=new WeakMap();
 
 async function preparePage(page,{
-  cloudClient=false,preferences=null,microphone='native',recordings=[],cloudUploadError='',
+  cloudClient=false,preferences=null,microphone='native',recordings=[],practiceLinks=[],cloudUploadError='',
   mediaActionFailOnce='',recordingListFailOnce=false,
 }={}){
   const errors=[];
@@ -15,7 +15,7 @@ async function preparePage(page,{
     body:'',
   }));
   await page.addInitScript(({
-    withCloud,storedPreferences,micMode,recordingRows,recordingUploadError,failMediaActionOnce,
+    withCloud,storedPreferences,micMode,recordingRows,practiceRows,recordingUploadError,failMediaActionOnce,
     failRecordingListOnce,
   })=>{
     sessionStorage.setItem('olive-startup-state-v2','shown');
@@ -58,6 +58,7 @@ async function preparePage(page,{
     }
     if(withCloud==='recordings'){
       const serverRows=recordingRows.slice();
+      const serverLinks=practiceRows.slice();
       let pendingRecording=null;
       let remainingRecordingListFailures=failRecordingListOnce?1:0;
       const user={
@@ -96,6 +97,11 @@ async function preparePage(page,{
               }
               return {data:serverRows,error:null};
             }}; }}; }}; },
+          };
+          if(table==='practice_links') return {
+            select(){ return {order(){ return {async limit(){
+              return {data:serverLinks,error:null};
+            }}; }}; },
           };
           if(table==='user_preferences') return {
             select(){ return {eq(){ return {async maybeSingle(){ return {data:null,error:null}; }}; }}; },
@@ -378,12 +384,12 @@ async function preparePage(page,{
     }
   },{
     withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,
-    recordingRows:recordings,recordingUploadError:cloudUploadError,
+    recordingRows:recordings,practiceRows:practiceLinks,recordingUploadError:cloudUploadError,
     failMediaActionOnce:mediaActionFailOnce,failRecordingListOnce:recordingListFailOnce,
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.52');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.53');
 }
 
 async function expandRecordList(page){
@@ -415,7 +421,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=182');
+  expect(workerUrl).toContain('service-worker.js?v=183');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -432,7 +438,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.52',build:182});
+  expect(payload.release).toEqual({version:'1.3.53',build:183});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -565,6 +571,42 @@ test('연습 링크 패널은 검색으로 열리고 입력 중에는 요청을 
   expect(searchCalls).toBe(0);
 });
 
+test('YouTube 재생 상자는 녹음본과 같은 제어 키와 진행 시간 배치를 쓴다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    practiceLinks:[{
+      id:'youtube-layout-test',provider:'youtube',video_id:'dQw4w9WgXcQ',
+      title:'YouTube layout test',duration_ms:200000,last_position_ms:16000,
+      loop_a_ms:10000,loop_b_ms:64000,loop_enabled:true,playback_rate:1,
+      created_at:'2026-09-08T14:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+  const entry=page.locator('.record-entry',{hasText:'YouTube layout test'});
+  const row=entry.locator('.record-row');
+  await expect(row.getByText('YouTube',{exact:true})).toBeVisible();
+  await row.locator('.record-row-open').click();
+
+  const player=entry.locator('.link-player');
+  const line=await player.locator('.link-track-line').boundingBox();
+  const times=await player.locator('.link-player-times').boundingBox();
+  const bounds=await player.boundingBox();
+  expect(await player.locator('.link-player-times').textContent()).toBe('0:16/3:20');
+  expect(times.y).toBeGreaterThan(line.y+line.height);
+  expect(times.y-(line.y+line.height)).toBeLessThanOrEqual(10);
+  expect((bounds.x+bounds.width)-(times.x+times.width)).toBeLessThanOrEqual(14);
+
+  const buttonStyle=await player.locator('.record-player-tool').first().evaluate(button=>{
+    const style=getComputedStyle(button);
+    return {height:button.getBoundingClientRect().height,border:style.borderTopWidth,background:style.backgroundColor};
+  });
+  expect(buttonStyle.height).toBeCloseTo(28,0);
+  expect(buttonStyle.border).toBe('0px');
+  expect(buttonStyle.background).not.toBe('rgba(0, 0, 0, 0)');
+});
+
 test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이 나타난다',async({page})=>{
   const waveform=Array.from({length:80},(_,index)=>18+(index*17)%82);
   await preparePage(page,{
@@ -677,7 +719,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=182',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=183',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -857,7 +899,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=182');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=183');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -1003,6 +1045,7 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
   expect(progressBar.height).toBeCloseTo(levelBar.height,0);
   expect(progressBar.x).toBeCloseTo(levelBar.x,0);
   expect(recordButton.y+recordButton.height).toBeLessThan(progressBar.y);
+  expect(progressBar.y-(recordButton.y+recordButton.height)).toBeGreaterThanOrEqual(12);
   expect(timeIcon.x+timeIcon.width).toBeLessThan(progressBar.x);
   expect(levelIcon.x+levelIcon.width).toBeLessThan(levelBar.x);
   expect(timeIcon.y+timeIcon.height/2).toBeCloseTo(progressBar.y+progressBar.height/2,0);

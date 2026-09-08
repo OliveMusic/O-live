@@ -1544,7 +1544,7 @@
   .trainer-pane.active{ display:block; animation:in .24s var(--ease-out); }
 
   /* ---------- 녹음 ---------- */
-  .record-stage{ text-align:center; padding:20px 0 8px; }
+  .record-stage{ text-align:center; padding:22px 0 12px; }
   .record-signin{ padding:18px 8px 8px; text-align:center; }
   .record-signin p{
     max-width:280px; margin:17px auto 20px;
@@ -1560,7 +1560,7 @@
     margin:2px auto 0; background:var(--key); border:1px solid var(--line);
   }
   .record-olive{
-    margin:16px auto 0; padding:0; cursor:pointer;
+    margin:20px auto 0; padding:0; cursor:pointer;
     background:var(--key); border:1px solid var(--line);
     transition:background .15s var(--ease-out), border-color .15s var(--ease-out), transform .12s var(--ease-out);
   }
@@ -1602,7 +1602,7 @@
   }
   .record-state-dot{ width:7px; height:7px; border-radius:50%; background:var(--error); }
   .record-time-progress{
-    position:relative; width:min(250px,76%); margin:16px auto 0;
+    position:relative; width:min(250px,76%); margin:22px auto 0;
     color:var(--ink-3); font-size:.5938rem; font-variant-numeric:tabular-nums;
   }
   .record-meter-icon{
@@ -1624,7 +1624,7 @@
   }
   .record-time-progress.running .record-time-fill{ transition:transform .22s linear; }
   .record-level-row{
-    position:relative; width:min(250px,76%); margin:12px auto 4px;
+    position:relative; width:min(250px,76%); margin:12px auto 8px;
   }
   .record-level-row>.record-meter-icon{
     position:absolute; left:-25px; top:50%; transform:translateY(-50%);
@@ -1638,7 +1638,7 @@
     display:block; width:100%; height:100%; transform:scaleX(0); transform-origin:left center;
     background:var(--signal); transition:transform .07s linear;
   }
-  .record-hint{ min-height:18px; margin:14px 0 0; }
+  .record-hint{ min-height:18px; margin:18px 0 0; }
   .record-draft{ max-width:330px; margin:20px auto 0; }
   .record-title{
     width:100%; min-height:44px; padding:10px 12px; border-radius:var(--r);
@@ -1754,14 +1754,18 @@
   }
   /* 공식 플레이어는 16:9 그대로 두고 O'live 장식을 얹지 않는다. */
   .link-frame{
-    width:100%; aspect-ratio:16/9; margin:0; border-radius:7px;
+    width:100%; aspect-ratio:16/9; margin:0; border-radius:6px;
     overflow:hidden; background:#000;
   }
   .link-frame iframe{ width:100%; height:100%; border:0; display:block; }
   /* A/B 지점을 눈으로 확인할 수 있어야 한다. YouTube 진행바는 iframe 안이라
      건드릴 수 없으므로 그 아래에 O'live의 얇은 트랙을 둔다. 구간과 마커는
      녹음 플레이어와 같은 클래스를 써서 생김새를 맞춘다. */
-  .link-track-wrap{ width:100%; height:40px; padding-top:6px; box-sizing:border-box; }
+  /* 래퍼에는 record-waveform-wrap(60px)도 함께 붙는다. 명시도가 같으면 소스 순서상
+     그쪽이 이겨서 진행바와 시간 표시가 벌어진다. 클래스를 겹쳐 명시도를 올린다. */
+  .record-waveform-wrap.link-track-wrap{
+    position:relative; width:100%; height:42px; padding-top:6px; box-sizing:border-box;
+  }
   /* 손가락으로 끌 수 있게 넉넉히 둔다. */
   .record-waveform.link-track{ height:34px; cursor:pointer; }
   .link-track-ticks{ position:absolute; z-index:0; inset:0; pointer-events:none; }
@@ -1783,32 +1787,25 @@
     transform:translateY(-50%); box-sizing:border-box;
   }
   .link-track .record-loop-region{ top:11px; bottom:11px; }
-  .link-track .record-loop-marker{ top:8px; bottom:8px; }
+  .link-track .record-loop-marker{ top:8px; bottom:12px; }
   .link-track .record-loop-marker::before{ top:-11px; font-size:.5938rem; }
-  .link-player{ margin:0 4px 8px 8px; padding:0 0 9px; }
+  .link-player{
+    margin:0 4px 8px 8px; padding:8px 10px 9px;
+    border:1px solid var(--line-soft); border-radius:var(--r);
+    background:color-mix(in srgb,var(--key) 76%,transparent);
+  }
   .link-player-error{
     height:100%; margin:0; display:grid; place-items:center; padding:0 18px;
     color:var(--ink-3); font-size:.6875rem; line-height:1.5; text-align:center;
   }
   .link-player-controls{
     display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:10px;
-    min-height:38px; margin-top:4px;
+    min-height:32px; margin-top:5px;
   }
-  .link-player .record-loop-tools{
-    height:36px; gap:4px; padding:0; border-radius:0; background:transparent;
-  }
-  .link-player .record-player-tool{
-    min-width:36px; height:36px; padding:0 8px; border:1px solid var(--line-soft);
-    border-radius:8px; color:var(--ink-2); font-size:.6875rem;
-    transition:background .12s var(--ease-out), border-color .12s var(--ease-out),
-      color .12s var(--ease-out), transform .1s var(--ease-out);
-  }
-  .link-player .record-player-tool.icon{ width:36px; }
-  .link-player .record-player-tool.active{ border-color:var(--signal); }
-  .link-player .record-player-tool:not(:disabled):active{ transform:scale(.96); }
-  .link-player-times{
-    position:relative; z-index:2; display:flex; justify-content:flex-end; align-items:center; gap:2px;
-    margin-top:-12px; padding:0 2px; color:var(--ink-3); font-size:.5938rem;
+  .link-track-wrap>.record-player-times.link-player-times{
+    position:absolute; z-index:2; right:2px; bottom:0; left:auto;
+    display:flex; justify-content:flex-end; align-items:center; gap:2px;
+    margin:0; padding:0; color:var(--ink-3); font-size:.5938rem;
     font-variant-numeric:tabular-nums; line-height:1; pointer-events:none;
   }
   .link-player-times .record-player-elapsed{ color:var(--ink-2); }
@@ -1821,9 +1818,6 @@
   .link-loop-times:empty{ display:none; }
   @media(max-width:370px){
     .link-player-controls{ gap:7px; }
-    .link-player .record-loop-tools{ gap:2px; }
-    .link-player .record-player-tool{ min-width:34px; width:34px; padding:0 6px; }
-    .link-player .record-player-tool.icon{ width:34px; }
   }
   .record-usage{ color:var(--ink-3); font-size:.6875rem; font-variant-numeric:tabular-nums; }
   .record-history > summary .record-usage{ margin-left:auto; }
@@ -2647,22 +2641,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=182"></script>
+<script src="app-version.js?v=183"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=182"></script>
-<script src="js/audio-runtime.js?v=182"></script>
-<script src="js/core.js?v=182"></script>
-<script src="js/metronome.js?v=182"></script>
-<script src="js/tuner-engine.js?v=182"></script>
-<script src="js/tuner.js?v=182"></script>
-<script src="js/scales.js?v=182"></script>
-<script src="js/ear-trainer.js?v=182"></script>
-<script src="js/rhythm-trainer.js?v=182"></script>
-<script src="js/recording-cache.js?v=182"></script>
-<script src="js/recorder.js?v=182"></script>
-<script src="js/practice-links.js?v=182"></script>
-<script src="js/jam-session.js?v=182"></script>
-<script src="js/app-shell.js?v=182"></script>
+<script src="cloud-sync.js?v=183"></script>
+<script src="js/audio-runtime.js?v=183"></script>
+<script src="js/core.js?v=183"></script>
+<script src="js/metronome.js?v=183"></script>
+<script src="js/tuner-engine.js?v=183"></script>
+<script src="js/tuner.js?v=183"></script>
+<script src="js/scales.js?v=183"></script>
+<script src="js/ear-trainer.js?v=183"></script>
+<script src="js/rhythm-trainer.js?v=183"></script>
+<script src="js/recording-cache.js?v=183"></script>
+<script src="js/recorder.js?v=183"></script>
+<script src="js/practice-links.js?v=183"></script>
+<script src="js/jam-session.js?v=183"></script>
+<script src="js/app-shell.js?v=183"></script>
 </body>
 </html>

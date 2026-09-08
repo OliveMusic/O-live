@@ -485,7 +485,8 @@
     const frame=document.createElement('div');
     frame.className='link-frame';
     wrap.appendChild(frame);
-    wrap.appendChild(createTrack(row));
+    const timeline=createTrack(row);
+    wrap.appendChild(timeline);
     const controls=document.createElement('div');
     controls.className='link-player-controls';
     const loop=loopFor(row);
@@ -536,7 +537,7 @@
     total.className='link-total';
     total.textContent=formatDuration(row.duration_ms);
     times.append(elapsed,divider,total);
-    wrap.appendChild(times);
+    timeline.appendChild(times);
     const loopTimes=document.createElement('p');
     loopTimes.className='link-loop-times';
     controls.append(tools,loopTimes);
