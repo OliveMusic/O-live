@@ -12,7 +12,11 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=178';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=179';
+  /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
+     문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
+  const SCHEMA_ERROR_CODE='DB-'+String(
+    (window.OLIVE_RELEASE&&window.OLIVE_RELEASE.schemaVersion)||0).padStart(3,'0');
   const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
@@ -2079,16 +2083,28 @@
     expandedRecordingId=row.id;
     renderList();
   }
+  /* 목록 길이 제한 50개는 녹음과 연습 링크를 합쳐서 센다. */
+  function practiceLinkCount(){
+    return window.OlivePracticeLinks && typeof window.OlivePracticeLinks.count==='function'
+      ? Number(window.OlivePracticeLinks.count())||0 : 0;
+  }
+  function renderUsage(){
+    recordUsage.textContent=`${rows.length+practiceLinkCount()} / ${MAX_RECORDINGS}`;
+  }
   function renderList(){
-    recordUsage.textContent=`${rows.length} / ${MAX_RECORDINGS}`;
+    renderUsage();
     recordList.innerHTML='';
     if(loadingList){
       const state=document.createElement('p'); state.className='record-empty'; state.textContent='녹음을 불러오는 중입니다';
       recordList.appendChild(state); return;
     }
     if(!rows.length){
-      const state=document.createElement('p'); state.className='record-empty'; state.textContent='저장된 녹음이 없습니다';
-      recordList.appendChild(state); return;
+      /* 연습 링크만 있는 경우에는 빈 목록 문구를 띄우지 않는다. */
+      if(!practiceLinkCount()){
+        const state=document.createElement('p'); state.className='record-empty'; state.textContent='저장된 녹음이 없습니다';
+        recordList.appendChild(state);
+      }
+      return;
     }
     rows.forEach(row=>{
       const entry=document.createElement('div'); entry.className='record-entry';
@@ -2230,8 +2246,8 @@
       console.warn('[O\'live recording upload cloud]',code,detail);
       const message=/count limit/i.test(detail) ? '내 녹음에는 최대 50개까지 저장할 수 있습니다'
         : /storage limit|too large|payload.*large|maximum.*size/i.test(detail) ? '녹음 저장 용량이 가득 찼습니다'
-        : /^DB-|schema/i.test(code+' '+detail) ? '클라우드 저장소 업데이트가 필요합니다 · DB-011'
-        : /mime|unsupported|not supported/i.test(detail) ? 'MP3 업로드를 위한 저장소 업데이트가 필요합니다 · DB-011'
+        : /^DB-|schema/i.test(code+' '+detail) ? `클라우드 저장소 업데이트가 필요합니다 · ${SCHEMA_ERROR_CODE}`
+        : /mime|unsupported|not supported/i.test(detail) ? `MP3 업로드를 위한 저장소 업데이트가 필요합니다 · ${SCHEMA_ERROR_CODE}`
         : !navigator.onLine ? '인터넷에 연결한 뒤 다시 업로드해 주세요'
         : '파일을 업로드하지 못했습니다. 다시 시도해 주세요';
       setMessage(message,true);
@@ -2441,6 +2457,7 @@
     }
     if(cloudPlayingId || cloudMediaId) stopCloudPlayback(false);
   }
+  document.addEventListener('olive-practice-links-change',renderUsage);
   window.OliveRecorder={
     isRecording:()=>recording || startPending,
     stopPlayback:stopPlaybackForOtherTool,

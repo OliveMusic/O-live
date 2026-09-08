@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://mowbkjoccuylfisbypvi.supabase.co wss://mowbkjoccuylfisbypvi.supabase.co; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://mowbkjoccuylfisbypvi.supabase.co wss://mowbkjoccuylfisbypvi.supabase.co; frame-src https://www.youtube-nocookie.com https://www.youtube.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>O&rsquo;live</title>
 <meta name="description" content="기타/현악기 연습을 위한 메트로놈, 튜너, 스케일, 트레이너, 잼 세션 올인원 앱">
 <meta name="theme-color" content="#d3d2cc" media="(prefers-color-scheme: light)">
@@ -1667,6 +1667,99 @@
   }
   .record-upload:active{ background:var(--signal-press); border-color:var(--signal-press); }
   .record-upload:disabled{ opacity:.45; cursor:default; }
+  /* 링크 버튼은 글자 대신 영상 아이콘을 쓴다. 채움은 다른 동작 버튼과 같다. */
+  .record-upload.icon{ min-width:44px; padding:0; display:grid; place-items:center; }
+  .record-upload.icon svg{
+    width:19px; height:19px; fill:none; stroke:currentColor;
+    stroke-width:1.6; stroke-linejoin:round;
+  }
+  .record-upload.icon svg path{ fill:currentColor; stroke:none; }
+
+  /* ── 연습 링크 ── */
+  .link-panel{
+    margin-bottom:10px; padding:10px; border:1px solid var(--line-soft);
+    border-radius:var(--r); background:var(--panel);
+  }
+  .link-modes{ display:flex; gap:4px; margin-bottom:9px; }
+  .link-mode{
+    min-height:30px; padding:0 12px; border:0; border-radius:var(--r-pill);
+    background:transparent; color:var(--ink-3); font:500 .6875rem/1 inherit; cursor:pointer;
+  }
+  .link-mode.active{ background:var(--signal-soft); color:var(--signal); }
+  .link-mode:not(.active):active{ background:var(--key-press); }
+  .link-form{ display:flex; align-items:center; gap:8px; }
+  .link-form[hidden]{ display:none; }
+  .link-input{
+    flex:1 1 auto; min-width:0; min-height:40px; padding:0 11px;
+    border:1px solid var(--line-soft); border-radius:var(--r);
+    background:var(--body); color:var(--ink); font:400 .8125rem/1 inherit;
+  }
+  .link-input:focus-visible{ outline:none; border-color:var(--signal); }
+  .link-message{ margin:8px 2px 0; color:var(--ink-3); font-size:.6875rem; }
+  .link-message:empty{ display:none; }
+  .link-message.error{ color:var(--error); }
+  .link-results{ display:grid; gap:2px; margin-top:8px; }
+  .link-results:empty{ display:none; }
+  .link-result{
+    display:grid; grid-template-columns:72px 1fr; align-items:center; gap:10px;
+    min-height:52px; padding:6px; border:0; border-radius:var(--r);
+    background:transparent; color:inherit; text-align:left; cursor:pointer;
+  }
+  .link-result:active{ background:var(--key-press); }
+  .link-thumb{
+    width:72px; aspect-ratio:16/9; border-radius:6px; object-fit:cover;
+    background:var(--key-press);
+  }
+  .link-result-copy{ min-width:0; display:grid; gap:2px; }
+  .link-result-title{
+    font-size:.75rem; font-weight:500; line-height:1.3;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .link-result-channel{ color:var(--ink-3); font-size:.625rem; }
+  .link-source{ margin:8px 2px 0; color:var(--ink-3); font-size:.5938rem; }
+  /* 공식 플레이어는 16:9 그대로 두고 O'live 장식을 얹지 않는다. */
+  .link-frame{
+    width:100%; aspect-ratio:16/9; margin-bottom:8px; border-radius:var(--r);
+    overflow:hidden; background:#000;
+  }
+  .link-frame iframe{ width:100%; height:100%; border:0; display:block; }
+  /* A/B 지점을 눈으로 확인할 수 있어야 한다. YouTube 진행바는 iframe 안이라
+     건드릴 수 없으므로 그 아래에 O'live의 얇은 트랙을 둔다. 구간과 마커는
+     녹음 플레이어와 같은 클래스를 써서 생김새를 맞춘다. */
+  .link-track-wrap{ width:100%; height:auto; padding-top:15px; box-sizing:border-box; }
+  /* 손가락으로 끌 수 있게 넉넉히 둔다. */
+  .record-waveform.link-track{ height:26px; cursor:pointer; }
+  .link-track-ticks{ position:absolute; z-index:0; inset:0; pointer-events:none; }
+  .link-track-tick{
+    position:absolute; top:50%; width:1px; height:7px; margin-top:-3.5px;
+    background:var(--line-soft);
+  }
+  .link-track-line{
+    position:absolute; z-index:1; left:0; right:0; top:12px; height:2px;
+    border-radius:2px; background:var(--line-soft); overflow:hidden;
+  }
+  .link-track-fill{
+    display:block; height:100%; width:var(--wave-progress);
+    border-radius:2px; background:var(--signal);
+  }
+  .link-player{ padding:2px 0 10px; }
+  .link-player-error{
+    height:100%; margin:0; display:grid; place-items:center; padding:0 18px;
+    color:var(--ink-3); font-size:.6875rem; line-height:1.5; text-align:center;
+  }
+  .link-player-controls{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  /* 녹음 플레이어의 시간 표시는 가로 전체를 쓰지만 여기서는 오른쪽에 모아 둔다.
+     space-between이 무의미해지므로 간격을 직접 준다. */
+  .link-player-controls .record-player-times{ flex:0 0 auto; gap:4px; }
+  .link-time-divider{ opacity:.5; }
+  /* 파형이 없으니 A/B 지점을 숫자로도 분명히 보여준다. */
+  .link-loop-times{
+    margin:6px 2px 0; color:var(--signal); font-size:.625rem;
+    font-variant-numeric:tabular-nums;
+  }
+  .link-loop-times:empty{ display:none; }
   .record-usage{ color:var(--ink-3); font-size:.6875rem; font-variant-numeric:tabular-nums; }
   .record-history > summary .record-usage{ margin-left:auto; }
   .record-history > summary::after{ margin-left:2px; }
@@ -2283,9 +2376,33 @@
             <div class="record-list-head">
               <div class="record-list-actions">
                 <input id="recordUploadInput" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.webm,.flac,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/flac" hidden>
+                <button class="record-upload icon" id="recordLink" type="button" aria-label="YouTube 링크 추가">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path d="M10.4 9.4v5.2l4.4-2.6z"/></svg>
+                </button>
                 <button class="record-upload" id="recordUpload" type="button">업로드</button>
               </div>
             </div>
+            <div class="link-panel" id="linkPanel" hidden>
+              <div class="link-modes" role="tablist" aria-label="링크 추가 방법">
+                <button class="link-mode active" id="linkModeSearch" type="button" role="tab" aria-selected="true">검색</button>
+                <button class="link-mode" id="linkModeUrl" type="button" role="tab" aria-selected="false">URL</button>
+              </div>
+              <div class="link-form" id="linkSearchForm">
+                <input class="link-input" id="linkSearchInput" type="search" inputmode="search"
+                  enterkeyhint="search" autocomplete="off" maxlength="100"
+                  placeholder="곡명 또는 아티스트 검색" aria-label="곡명 또는 아티스트 검색">
+                <button class="record-upload" id="linkSearchGo" type="button">검색</button>
+              </div>
+              <div class="link-form" id="linkUrlForm" hidden>
+                <input class="link-input" id="linkUrlInput" type="url" inputmode="url"
+                  enterkeyhint="done" autocomplete="off" maxlength="200"
+                  placeholder="YouTube 주소 붙여넣기" aria-label="YouTube 주소">
+                <button class="record-upload" id="linkUrlGo" type="button">추가</button>
+              </div>
+              <p class="link-message" id="linkMessage" role="status" aria-live="polite"></p>
+              <div class="link-results" id="linkResults"></div>
+            </div>
+            <div class="record-list" id="recordLinkList"></div>
             <div class="record-list" id="recordList"></div>
             <div class="ear-cloud record-cloud" id="recordCloud">
               <div class="ear-cloud-copy">
@@ -2392,6 +2509,16 @@
   </div>
 </div>
 
+<div class="record-menu-backdrop" id="linkMenuBackdrop" hidden>
+  <div class="record-menu-wrap">
+    <section class="record-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="linkMenuTitle">
+      <strong class="record-menu-title" id="linkMenuTitle"></strong>
+      <button id="linkMenuRename" type="button">이름 변경</button>
+      <button class="danger" id="linkMenuDelete" type="button">삭제</button>
+    </section>
+  </div>
+</div>
+
 <div class="cloud-sheet-backdrop" id="cloudAuthSheet" hidden>
   <section class="cloud-sheet" role="dialog" aria-modal="true" aria-labelledby="cloudAuthTitle">
     <div class="cloud-sheet-handle" aria-hidden="true"></div>
@@ -2449,21 +2576,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=178"></script>
+<script src="app-version.js?v=179"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=178"></script>
-<script src="js/audio-runtime.js?v=178"></script>
-<script src="js/core.js?v=178"></script>
-<script src="js/metronome.js?v=178"></script>
-<script src="js/tuner-engine.js?v=178"></script>
-<script src="js/tuner.js?v=178"></script>
-<script src="js/scales.js?v=178"></script>
-<script src="js/ear-trainer.js?v=178"></script>
-<script src="js/rhythm-trainer.js?v=178"></script>
-<script src="js/recording-cache.js?v=178"></script>
-<script src="js/recorder.js?v=178"></script>
-<script src="js/jam-session.js?v=178"></script>
-<script src="js/app-shell.js?v=178"></script>
+<script src="cloud-sync.js?v=179"></script>
+<script src="js/audio-runtime.js?v=179"></script>
+<script src="js/core.js?v=179"></script>
+<script src="js/metronome.js?v=179"></script>
+<script src="js/tuner-engine.js?v=179"></script>
+<script src="js/tuner.js?v=179"></script>
+<script src="js/scales.js?v=179"></script>
+<script src="js/ear-trainer.js?v=179"></script>
+<script src="js/rhythm-trainer.js?v=179"></script>
+<script src="js/recording-cache.js?v=179"></script>
+<script src="js/recorder.js?v=179"></script>
+<script src="js/practice-links.js?v=179"></script>
+<script src="js/jam-session.js?v=179"></script>
+<script src="js/app-shell.js?v=179"></script>
 </body>
 </html>

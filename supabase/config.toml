@@ -1,2 +1,5 @@
 [functions.delete-account]
 verify_jwt = true
+
+[functions.youtube-search]
+verify_jwt = true

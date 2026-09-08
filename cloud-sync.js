@@ -788,6 +788,97 @@
     }
   }
 
+  /* ===================== 연습 링크 =====================
+     YouTube API 개발자 정책상 영상 제목·채널명·설명은 30일 안에 갱신하거나
+     삭제해야 한다. 그래서 클라우드에는 video_id와 사용자가 정한 별칭, 연습
+     설정만 남긴다. 검색 결과의 제목·채널·썸네일은 화면에 보여줄 때만 쓰고
+     저장하지 않는다. */
+  async function listPracticeLinks(){
+    await ensureRecordingAccess();
+    const {data,error}=await client.from('practice_links')
+      .select('id,provider,video_id,title,duration_ms,last_position_ms,loop_a_ms,loop_b_ms,loop_enabled,playback_rate,created_at')
+      .order('created_at',{ascending:false})
+      .limit(50);
+    if(error) throw error;
+    return data||[];
+  }
+  async function savePracticeLink(videoId,title,durationMs){
+    await ensureRecordingAccess();
+    const id=makeId();
+    const {data,error}=await client.rpc('save_practice_link',{
+      p_link_id:id,
+      p_video_id:String(videoId||''),
+      p_title:String(title||''),
+      p_duration_ms:Math.max(0,Math.round(Number(durationMs)||0)),
+    });
+    if(error) throw error;
+    if(!data) throw new Error('Practice link was not saved');
+    return id;
+  }
+  async function renamePracticeLink(id,title){
+    await ensureRecordingAccess();
+    const {data,error}=await client.rpc('rename_practice_link',{
+      p_link_id:String(id||''),p_title:String(title||''),
+    });
+    if(error) throw error;
+    if(!data) throw new Error('Practice link was not found');
+    return true;
+  }
+  /* 마지막 위치·A/B·배속은 연습 중 자주 바뀌므로 한 번에 저장한다. */
+  async function savePracticeLinkState(id,state){
+    await ensureRecordingAccess();
+    /* Number(null)이 0이므로 빈 값을 먼저 걸러야 지정되지 않은 A/B가 0으로 저장되지 않는다. */
+    const loopMs=value=>{
+      if(value===null || value===undefined || value==='') return null;
+      const number=Number(value);
+      return Number.isFinite(number)?Math.round(number):null;
+    };
+    const loopA=loopMs(state&&state.loopA);
+    const loopB=loopMs(state&&state.loopB);
+    const {data,error}=await client.rpc('save_practice_link_state',{
+      p_link_id:String(id||''),
+      p_last_position_ms:Math.max(0,Math.round(Number(state&&state.position)||0)),
+      p_loop_a_ms:loopA,
+      p_loop_b_ms:loopB,
+      p_loop_enabled:Boolean(state&&state.loopEnabled),
+      p_playback_rate:Number(state&&state.rate)||1,
+      p_duration_ms:Math.max(0,Math.round(Number(state&&state.duration)||0)),
+    });
+    if(error) throw error;
+    if(!data) throw new Error('Practice link was not found');
+    return true;
+  }
+  async function deletePracticeLink(id){
+    await ensureRecordingAccess();
+    const {data,error}=await client.rpc('delete_practice_link',{p_link_id:String(id||'')});
+    if(error) throw error;
+    if(!data) throw new Error('Practice link was not found');
+    return true;
+  }
+  /* 검색은 Edge Function을 거친다. 브라우저가 Google API를 직접 부르지 않으므로
+     API 키가 노출되지 않고 CSP의 connect-src도 Supabase로 유지된다. */
+  async function searchYouTube(query){
+    await ensureRecordingAccess();
+    const {data,error}=await client.functions.invoke('youtube-search',{
+      body:{query:String(query||'')},
+    });
+    if(error){
+      /* Edge Function이 돌려준 오류 코드를 그대로 살려서 화면 문구를 나눈다. */
+      let code='';
+      try{
+        const body=error.context&&typeof error.context.json==='function'
+          ? await error.context.json() : null;
+        code=String(body&&body.error||'');
+      }catch(e){}
+      const failure=new Error(code||'search_failed');
+      failure.code=code||'search_failed';
+      throw failure;
+    }
+    return {
+      results:Array.isArray(data&&data.results)?data.results:[],
+      remaining:Number.isFinite(Number(data&&data.remaining))?Number(data.remaining):null,
+    };
+  }
   window.OliveCloud={
     init,
     recordAnswer,
@@ -801,5 +892,11 @@
     renameRecording,
     deleteRecording,
     downloadRecording,
+    listPracticeLinks,
+    savePracticeLink,
+    renamePracticeLink,
+    savePracticeLinkState,
+    deletePracticeLink,
+    searchYouTube,
   };
 })();

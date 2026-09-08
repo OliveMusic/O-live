@@ -15,7 +15,7 @@ assert.ok(Number.isInteger(release.schemaVersion) && release.schemaVersion>0,'po
 const index=fs.readFileSync('index.html','utf8');
 const appShell=fs.readFileSync('js/app-shell.js','utf8');
 const worker=fs.readFileSync('service-worker.js','utf8');
-const schema=fs.readFileSync('supabase/011_recording_mime_types.sql','utf8');
+const schema=fs.readFileSync('supabase/012_practice_links.sql','utf8');
 
 assert.match(index,new RegExp(`<script src="app-version\\.js\\?v=${release.build}"><\\/script>`),'page loads current release metadata');
 assert.match(appShell,/service-worker\.js\?v=['"`]\+release\.build/,'worker registration uses release build');
@@ -25,7 +25,7 @@ assert.match(schema,new RegExp(`select ${release.schemaVersion}::integer`),'data
 
 const versionedAssets=[
   'cloud-sync.js','js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner-engine.js','js/tuner.js','js/scales.js',
-  'js/ear-trainer.js','js/rhythm-trainer.js','js/recording-cache.js','js/recorder.js','js/jam-session.js','js/app-shell.js',
+  'js/ear-trainer.js','js/rhythm-trainer.js','js/recording-cache.js','js/recorder.js','js/practice-links.js','js/jam-session.js','js/app-shell.js',
 ];
 for(const asset of versionedAssets){
   const escaped=asset.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');

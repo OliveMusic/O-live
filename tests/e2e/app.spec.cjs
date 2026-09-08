@@ -70,7 +70,7 @@ async function preparePage(page,{
           async getSession(){ return {data:{session:{user}},error:null}; },
         },
         async rpc(name,args){
-          if(name==='olive_schema_version') return {data:11,error:null};
+          if(name==='olive_schema_version') return {data:12,error:null};
           if(name==='reserve_practice_recording') pendingRecording=args;
           if(name==='finalize_practice_recording' && pendingRecording &&
              pendingRecording.p_recording_id===args.p_recording_id){
@@ -383,7 +383,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.48');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.49');
 }
 
 async function expandRecordList(page){
@@ -415,7 +415,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=178');
+  expect(workerUrl).toContain('service-worker.js?v=179');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -432,7 +432,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.48',build:178});
+  expect(payload.release).toEqual({version:'1.3.49',build:179});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -520,6 +520,48 @@ test('내 녹음은 접고 펼칠 수 있고 계정 상태에서 같은 관리 �
   await details.locator('summary').click();
   await expect(details).not.toHaveAttribute('open','');
   await expect(page.locator('#recordList')).toBeHidden();
+});
+
+test('연습 링크 패널은 검색으로 열리고 입력 중에는 요청을 보내지 않는다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings'});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
+
+  /* 하루 100회뿐인 검색 할당량을 입력 중에 태우지 않는지 본다. */
+  let searchCalls=0;
+  await page.exposeFunction('__oliveCountSearch',()=>{ searchCalls++; });
+  await page.evaluate(()=>{
+    const cloud=window.OliveCloud;
+    const original=cloud.searchYouTube;
+    Object.defineProperty(cloud,'searchYouTube',{
+      configurable:true,
+      value:async query=>{ await window.__oliveCountSearch(); return original.call(cloud,query); },
+    });
+  });
+
+  const panel=page.locator('#linkPanel');
+  await expect(panel).toBeHidden();
+  await page.locator('#recordLink').click();
+  await expect(panel).toBeVisible();
+  /* 기본 진입점은 검색이다. 한 번에 한 폼만 보인다. */
+  await expect(page.locator('#linkModeSearch')).toHaveAttribute('aria-selected','true');
+  await expect(page.locator('#linkSearchForm')).toBeVisible();
+  await expect(page.locator('#linkUrlForm')).toBeHidden();
+
+  await page.locator('#linkSearchInput').fill('아');
+  await expect(page.locator('#linkResults')).toBeHidden();
+  await page.locator('#linkSearchGo').click();
+  await expect(page.locator('#linkMessage')).toHaveText('두 글자 이상 입력해 주세요');
+  expect(searchCalls).toBe(0);
+
+  await page.locator('#linkModeUrl').click();
+  await expect(page.locator('#linkSearchForm')).toBeHidden();
+  await expect(page.locator('#linkUrlForm')).toBeVisible();
+  await page.locator('#linkUrlInput').fill('https://example.com/watch?v=dQw4w9WgXcQ');
+  await page.locator('#linkUrlGo').click();
+  await expect(page.locator('#linkMessage')).toHaveText('YouTube 주소에서 영상을 찾지 못했습니다');
+  expect(searchCalls).toBe(0);
 });
 
 test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이 나타난다',async({page})=>{
@@ -634,7 +676,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=178',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=179',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -814,7 +856,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=178');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=179');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -944,7 +986,7 @@ test('Storage가 MP3 MIME을 거절하면 DB 업데이트 안내를 표시한다
     name:'Paper Hearts.mp3',mimeType:'audio/mpeg',buffer:Buffer.from('mp3 upload'),
   });
   await expect(page.locator('#recordMessage'))
-    .toHaveText('MP3 업로드를 위한 저장소 업데이트가 필요합니다 · DB-011');
+    .toHaveText('MP3 업로드를 위한 저장소 업데이트가 필요합니다 · DB-012');
 });
 
 test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다',async({page})=>{
@@ -1645,8 +1687,8 @@ test('클라우드 스키마가 오래되면 저장 대신 구체적인 업데�
   await preparePage(page,{cloudClient:true});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(page.locator('#earCloudTitle')).toHaveText('클라우드 업데이트 필요');
-  await expect(page.locator('#earCloudStatus')).toContainText('DB-011');
+  await expect(page.locator('#earCloudStatus')).toContainText('DB-012');
   await page.locator('#earCloudAction').evaluate(element=>element.click());
   await page.locator('#cloudSyncNow').click();
-  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-011');
+  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-012');
 });

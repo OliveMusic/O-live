@@ -2,8 +2,8 @@
   'use strict';
 
   root.OLIVE_RELEASE=Object.freeze({
-    version:'1.3.48',
-    build:178,
-    schemaVersion:11,
+    version:'1.3.49',
+    build:179,
+    schemaVersion:12,
   });
 })(globalThis);

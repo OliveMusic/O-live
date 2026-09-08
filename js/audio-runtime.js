@@ -705,6 +705,12 @@ function prepareForegroundPlaybackMode(){
      typeof window.OliveRecorder.stopPlayback==='function'){
     window.OliveRecorder.stopPlayback();
   }
+  /* 연습 링크의 YouTube 플레이어도 저장 녹음 재생과 같은 취급이다.
+     녹음 중에는 반주로 쓸 수 있으므로 건드리지 않는다. */
+  if(!recording && window.OlivePracticeLinks &&
+     typeof window.OlivePracticeLinks.stopPlayback==='function'){
+    window.OlivePracticeLinks.stopPlayback();
+  }
   return recording?'play-and-record':hasBackgroundTransportPlaying()?'playback':'ambient';
 }
 
