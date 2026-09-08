@@ -15,7 +15,7 @@ const config=fs.readFileSync('supabase/config.toml','utf8');
 /* 링크는 아이콘 버튼이다. 글자가 없으므로 aria-label이 반드시 있어야 한다. */
 assert.match(index,/id="recordLink"[^>]*aria-label="YouTube 링크 추가"/);
 assert.match(index,/id="recordLink"[^>]*aria-controls="linkPanel"[^>]*aria-expanded="false"/);
-assert.match(index,/id="recordUpload"[^>]*>업로드</);
+assert.match(index,/class="record-upload icon" id="recordUpload"[^>]*aria-label="오디오 파일 업로드"/);
 /* 동작 버튼은 테두리만 있는 형태가 아니라 올리브로 채운다. */
 assert.doesNotMatch(index,/class="record-upload ghost"/);
 assert.match(index,/\.record-upload\{[^}]*background:var\(--signal\)/);
@@ -73,6 +73,7 @@ assert.match(links,/function createTrack\(row\)/);
 assert.match(links,/record-loop-marker start/);
 assert.match(links,/record-loop-marker end/);
 assert.match(index,/\.link-track-fill\{/);
+assert.match(index,/\.link-track-line\{[\s\S]*?height:4px/);
 /* A/B를 누를 때 목록을 다시 그리면 플레이어가 새로 만들어져 영상이 처음부터
    다시 시작한다. 제자리에서만 갱신해야 한다. */
 assert.match(links,/function refreshLoopUi\(row\)/);

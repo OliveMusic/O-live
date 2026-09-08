@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=180';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=181';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -355,7 +355,7 @@
   function pad(value){ return String(value).padStart(2,'0'); }
   function formatDuration(ms){
     const seconds=Math.max(0,Math.floor(ms/1000));
-    return pad(Math.floor(seconds/60))+':'+pad(seconds%60);
+    return Math.floor(seconds/60)+':'+pad(seconds%60);
   }
   function formatRecordingDuration(ms){
     const seconds=Math.max(0,Math.floor(ms/1000));
@@ -567,7 +567,7 @@
       setAudioSession('playback');
       if(typeof MediaMetadata==='function'){
         navigator.mediaSession.metadata=new MediaMetadata({
-          title:String(row.title||'내 녹음'),artist:"O'live",album:'내 녹음',
+          title:String(row.title||'무제'),artist:"O'live",album:'O’live 목록',
         });
       }
       if(installActions && typeof navigator.mediaSession.setActionHandler==='function'){
@@ -1614,7 +1614,7 @@
     const seeking=Number.isFinite(requestedOffset);
     const offset=clamp(seeking?requestedOffset:Number(playbackPositions.get(row.id))||0,0,rowDurationSeconds(row));
     if(recording || startPending){
-      setMessage('녹음을 정지한 뒤 내 녹음을 재생해 주세요',true);
+      setMessage('녹음을 정지한 뒤 목록을 재생해 주세요',true);
       return;
     }
     if(cloudPlayingId===row.id && seeking){
@@ -2198,18 +2198,21 @@
     recordingListLoadPromise=tracked;
     return tracked;
   }
+  function setUploadButtonState(label,busy){
+    recordUpload.disabled=Boolean(busy);
+    recordUpload.setAttribute('aria-label',label);
+  }
   async function uploadExternalFile(file){
     if(!currentUser || !file || recordUpload.disabled) return;
     if(rows.length>=MAX_RECORDINGS){
-      setMessage('내 녹음에는 최대 50개까지 저장할 수 있습니다',true); return;
+      setMessage('목록에는 최대 50개까지 저장할 수 있습니다',true); return;
     }
     const mimeType=uploadMimeType(file);
     if(!mimeType){ setMessage('지원하는 오디오 파일을 선택해 주세요',true); return; }
     if(!file.size || file.size>MAX_UPLOAD_BYTES){
       setMessage('업로드 파일은 15MB 이하여야 합니다',true); return;
     }
-    recordUpload.disabled=true;
-    recordUpload.textContent='확인 중…';
+    setUploadButtonState('오디오 파일 확인 중',true);
     setMessage('오디오 정보를 확인하는 중입니다');
     let durationMs=0;
     try{
@@ -2217,8 +2220,7 @@
     }catch(error){
       console.warn('[O\'live recording upload metadata]',error);
       setMessage('이 오디오 파일을 확인할 수 없습니다',true);
-      recordUpload.disabled=false;
-      recordUpload.textContent='업로드';
+      setUploadButtonState('오디오 파일 업로드',false);
       recordUploadInput.value='';
       return;
     }
@@ -2231,7 +2233,7 @@
         extension:extensionFor(mimeType),waveform:[],playbackGain:1,
         recordedAt:new Date().toISOString(),sourceType:'upload',
       };
-      recordUpload.textContent='업로드 중…';
+      recordUpload.setAttribute('aria-label','오디오 파일 업로드 중');
       setMessage('클라우드에 업로드하는 중입니다');
       await window.OliveCloud.uploadRecording(uploaded);
       rememberCloudBlob(uploaded,file);
@@ -2239,12 +2241,12 @@
       recordListCard.open=true;
       const savedRow=rows.find(row=>row.id===uploaded.id)||uploaded;
       await cacheRowBlob(savedRow,file);
-      setMessage('내 녹음에 추가했습니다');
+      setMessage('목록에 추가했습니다');
     }catch(error){
       const detail=String(error&&error.message||'');
       const code=String(error&&error.code||'');
       console.warn('[O\'live recording upload cloud]',code,detail);
-      const message=/count limit/i.test(detail) ? '내 녹음에는 최대 50개까지 저장할 수 있습니다'
+      const message=/count limit/i.test(detail) ? '목록에는 최대 50개까지 저장할 수 있습니다'
         : /storage limit|too large|payload.*large|maximum.*size/i.test(detail) ? '녹음 저장 용량이 가득 찼습니다'
         : /^DB-|schema/i.test(code+' '+detail) ? `클라우드 저장소 업데이트가 필요합니다 · ${SCHEMA_ERROR_CODE}`
         : /mime|unsupported|not supported/i.test(detail) ? `MP3 업로드를 위한 저장소 업데이트가 필요합니다 · ${SCHEMA_ERROR_CODE}`
@@ -2252,8 +2254,7 @@
         : '파일을 업로드하지 못했습니다. 다시 시도해 주세요';
       setMessage(message,true);
     }finally{
-      recordUpload.disabled=false;
-      recordUpload.textContent='업로드';
+      setUploadButtonState('오디오 파일 업로드',false);
       recordUploadInput.value='';
     }
   }
