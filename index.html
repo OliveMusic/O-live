@@ -1544,7 +1544,7 @@
   .trainer-pane.active{ display:block; animation:in .24s var(--ease-out); }
 
   /* ---------- 녹음 ---------- */
-  .record-stage{ text-align:center; padding:22px 0 12px; }
+  .record-stage{ text-align:center; padding:14px 0 10px; }
   .record-signin{ padding:18px 8px 8px; text-align:center; }
   .record-signin p{
     max-width:280px; margin:17px auto 20px;
@@ -1565,6 +1565,16 @@
     transition:background .15s var(--ease-out), border-color .15s var(--ease-out), transform .12s var(--ease-out);
   }
   .record-olive:active{ transform:rotate(-11deg) scale(.94); }
+  /* 녹음 시간과 올리브 버튼을 좌우로 두어 세로 공간을 아낀다.
+     아래 진행바·레벨바와 같은 폭에 맞춰 시선이 한 줄로 정렬되게 한다. */
+  .record-head{
+    width:min(276px,84%); margin:0 auto;
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+  }
+  .record-head-copy{ min-width:0; text-align:left; }
+  .record-head .record-timer{ font-size:3.1rem; }
+  .record-head .record-state{ min-height:18px; margin-top:3px; justify-content:flex-start; }
+  .record-head .record-olive{ margin:0; flex:0 0 auto; }
   .record-olive::after,.record-olive-static::after{
     content:''; position:absolute; left:calc(50% + 15px); top:50%;
     width:23px; height:23px; border-radius:50%; background:var(--panel);
@@ -1602,7 +1612,7 @@
   }
   .record-state-dot{ width:7px; height:7px; border-radius:50%; background:var(--error); }
   .record-time-progress{
-    position:relative; width:min(250px,76%); margin:22px auto 0;
+    position:relative; width:min(250px,76%); margin:16px auto 0;
     color:var(--ink-3); font-size:.5938rem; font-variant-numeric:tabular-nums;
   }
   .record-meter-icon{
@@ -1638,7 +1648,7 @@
     display:block; width:100%; height:100%; transform:scaleX(0); transform-origin:left center;
     background:var(--signal); transition:transform .07s linear;
   }
-  .record-hint{ min-height:18px; margin:18px 0 0; }
+  .record-hint{ min-height:18px; margin:12px 0 0; }
   .record-draft{ max-width:330px; margin:20px auto 0; }
   .record-title{
     width:100%; min-height:44px; padding:10px 12px; border-radius:var(--r);
@@ -1647,7 +1657,10 @@
   }
   .record-title:focus{ border-color:var(--signal); box-shadow:0 0 0 2px var(--signal-soft); }
   .record-draft-actions{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:8px; }
+  /* 메시지는 저장·오류 때만 잠깐 뜬다. 비어 있을 때 자리를 잡아 두면
+     녹음 카드 아래쪽이 늘 비어 보인다. */
   .record-message{ min-height:19px; margin:12px 0 0; color:var(--signal); font-size:.6875rem; }
+  .record-message:empty{ min-height:0; margin:0; }
   .record-message.error{ color:var(--error); }
   #recordListCard{ position:relative; }
   #recordListCard::after{
@@ -2387,18 +2400,22 @@
           </div>
 
           <div class="record-stage" id="recordWorkspace" hidden>
-            <div class="record-timer" id="recordTimer">0:00</div>
-            <div class="record-state">
-              <i class="record-state-dot" id="recordStateDot" hidden></i>
-              <span id="recordState">녹음 준비</span>
+            <div class="record-head">
+              <div class="record-head-copy">
+                <div class="record-timer" id="recordTimer">0:00</div>
+                <div class="record-state">
+                  <i class="record-state-dot" id="recordStateDot" hidden></i>
+                  <span id="recordState">녹음 준비</span>
+                </div>
+              </div>
+              <button class="record-olive" id="recordToggle" type="button" data-mode="idle" aria-label="녹음 시작">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="4" width="6" height="11" rx="3"/>
+                  <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3M9 20h6"/>
+                </svg>
+                <span class="record-seed-symbol" aria-hidden="true"></span>
+              </button>
             </div>
-            <button class="record-olive" id="recordToggle" type="button" data-mode="idle" aria-label="녹음 시작">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="9" y="4" width="6" height="11" rx="3"/>
-                <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3M9 20h6"/>
-              </svg>
-              <span class="record-seed-symbol" aria-hidden="true"></span>
-            </button>
             <div class="record-time-progress" id="recordTimeProgress" role="progressbar" aria-label="최대 녹음 시간" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0">
               <svg class="record-meter-icon" viewBox="0 0 16 16" aria-hidden="true">
                 <circle cx="8" cy="8" r="5.5"/><path d="M8 4.7V8l2.2 1.4"/>
@@ -2641,22 +2658,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=183"></script>
+<script src="app-version.js?v=184"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=183"></script>
-<script src="js/audio-runtime.js?v=183"></script>
-<script src="js/core.js?v=183"></script>
-<script src="js/metronome.js?v=183"></script>
-<script src="js/tuner-engine.js?v=183"></script>
-<script src="js/tuner.js?v=183"></script>
-<script src="js/scales.js?v=183"></script>
-<script src="js/ear-trainer.js?v=183"></script>
-<script src="js/rhythm-trainer.js?v=183"></script>
-<script src="js/recording-cache.js?v=183"></script>
-<script src="js/recorder.js?v=183"></script>
-<script src="js/practice-links.js?v=183"></script>
-<script src="js/jam-session.js?v=183"></script>
-<script src="js/app-shell.js?v=183"></script>
+<script src="cloud-sync.js?v=184"></script>
+<script src="js/audio-runtime.js?v=184"></script>
+<script src="js/core.js?v=184"></script>
+<script src="js/metronome.js?v=184"></script>
+<script src="js/tuner-engine.js?v=184"></script>
+<script src="js/tuner.js?v=184"></script>
+<script src="js/scales.js?v=184"></script>
+<script src="js/ear-trainer.js?v=184"></script>
+<script src="js/rhythm-trainer.js?v=184"></script>
+<script src="js/recording-cache.js?v=184"></script>
+<script src="js/recorder.js?v=184"></script>
+<script src="js/practice-links.js?v=184"></script>
+<script src="js/jam-session.js?v=184"></script>
+<script src="js/app-shell.js?v=184"></script>
 </body>
 </html>

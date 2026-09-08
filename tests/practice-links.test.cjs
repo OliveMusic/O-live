@@ -94,6 +94,24 @@ assert.match(cloud,/const loopMs=value=>\{/);
 assert.doesNotMatch(cloud,/Number\.isFinite\(Number\(state&&state\.loop[AB]\)\)/);
 /* A 다음 B를 찍으면 곧바로 반복이 시작되어야 한다. */
 assert.match(links,/loop\.enabled=loop\.a!==null && loop\.b!==null;/);
+/* A/B가 없어도 반복을 켤 수 있다. 이때는 처음부터 끝까지가 구간이다.
+   녹음본의 activeLoopFor와 같은 규칙이다. */
+assert.match(links,/function activeLoopFor\(row\)/);
+assert.match(links,/return duration>=MIN_LOOP_MS \? \{a:0,b:duration,whole:true\} : null;/);
+assert.match(links,/repeat\.disabled=!canLoop\(row\)/);
+assert.doesNotMatch(links,/repeat\.disabled=loop\.a===null \|\| loop\.b===null/);
+assert.match(links,/'전체 반복 켜기'/);
+/* 끝까지 재생되면 틱이 놓칠 수 있으므로 ENDED에서도 되돌린다. */
+assert.match(links,/event\.data===YT\.PlayerState\.ENDED\)\{[\s\S]{0,320}player\.playVideo\(\)/);
+/* 목록에서 한 번에 하나만 펼친다. 녹음본과 링크가 동시에 열리지 않아야 한다. */
+assert.match(links,/collapse,/,'링크 모듈이 collapse를 노출');
+assert.match(links,/window\.OliveRecorder\.collapse==='function'[\s\S]{0,90}OliveRecorder\.collapse\(\)/);
+assert.match(recorder,/collapse:collapseExpandedRow/,'녹음 모듈이 collapse를 노출');
+assert.match(recorder,/function collapsePracticeLink\(\)/);
+{
+  const body=recorder.match(/function toggleRowExpanded\(row\)\{[\s\S]*?\n  \}/)[0];
+  assert.match(body,/collapsePracticeLink\(\)/,'녹음본을 펼치면 링크를 접는다');
+}
 /* 파형이 없으므로 시간 눈금과 숫자 표시로 위치 감각을 준다. */
 assert.match(links,/function tickIntervalMs\(duration\)/);
 assert.match(links,/function renderTicks\(row\)/);

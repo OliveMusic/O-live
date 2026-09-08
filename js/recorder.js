@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=183';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=184';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -2072,6 +2072,19 @@
     if(!values.length) loadRowWaveform(row);
     return player;
   }
+  /* 목록에서 한 번에 하나만 펼친다. 연습 링크도 같은 목록에 속하므로 함께 접는다. */
+  function collapseExpandedRow(){
+    if(!expandedRecordingId) return;
+    const id=expandedRecordingId;
+    expandedRecordingId='';
+    if(cloudMediaId===id) stopCloudPlayback();
+    else renderList();
+  }
+  function collapsePracticeLink(){
+    if(window.OlivePracticeLinks && typeof window.OlivePracticeLinks.collapse==='function'){
+      window.OlivePracticeLinks.collapse();
+    }
+  }
   function toggleRowExpanded(row){
     if(expandedRecordingId===row.id){
       expandedRecordingId='';
@@ -2080,6 +2093,7 @@
       return;
     }
     if(cloudMediaId && cloudMediaId!==row.id) stopCloudPlayback();
+    collapsePracticeLink();
     expandedRecordingId=row.id;
     renderList();
   }
@@ -2462,6 +2476,7 @@
   window.OliveRecorder={
     isRecording:()=>recording || startPending,
     stopPlayback:stopPlaybackForOtherTool,
+    collapse:collapseExpandedRow,
     resumeAfterVisibility,
   };
   window.OliveCloud.subscribeSession(applySession);

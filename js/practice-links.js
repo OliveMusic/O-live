@@ -16,6 +16,8 @@
   const STATE_SAVE_DELAY=1200;
   const TICK_MS=250;
   const CHECK_TIMEOUT_MS=8000;
+  /* 녹음본과 같은 규칙이다. 너무 짧은 구간은 반복해도 의미가 없다. */
+  const MIN_LOOP_MS=800;
 
   const linkPanel=document.getElementById('linkPanel');
   const linkButton=document.getElementById('recordLink');
@@ -214,10 +216,10 @@
     if(!row) return;
     let position=0;
     try{ position=player.getCurrentTime()*1000; }catch(e){ return; }
-    const loop=loopFor(row);
-    if(loop.enabled && loop.a!==null && loop.b!==null && position>=loop.b){
-      try{ player.seekTo(loop.a/1000,true); }catch(e){}
-      position=loop.a;
+    const active=activeLoopFor(row);
+    if(active && position>=active.b){
+      try{ player.seekTo(active.a/1000,true); }catch(e){}
+      position=active.a;
     }
     updateTimes(row,position);
     updateTrack(row,position);
@@ -311,6 +313,15 @@
           }else{
             playing=false;
             stopTicker();
+            if(event.data===YT.PlayerState.ENDED){
+              /* 끝까지 재생되면 틱이 b를 넘는 순간을 놓칠 수 있다.
+                 반복이 켜져 있으면 여기서 되돌린다. */
+              const active=activeLoopFor(row);
+              if(active){
+                try{ player.seekTo(active.a/1000,true); player.playVideo(); }catch(e){}
+                return;
+              }
+            }
             if(event.data===YT.PlayerState.PAUSED || event.data===YT.PlayerState.ENDED){
               queueStateSave(row);
             }
@@ -338,7 +349,7 @@
   }
   function toggleLoop(row){
     const loop=loopFor(row);
-    if(loop.a===null || loop.b===null) return;
+    if(!loop.enabled && !canLoop(row)) return;
     loop.enabled=!loop.enabled;
     queueStateSave(row);
     refreshLoopUi(row);
@@ -352,6 +363,25 @@
 
   function rowDurationMs(row){
     return Math.max(0,Number(row&&row.duration_ms)||0);
+  }
+  /* A/B가 있으면 그 구간, 없으면 처음부터 끝까지를 반복한다.
+     녹음본의 activeLoopFor와 같은 규칙이다. */
+  function activeLoopFor(row){
+    const loop=loopFor(row);
+    if(!loop.enabled) return null;
+    if(loop.a!==null && loop.b!==null && loop.b-loop.a>=MIN_LOOP_MS){
+      return {a:loop.a,b:loop.b,whole:false};
+    }
+    const duration=rowDurationMs(row);
+    return duration>=MIN_LOOP_MS ? {a:0,b:duration,whole:true} : null;
+  }
+  function canLoop(row){
+    return rowDurationMs(row)>=MIN_LOOP_MS;
+  }
+  function loopLabel(row){
+    const loop=loopFor(row);
+    if(loop.enabled) return '반복 끄기';
+    return loop.a!==null && loop.b!==null ? 'A/B 구간 반복 켜기' : '전체 반복 켜기';
   }
   /* YouTube 진행바는 iframe 안이라 A/B를 그릴 수 없다. 아래에 O'live 트랙을 두고
      녹음 플레이어와 같은 구간·마커 클래스를 써서 위치를 보여준다. */
@@ -460,9 +490,9 @@
     const repeat=wrap.querySelector('[data-role="repeat"]');
     if(repeat){
       repeat.classList.toggle('active',Boolean(loop.enabled));
-      repeat.disabled=loop.a===null || loop.b===null;
+      repeat.disabled=!canLoop(row);
       repeat.setAttribute('aria-pressed',String(Boolean(loop.enabled)));
-      repeat.setAttribute('aria-label',loop.enabled?'구간 반복 끄기':'A/B 구간 반복 켜기');
+      repeat.setAttribute('aria-label',loopLabel(row));
     }
     const clear=wrap.querySelector('[data-role="clear"]');
     if(clear) clear.disabled=loop.a===null && loop.b===null;
@@ -511,9 +541,9 @@
     repeat.dataset.role='repeat';
     repeat.className='record-player-tool icon repeat'+(loop.enabled?' active':'');
     repeat.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.5 8A7 7 0 0 0 6.4 5.6L4.5 7.5M4.5 7.5V3.8M4.5 7.5h3.7M5.5 16A7 7 0 0 0 17.6 18.4l1.9-1.9M19.5 16.5v3.7M19.5 16.5h-3.7"/></svg>';
-    repeat.setAttribute('aria-label',loop.enabled?'구간 반복 끄기':'A/B 구간 반복 켜기');
+    repeat.setAttribute('aria-label',loopLabel(row));
     repeat.setAttribute('aria-pressed',String(loop.enabled));
-    repeat.disabled=loop.a===null || loop.b===null;
+    repeat.disabled=!canLoop(row);
     repeat.addEventListener('click',()=>toggleLoop(row));
     const clear=document.createElement('button');
     clear.type='button';
@@ -546,6 +576,15 @@
     return wrap;
   }
 
+  /* 목록에서 한 번에 하나만 펼친다. 녹음본 파형과 동시에 열리지 않게 한다. */
+  function collapse(){
+    if(!expandedId) return;
+    const row=rows.find(item=>item.id===expandedId);
+    expandedId='';
+    if(row) queueStateSave(row);
+    destroyPlayer();
+    renderList();
+  }
   function toggleExpanded(row){
     if(expandedId===row.id){
       expandedId='';
@@ -553,6 +592,9 @@
       destroyPlayer();
       renderList();
       return;
+    }
+    if(window.OliveRecorder && typeof window.OliveRecorder.collapse==='function'){
+      window.OliveRecorder.collapse();
     }
     expandedId=row.id;
     destroyPlayer();
@@ -842,6 +884,7 @@
     count:()=>rows.length,
     isPlaying,
     stopPlayback,
+    collapse,
   };
   if(window.OliveCloud && typeof window.OliveCloud.subscribeSession==='function'){
     window.OliveCloud.subscribeSession(applySession);

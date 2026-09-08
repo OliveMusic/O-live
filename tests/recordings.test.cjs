@@ -53,7 +53,12 @@ assert.match(index,/id="recordTimeProgress"[^>]*aria-valuemax="300"[^>]*aria-val
 assert.match(index,/id="recordState">녹음 준비</);
 assert.match(index,/id="recordState">녹음 준비<\/span>[\s\S]*?id="recordToggle"[\s\S]*?id="recordTimeProgress"[\s\S]*?id="recordLevelRow"/);
 assert.match(index,/\.record-olive\{[^}]*margin:20px auto 0/);
-assert.match(index,/\.record-time-progress\{[^}]*margin:22px auto 0/);
+assert.match(index,/\.record-time-progress\{[^}]*margin:16px auto 0/);
+/* 녹음 시간과 올리브 버튼은 좌우로 배치해 세로 공간을 아낀다. */
+assert.match(index,/<div class="record-head">[\s\S]*?id="recordTimer"[\s\S]*?id="recordState"[\s\S]*?id="recordToggle"[\s\S]*?<\/div>/);
+assert.match(index,/\.record-head\{[^}]*display:flex;[^}]*justify-content:space-between/);
+assert.match(index,/\.record-head \.record-olive\{ margin:0/);
+assert.match(index,/\.record-stage\{ text-align:center; padding:14px 0 10px; \}/);
 assert.match(index,/\.record-level-row\{[^}]*margin:12px auto 8px/);
 assert.match(index,/id="recordTimeTrack"/);
 assert.match(index,/id="recordTimeFill"/);
@@ -244,7 +249,7 @@ assert.match(recorder,/const edgeSnap=Math\.min\(12,bounds\.width\*\.04\)/);
 assert.match(recorder,/const PLAYBACK_RATE_MIN=\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_MAX=1\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_STEP=\.05/);
-assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=183'/);
+assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=184'/);
 assert.match(recorder,/function makeCloudTransportAudio\(\)/);
 assert.match(recorder,/audio\.dataset\.oliveRecordingTransport='true'/);
 assert.match(recorder,/ctx\.createMediaStreamDestination\(\)/);
