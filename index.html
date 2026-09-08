@@ -1601,9 +1601,17 @@
   }
   .record-state-dot{ width:7px; height:7px; border-radius:50%; background:var(--error); }
   .record-time-progress{
-    width:min(250px,76%); margin:18px auto 0;
+    position:relative; width:min(250px,76%); margin:18px auto 0;
     color:var(--ink-3); font-size:.5938rem; font-variant-numeric:tabular-nums;
   }
+  .record-meter-icon{
+    width:14px; height:14px; fill:none; stroke:var(--ink-3); stroke-width:1.7;
+    stroke-linecap:round; stroke-linejoin:round;
+  }
+  .record-time-progress>.record-meter-icon{
+    position:absolute; left:-25px; bottom:-5.5px;
+  }
+  .record-time-progress.running>.record-meter-icon{ stroke:var(--signal); }
   .record-time-labels{ display:flex; justify-content:space-between; margin-bottom:8px; }
   .record-time-track{
     position:relative; display:block; width:100%; height:3px;
@@ -1613,15 +1621,27 @@
     position:absolute; inset:0; border-radius:inherit; background:var(--signal);
     transform:scaleX(0); transform-origin:left center;
   }
-  .record-time-olive{
+  .record-time-marker{
     position:absolute; left:0; top:50%; width:18px; height:15px;
+    transform:translate(-50%,-50%); will-change:left;
+  }
+  .record-time-olive{
+    display:block; width:100%; height:100%;
     background:var(--olive-thumb) center/100% 100% no-repeat;
-    transform:translate(-50%,-50%) rotate(0deg); will-change:left,transform;
+    transform-origin:center; will-change:transform;
   }
   .record-time-progress.running .record-time-fill{ transition:transform .22s linear; }
-  .record-time-progress.running .record-time-olive{ transition:left .22s linear,transform .22s linear; }
+  .record-time-progress.running .record-time-marker{ transition:left .22s linear; }
+  .record-time-progress.running .record-time-olive{ animation:record-time-olive-roll 2s linear infinite; }
+  @keyframes record-time-olive-roll{ to{ transform:rotate(360deg); } }
+  .record-level-row{
+    position:relative; width:min(250px,76%); margin:14px auto 4px;
+  }
+  .record-level-row>.record-meter-icon{
+    position:absolute; left:-25px; top:50%; transform:translateY(-50%);
+  }
   .record-level{
-    width:min(250px,76%); height:3px; margin:14px auto 4px; border-radius:3px;
+    width:100%; height:3px; border-radius:3px;
     overflow:hidden; background:var(--line-soft);
   }
   .record-level-fill{
@@ -1799,7 +1819,8 @@
     .record-rate-control{ gap:5px; }
   }
   @media(prefers-reduced-motion:reduce){
-    .record-time-olive{ transition:none!important; transform:translate(-50%,-50%)!important; }
+    .record-time-marker,.record-time-fill{ transition:none!important; }
+    .record-time-olive{ animation:none!important; }
   }
   body.record-menu-open{ overflow:hidden; }
   .record-menu-backdrop{
@@ -2224,12 +2245,20 @@
             </div>
             <div class="record-time-progress" id="recordTimeProgress" role="progressbar" aria-label="최대 녹음 시간" aria-valuemin="0" aria-valuemax="300" aria-valuenow="0">
               <div class="record-time-labels" aria-hidden="true"><span>0:00</span><span>5:00</span></div>
+              <svg class="record-meter-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="5.5"/><path d="M8 4.7V8l2.2 1.4"/>
+              </svg>
               <span class="record-time-track" id="recordTimeTrack" aria-hidden="true">
                 <i class="record-time-fill" id="recordTimeFill"></i>
-                <i class="record-time-olive" id="recordTimeOlive"></i>
+                <i class="record-time-marker" id="recordTimeMarker"><i class="record-time-olive" id="recordTimeOlive"></i></i>
               </span>
             </div>
-            <div class="record-level" aria-hidden="true"><i class="record-level-fill" id="recordLevelFill"></i></div>
+            <div class="record-level-row" aria-hidden="true">
+              <svg class="record-meter-icon" viewBox="0 0 16 16">
+                <rect x="5.5" y="2" width="5" height="8" rx="2.5"/><path d="M3.7 7.8a4.3 4.3 0 0 0 8.6 0M8 12v2M5.8 14h4.4"/>
+              </svg>
+              <div class="record-level"><i class="record-level-fill" id="recordLevelFill"></i></div>
+            </div>
             <button class="record-olive" id="recordToggle" type="button" data-mode="idle" aria-label="녹음 시작">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <rect x="9" y="4" width="6" height="11" rx="3"/>
@@ -2407,21 +2436,21 @@
   </section>
 </div>
 
-<script src="app-version.js?v=173"></script>
+<script src="app-version.js?v=174"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=173"></script>
-<script src="js/audio-runtime.js?v=173"></script>
-<script src="js/core.js?v=173"></script>
-<script src="js/metronome.js?v=173"></script>
-<script src="js/tuner-engine.js?v=173"></script>
-<script src="js/tuner.js?v=173"></script>
-<script src="js/scales.js?v=173"></script>
-<script src="js/ear-trainer.js?v=173"></script>
-<script src="js/rhythm-trainer.js?v=173"></script>
-<script src="js/recording-cache.js?v=173"></script>
-<script src="js/recorder.js?v=173"></script>
-<script src="js/jam-session.js?v=173"></script>
-<script src="js/app-shell.js?v=173"></script>
+<script src="cloud-sync.js?v=174"></script>
+<script src="js/audio-runtime.js?v=174"></script>
+<script src="js/core.js?v=174"></script>
+<script src="js/metronome.js?v=174"></script>
+<script src="js/tuner-engine.js?v=174"></script>
+<script src="js/tuner.js?v=174"></script>
+<script src="js/scales.js?v=174"></script>
+<script src="js/ear-trainer.js?v=174"></script>
+<script src="js/rhythm-trainer.js?v=174"></script>
+<script src="js/recording-cache.js?v=174"></script>
+<script src="js/recorder.js?v=174"></script>
+<script src="js/jam-session.js?v=174"></script>
+<script src="js/app-shell.js?v=174"></script>
 </body>
 </html>
