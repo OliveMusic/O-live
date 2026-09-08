@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=175';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=176';
   const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
@@ -20,6 +20,8 @@
   const PLAYBACK_GAIN_MAX=11.2;
   const PLAYBACK_PEAK_HEADROOM=.88;
   const RECORDING_NOISE_FLOOR=.0007;
+  const INPUT_ACTIVITY_THRESHOLD=.001;
+  const INPUT_ACTIVITY_HOLD_MS=180;
   const recordGuest=document.getElementById('recordGuest');
   const recordWorkspace=document.getElementById('recordWorkspace');
   const recordListCard=document.getElementById('recordListCard');
@@ -30,6 +32,7 @@
   const recordStateDot=document.getElementById('recordStateDot');
   const recordTimeProgress=document.getElementById('recordTimeProgress');
   const recordTimeFill=document.getElementById('recordTimeFill');
+  const recordLevelRow=document.getElementById('recordLevelRow');
   const recordLevel=document.getElementById('recordLevelFill');
   const recordHint=document.getElementById('recordHint');
   const recordDraft=document.getElementById('recordDraft');
@@ -77,6 +80,7 @@
   let levelSamples=null;
   let waveformLevels=[];
   let recordingPeak=0;
+  let inputActivityLastAt=0;
   let lastWaveformCaptureAt=0;
   let draft=null;
   let draftUrl='';
@@ -752,12 +756,17 @@
     }[mode]||'녹음');
     recordToggle.setAttribute('aria-busy',mode==='starting'?'true':'false');
   }
+  function clearInputActivity(){
+    inputActivityLastAt=0;
+    recordLevelRow.classList.remove('input-active');
+  }
   function renderIdle(){
     setTimer(0);
     recordState.textContent='녹음 준비';
     recordStateDot.hidden=true;
     recordHint.textContent='최대 5분 · 메트로놈 또는 잼 세션과 함께 녹음할 수 있습니다';
     recordDraft.hidden=true;
+    clearInputActivity();
     recordLevel.style.transform='scaleX(0)';
     setButtonMode('idle');
   }
@@ -782,6 +791,7 @@
     recordingStream=null;
     levelSource=levelAnalyser=levelSink=levelSamples=null;
     cancelAnimationFrame(levelFrame); levelFrame=0;
+    clearInputActivity();
     recordLevel.style.transform='scaleX(0)';
   }
   function stopTracks(){
@@ -895,6 +905,8 @@
       waveformLevels.push(rms);
       lastWaveformCaptureAt=now;
     }
+    if(rms>=INPUT_ACTIVITY_THRESHOLD) inputActivityLastAt=now;
+    recordLevelRow.classList.toggle('input-active',Boolean(inputActivityLastAt && now-inputActivityLastAt<=INPUT_ACTIVITY_HOLD_MS));
     recordLevel.style.transform=`scaleX(${meterLevelForRms(rms).toFixed(3)})`;
     levelFrame=requestAnimationFrame(drawLevel);
   }
@@ -1057,6 +1069,7 @@
     if(!recording || !recorder) return;
     const elapsed=Math.min(MAX_DURATION_MS,performance.now()-startedAt);
     recording=false;
+    clearInputActivity();
     clearInterval(timerId); timerId=0;
     setTimer(elapsed);
     recordState.textContent='녹음 처리 중…';

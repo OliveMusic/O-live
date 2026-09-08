@@ -383,7 +383,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.45');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.46');
 }
 
 test.afterEach(async({page})=>{
@@ -409,7 +409,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=175');
+  expect(workerUrl).toContain('service-worker.js?v=176');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -426,7 +426,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.45',build:175});
+  expect(payload.release).toEqual({version:'1.3.46',build:176});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -515,6 +515,8 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   expect(box).toBeTruthy();
   const waveformSvgBox=await page.locator('.record-waveform-svg.base').boundingBox();
   const playBox=await page.locator('.record-player-play').boundingBox();
+  const playerBox=await page.locator('.record-player').boundingBox();
+  expect(playerBox.height).toBeLessThanOrEqual(134);
   expect(box.height).toBeCloseTo(44,0);
   expect(waveformSvgBox.y-box.y).toBeCloseTo(2,0);
   expect((box.y+box.height)-(waveformSvgBox.y+waveformSvgBox.height)).toBeCloseTo(2,0);
@@ -562,7 +564,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   expect(loopLabelSizes.marker).toBeLessThanOrEqual(loopLabelSizes.button);
   expect(loopLabelSizes.button-loopLabelSizes.marker).toBeLessThan(3);
   expect(loopLabelSizes.markerTop).toBe(-15);
-  expect(loopLabelSizes.waveformTopPadding).toBe(16);
+  expect(loopLabelSizes.waveformTopPadding).toBe(14);
   await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
   await expect(page.locator('.record-player-tool.repeat')).toHaveAttribute('aria-pressed','true');
   await page.evaluate(()=>{ window.__lastRecordingContentMedia.currentTime=35; });
@@ -591,7 +593,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=175',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=176',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -769,7 +771,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=175');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=176');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -938,8 +940,15 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
     const transform=getComputedStyle(element).transform;
     return transform==='none'?0:new DOMMatrix(transform).a;
   })).toBeGreaterThan(.18);
+  await expect(page.locator('#recordLevelRow')).toHaveClass(/input-active/);
+  const activeMeterColors=await page.evaluate(()=>({
+    time:getComputedStyle(document.querySelector('.record-time-progress>.record-meter-icon')).stroke,
+    input:getComputedStyle(document.querySelector('.record-level-row>.record-meter-icon')).stroke,
+  }));
+  expect(activeMeterColors.input).toBe(activeMeterColors.time);
   await page.locator('#recordToggle').click();
   await expect(page.locator('#recordTimeProgress')).not.toHaveClass(/running/);
+  await expect(page.locator('#recordLevelRow')).not.toHaveClass(/input-active/);
 });
 
 test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',async({page})=>{
