@@ -383,7 +383,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.41');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.43');
 }
 
 test.afterEach(async({page})=>{
@@ -409,7 +409,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=171');
+  expect(workerUrl).toContain('service-worker.js?v=173');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -426,7 +426,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.41',build:171});
+  expect(payload.release).toEqual({version:'1.3.43',build:173});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -437,6 +437,7 @@ test('녹음 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 �
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
   await expect(page.locator('#pane-record')).toBeVisible();
   await expect(page.locator('#recordTimer')).toHaveText('0:00');
+  await expect(page.locator('#recordState')).toHaveText('녹음 준비');
   await expect(page.locator('#recordTimeProgress')).toHaveAttribute('aria-valuetext','0:00 / 5:00');
   await expect(page.locator('#recordTimeOlive')).toHaveCSS('left','0%');
   await expect(page.locator('#recordGuest')).toBeVisible();
@@ -589,7 +590,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=171',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=173',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -767,7 +768,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=171');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=173');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -900,6 +901,17 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
   await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal'});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  const progressBar=await page.locator('#recordTimeTrack').boundingBox();
+  const levelBar=await page.locator('.record-level').boundingBox();
+  const timeLabels=await page.locator('.record-time-labels').boundingBox();
+  expect(progressBar.width).toBeCloseTo(levelBar.width,0);
+  expect(progressBar.height).toBeCloseTo(levelBar.height,0);
+  expect(timeLabels.y+timeLabels.height).toBeLessThan(progressBar.y);
+  const barColors=await page.evaluate(()=>({
+    progress:getComputedStyle(document.getElementById('recordTimeFill')).backgroundColor,
+    level:getComputedStyle(document.getElementById('recordLevelFill')).backgroundColor,
+  }));
+  expect(barColors.progress).toBe(barColors.level);
   await page.locator('#recordToggle').click();
   await expect(page.locator('#recordToggle')).toHaveClass(/on/);
   await expect(page.locator('#recordTimeProgress')).toHaveClass(/running/);
@@ -909,6 +921,14 @@ test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다'
   await expect.poll(()=>page.locator('#recordTimeOlive').evaluate(element=>(
     parseFloat(element.style.left)
   ))).toBeGreaterThan(0);
+  await expect.poll(()=>page.locator('#recordTimeFill').evaluate(element=>{
+    const transform=getComputedStyle(element).transform;
+    return transform==='none'?0:new DOMMatrix(transform).a;
+  })).toBeGreaterThan(0);
+  await expect.poll(()=>page.locator('#recordTimeOlive').evaluate(element=>{
+    const match=element.style.transform.match(/rotate\(([-\d.]+)deg\)/);
+    return match?Math.abs(Number(match[1])):0;
+  })).toBeGreaterThan(0);
   expect(await page.evaluate(()=>window.__micHarness.lastConstraints.audio)).toMatchObject({
     echoCancellation:false,noiseSuppression:false,autoGainControl:false,
   });

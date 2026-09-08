@@ -12,7 +12,8 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=171';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=173';
+  const RECORD_OLIVE_TURN_MS=2000;
   const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
@@ -29,6 +30,8 @@
   const recordState=document.getElementById('recordState');
   const recordStateDot=document.getElementById('recordStateDot');
   const recordTimeProgress=document.getElementById('recordTimeProgress');
+  const recordTimeTrack=document.getElementById('recordTimeTrack');
+  const recordTimeFill=document.getElementById('recordTimeFill');
   const recordTimeOlive=document.getElementById('recordTimeOlive');
   const recordLevel=document.getElementById('recordLevelFill');
   const recordHint=document.getElementById('recordHint');
@@ -734,11 +737,13 @@
   function setRecordingProgress(ms){
     const elapsed=clamp(Number(ms)||0,0,MAX_DURATION_MS);
     const progress=MAX_DURATION_MS ? elapsed/MAX_DURATION_MS : 0;
+    const rollDegrees=elapsed/RECORD_OLIVE_TURN_MS*360;
     recordTimeProgress.classList.toggle('running',recording);
     recordTimeProgress.setAttribute('aria-valuenow',String(Math.floor(elapsed/1000)));
     recordTimeProgress.setAttribute('aria-valuetext',`${formatRecordingDuration(elapsed)} / 5:00`);
     recordTimeOlive.style.left=`${(progress*100).toFixed(3)}%`;
-    recordTimeOlive.style.transform=`translate(-50%,-50%) rotate(${(progress*720).toFixed(2)}deg)`;
+    recordTimeFill.style.transform=`scaleX(${progress.toFixed(5)})`;
+    recordTimeOlive.style.transform=`translate(-50%,-50%) rotate(${rollDegrees.toFixed(2)}deg)`;
   }
   function setTimer(ms){
     recordTimer.textContent=formatRecordingDuration(ms);
@@ -755,7 +760,7 @@
   }
   function renderIdle(){
     setTimer(0);
-    recordState.textContent='새 녹음';
+    recordState.textContent='녹음 준비';
     recordStateDot.hidden=true;
     recordHint.textContent='최대 5분 · 메트로놈 또는 잼 세션과 함께 녹음할 수 있습니다';
     recordDraft.hidden=true;
