@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=170';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=171';
   const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
@@ -28,6 +28,8 @@
   const recordTimer=document.getElementById('recordTimer');
   const recordState=document.getElementById('recordState');
   const recordStateDot=document.getElementById('recordStateDot');
+  const recordTimeProgress=document.getElementById('recordTimeProgress');
+  const recordTimeOlive=document.getElementById('recordTimeOlive');
   const recordLevel=document.getElementById('recordLevelFill');
   const recordHint=document.getElementById('recordHint');
   const recordDraft=document.getElementById('recordDraft');
@@ -125,6 +127,9 @@
   const loopRegions=new Map();
   const cloudStretchModulePromises=new WeakMap();
   let loadingList=false;
+  let recordingListLoadPromise=null;
+  let recordingListLoadUserId='';
+  let recordingListLoadToken=0;
   let recordDragDepth=0;
 
   function makeCloudFallbackAudio(){
@@ -343,6 +348,10 @@
   function formatDuration(ms){
     const seconds=Math.max(0,Math.floor(ms/1000));
     return pad(Math.floor(seconds/60))+':'+pad(seconds%60);
+  }
+  function formatRecordingDuration(ms){
+    const seconds=Math.max(0,Math.floor(ms/1000));
+    return `${Math.floor(seconds/60)}:${pad(seconds%60)}`;
   }
   function formatDate(value){
     const date=new Date(value);
@@ -722,7 +731,19 @@
     recordMessage.textContent=message||'';
     recordMessage.classList.toggle('error',Boolean(error));
   }
-  function setTimer(ms){ recordTimer.textContent=formatDuration(ms); }
+  function setRecordingProgress(ms){
+    const elapsed=clamp(Number(ms)||0,0,MAX_DURATION_MS);
+    const progress=MAX_DURATION_MS ? elapsed/MAX_DURATION_MS : 0;
+    recordTimeProgress.classList.toggle('running',recording);
+    recordTimeProgress.setAttribute('aria-valuenow',String(Math.floor(elapsed/1000)));
+    recordTimeProgress.setAttribute('aria-valuetext',`${formatRecordingDuration(elapsed)} / 5:00`);
+    recordTimeOlive.style.left=`${(progress*100).toFixed(3)}%`;
+    recordTimeOlive.style.transform=`translate(-50%,-50%) rotate(${(progress*720).toFixed(2)}deg)`;
+  }
+  function setTimer(ms){
+    recordTimer.textContent=formatRecordingDuration(ms);
+    setRecordingProgress(ms);
+  }
   function setButtonMode(mode){
     recordToggle.dataset.mode=mode;
     recordToggle.classList.toggle('on',mode==='recording');
@@ -1013,6 +1034,7 @@
         processedStream:recordingStream!==stream,
       });
       recording=true; startPending=false; startedAt=performance.now(); recordedAt=new Date().toISOString();
+      setTimer(0);
       timerId=setInterval(updateTimer,200);
       setTabSounding('trainer',true,'recorder');
       recordState.textContent='녹음 중';
@@ -1034,8 +1056,10 @@
       startPending=false; ++startToken; finishAudioSession(); renderIdle(); return;
     }
     if(!recording || !recorder) return;
+    const elapsed=Math.min(MAX_DURATION_MS,performance.now()-startedAt);
     recording=false;
     clearInterval(timerId); timerId=0;
+    setTimer(elapsed);
     recordState.textContent='녹음 처리 중…';
     recordStateDot.hidden=true;
     setButtonMode('starting');
@@ -2076,22 +2100,75 @@
       recordList.appendChild(entry);
     });
   }
-  async function loadRecordings(){
-    if(!currentUser){ rows=[]; renderList(); return; }
-    const userId=currentUser.id;
-    loadingList=true; renderList();
-    try{
-      rows=await window.OliveCloud.listRecordings();
-      rows.forEach(row=>{
-        const waveform=normalizeWaveform(row.waveform);
-        if(waveform.length) waveformCache.set(row.id,waveform);
-      });
-      pruneCloudPlaybackCache();
-      await hydrateCloudPlaybackCache(userId);
-      setMessage('');
+  function waitRecordingListRetry(ms){
+    return new Promise(resolve=>setTimeout(resolve,ms));
+  }
+  function recordingListRequestIsCurrent(userId,token){
+    return token===recordingListLoadToken && Boolean(currentUser) && currentUser.id===userId;
+  }
+  async function requestRecordingRows(userId,token){
+    const delays=[0,250,750];
+    let lastError=null;
+    for(let attempt=0;attempt<delays.length;attempt++){
+      if(delays[attempt]) await waitRecordingListRetry(delays[attempt]);
+      if(!recordingListRequestIsCurrent(userId,token)) return null;
+      try{ return await window.OliveCloud.listRecordings(); }
+      catch(error){
+        lastError=error;
+        if(!navigator.onLine) break;
+      }
     }
-    catch(error){ rows=[]; setMessage('녹음 저장소를 준비한 뒤 다시 시도해 주세요',true); }
-    finally{ loadingList=false; renderList(); }
+    throw lastError||new Error('Recording list unavailable');
+  }
+  function loadRecordings(force=false){
+    if(!currentUser){
+      recordingListLoadToken++;
+      recordingListLoadPromise=null;
+      recordingListLoadUserId='';
+      loadingList=false; rows=[]; renderList();
+      return Promise.resolve();
+    }
+    const userId=currentUser.id;
+    if(!force && recordingListLoadPromise && recordingListLoadUserId===userId){
+      return recordingListLoadPromise;
+    }
+    const token=++recordingListLoadToken;
+    recordingListLoadUserId=userId;
+    loadingList=!rows.length;
+    renderList();
+    const task=(async()=>{
+      try{
+        const nextRows=await requestRecordingRows(userId,token);
+        if(!nextRows || !recordingListRequestIsCurrent(userId,token)) return;
+        rows=nextRows;
+        rows.forEach(row=>{
+          const waveform=normalizeWaveform(row.waveform);
+          if(waveform.length) waveformCache.set(row.id,waveform);
+        });
+        pruneCloudPlaybackCache();
+        await hydrateCloudPlaybackCache(userId);
+        if(recordingListRequestIsCurrent(userId,token)) setMessage('');
+      }catch(error){
+        if(!recordingListRequestIsCurrent(userId,token)) return;
+        console.warn('[O\'live recording list]',error);
+        setMessage(rows.length
+          ? '녹음 목록을 새로고침하지 못했습니다'
+          : '녹음 목록을 불러오지 못했습니다 · 연결되면 다시 시도합니다',true);
+      }finally{
+        if(recordingListRequestIsCurrent(userId,token)){
+          loadingList=false;
+          renderList();
+        }
+      }
+    })();
+    const tracked=task.finally(()=>{
+      if(recordingListLoadPromise===tracked){
+        recordingListLoadPromise=null;
+        recordingListLoadUserId='';
+      }
+    });
+    recordingListLoadPromise=tracked;
+    return tracked;
   }
   async function uploadExternalFile(file){
     if(!currentUser || !file || recordUpload.disabled) return;
@@ -2130,7 +2207,7 @@
       setMessage('클라우드에 업로드하는 중입니다');
       await window.OliveCloud.uploadRecording(uploaded);
       rememberCloudBlob(uploaded,file);
-      await loadRecordings();
+      await loadRecordings(true);
       const savedRow=rows.find(row=>row.id===uploaded.id)||uploaded;
       await cacheRowBlob(savedRow,file);
       setMessage('내 녹음에 추가했습니다');
@@ -2203,7 +2280,7 @@
       await window.OliveCloud.uploadRecording(saved);
       rememberCloudBlob(saved,saved.blob);
       await cacheRowBlob(saved,saved.blob);
-      discardDraft(); await loadRecordings(); setMessage('클라우드에 저장했습니다');
+      discardDraft(); await loadRecordings(true); setMessage('클라우드에 저장했습니다');
     }catch(error){
       const message=/count limit/i.test(error&&error.message||'') ? '녹음은 최대 50개까지 저장할 수 있습니다'
         : /storage limit/i.test(error&&error.message||'') ? '녹음 저장 용량이 가득 찼습니다'
@@ -2239,7 +2316,7 @@
     if(!row) return;
     const next=window.prompt('녹음 이름',row.title);
     if(next===null || !next.trim() || next.trim()===row.title) return;
-    try{ await window.OliveCloud.renameRecording(row.id,next.trim().slice(0,80)); await loadRecordings(); }
+    try{ await window.OliveCloud.renameRecording(row.id,next.trim().slice(0,80)); await loadRecordings(true); }
     catch(e){ setMessage('이름을 변경하지 못했습니다',true); }
   }
   async function downloadSelected(){
@@ -2264,12 +2341,18 @@
       forgetCloudBlob(row.id);
       const cache=recordingCache();
       if(cache && currentUser) await cache.remove(currentUser.id,row.id);
-      await loadRecordings(); setMessage('녹음을 삭제했습니다');
+      await loadRecordings(true); setMessage('녹음을 삭제했습니다');
     }
     catch(e){ setMessage('녹음을 삭제하지 못했습니다',true); }
   }
   function applySession(user){
     const nextId=user&&user.id||'';
+    if(sessionUserId!==nextId){
+      recordingListLoadToken++;
+      recordingListLoadPromise=null;
+      recordingListLoadUserId='';
+      loadingList=false;
+    }
     if(sessionUserId && sessionUserId!==nextId){
       const previousId=sessionUserId;
       if(recording || startPending) stopRecording();
@@ -2330,12 +2413,14 @@
     keepWhenHidden:true,
   });
   document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible' && currentUser) loadRecordings();
     if(cloudMediaSessionActive && cloudMediaId){
       cloudMediaPositionUpdatedAt=0;
       refreshCloudMediaSessionPosition(0);
     }
     if(recording && document.visibilityState==='hidden') recordingInterruptedWhileHidden=true;
   });
+  window.addEventListener('online',()=>{ if(currentUser) loadRecordings(true); });
   function stopPlaybackForOtherTool(){
     pauseDraftPlayback(false);
     if(cloudPlayingId){
