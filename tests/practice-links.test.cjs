@@ -33,6 +33,10 @@ assert.match(links,/at:Date\.parse\(row\.created_at\)\|\|0/);
 assert.match(recorder,/function practiceLinkEntries\(\)/);
 assert.match(recorder,/\.concat\(practiceLinkEntries\(\)\)/);
 assert.match(recorder,/entries\.sort\(\(a,b\)=>b\.at-a\.at\)/,'최신 항목이 위에 온다');
+/* 목록에는 녹음·업로드·YouTube가 함께 들어가므로 문구를 녹음으로 한정하지 않는다. */
+assert.match(recorder,/textContent='저장된 항목이 없습니다'/);
+assert.match(recorder,/textContent='목록을 불러오는 중입니다'/);
+assert.doesNotMatch(recorder,/textContent='저장된 녹음이 없습니다'/);
 assert.match(recorder,/at:Date\.parse\(row\.recorded_at\)\|\|0/);
 assert.match(recorder,/addEventListener\('olive-practice-links-change',renderList\)/);
 /* 링크 메뉴에는 다운로드가 없고, 녹음과 마찬가지로 취소 항목도 두지 않는다. */

@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=185';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=186';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -2136,14 +2136,15 @@
   function renderList(){
     renderUsage();
     recordList.innerHTML='';
+    /* 목록에는 녹음·업로드·YouTube가 함께 들어간다. 문구를 녹음으로 한정하지 않는다. */
     if(loadingList){
-      const state=document.createElement('p'); state.className='record-empty'; state.textContent='녹음을 불러오는 중입니다';
+      const state=document.createElement('p'); state.className='record-empty'; state.textContent='목록을 불러오는 중입니다';
       recordList.appendChild(state); return;
     }
     const entries=rows.map(row=>({at:Date.parse(row.recorded_at)||0,node:()=>createRecordingEntry(row)}))
       .concat(practiceLinkEntries());
     if(!entries.length){
-      const state=document.createElement('p'); state.className='record-empty'; state.textContent='저장된 녹음이 없습니다';
+      const state=document.createElement('p'); state.className='record-empty'; state.textContent='저장된 항목이 없습니다';
       recordList.appendChild(state); return;
     }
     entries.sort((a,b)=>b.at-a.at);
