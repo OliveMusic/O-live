@@ -14,6 +14,7 @@ const config=fs.readFileSync('supabase/config.toml','utf8');
 /* ── 마크업 ── */
 /* 링크는 아이콘 버튼이다. 글자가 없으므로 aria-label이 반드시 있어야 한다. */
 assert.match(index,/id="recordLink"[^>]*aria-label="YouTube 링크 추가"/);
+assert.match(index,/id="recordLink"[^>]*aria-controls="linkPanel"[^>]*aria-expanded="false"/);
 assert.match(index,/id="recordUpload"[^>]*>업로드</);
 /* 동작 버튼은 테두리만 있는 형태가 아니라 올리브로 채운다. */
 assert.doesNotMatch(index,/class="record-upload ghost"/);
@@ -46,6 +47,7 @@ assert.match(links,/PLAYER_HOST='https:\/\/www\.youtube-nocookie\.com'/);
 /* 입력 중 자동 검색 금지. 명시적인 동작에서만 보낸다. */
 assert.doesNotMatch(links,/addEventListener\('input',[^)]*runSearch/);
 assert.match(links,/searchGo\.addEventListener\('click',runSearch\)/);
+assert.match(links,/linkButton\.setAttribute\('aria-expanded',String\(open\)\)/);
 assert.match(links,/event\.key==='Enter'[\s\S]{0,80}runSearch\(\)/);
 assert.match(links,/searchCache\.has\(query\)/,'같은 검색어 재요청 방지');
 assert.match(links,/MIN_QUERY_LENGTH=2/);

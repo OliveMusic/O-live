@@ -524,7 +524,7 @@
     clear.addEventListener('click',()=>clearLoop(row));
     tools.append(pointA,pointB,repeat,clear);
     const times=document.createElement('div');
-    times.className='record-player-times';
+    times.className='record-player-times link-player-times';
     const elapsed=document.createElement('span');
     elapsed.className='record-player-elapsed';
     elapsed.textContent=formatDuration(row.last_position_ms);
@@ -536,11 +536,11 @@
     total.className='link-total';
     total.textContent=formatDuration(row.duration_ms);
     times.append(elapsed,divider,total);
-    controls.append(tools,times);
-    wrap.appendChild(controls);
+    wrap.appendChild(times);
     const loopTimes=document.createElement('p');
     loopTimes.className='link-loop-times';
-    wrap.appendChild(loopTimes);
+    controls.append(tools,loopTimes);
+    wrap.appendChild(controls);
     mountPlayer(row,frame);
     return wrap;
   }
@@ -684,6 +684,7 @@
   function togglePanel(){
     const open=linkPanel.hidden;
     linkPanel.hidden=!open;
+    linkButton.setAttribute('aria-expanded',String(open));
     if(open){ setMode('search'); }
     else{ setMessage(''); results.textContent=''; }
   }
@@ -780,6 +781,7 @@
     try{
       await window.OliveCloud.savePracticeLink(videoId,trimmed,check.durationMs||0);
       linkPanel.hidden=true;
+      linkButton.setAttribute('aria-expanded','false');
       results.textContent='';
       searchInput.value='';
       urlInput.value='';
@@ -807,6 +809,7 @@
     if(!currentUser){
       rows=[]; expandedId=''; destroyPlayer(); loopState.clear();
       linkPanel.hidden=true;
+      linkButton.setAttribute('aria-expanded','false');
       renderList();
       return;
     }
