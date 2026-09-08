@@ -104,31 +104,31 @@
     const source=metadata.full_name || metadata.name || user && user.email || 'G';
     return Array.from(String(source).trim())[0] || 'G';
   }
-  function renderAccountAction(){
-    if(!ui.action) return;
+  function renderAccountAction(view){
+    if(!view || !view.action) return;
     const signedIn=Boolean(currentUser);
-    ui.action.classList.toggle('has-account',signedIn);
-    ui.actionLabel.hidden=signedIn;
-    ui.action.setAttribute('aria-label',signedIn ? providerLabel(currentUser)+' 계정 열기' : '계정 연결');
+    view.action.classList.toggle('has-account',signedIn);
+    view.actionLabel.hidden=signedIn;
+    view.action.setAttribute('aria-label',signedIn ? providerLabel(currentUser)+' 계정 열기' : '계정 연결');
     if(!signedIn){
-      ui.avatar.hidden=true;
-      ui.avatarFallback.hidden=true;
-      ui.avatar.removeAttribute('src');
+      view.avatar.hidden=true;
+      view.avatarFallback.hidden=true;
+      view.avatar.removeAttribute('src');
       return;
     }
     const url=avatarUrl(currentUser);
-    ui.avatarFallback.textContent=accountInitial(currentUser);
-    ui.avatarFallback.hidden=Boolean(url);
-    ui.avatar.hidden=!url;
-    if(url) ui.avatar.src=url;
-    else ui.avatar.removeAttribute('src');
+    view.avatarFallback.textContent=accountInitial(currentUser);
+    view.avatarFallback.hidden=Boolean(url);
+    view.avatar.hidden=!url;
+    if(url) view.avatar.src=url;
+    else view.avatar.removeAttribute('src');
   }
   function redirectUrl(){
     return config.redirectUrl || new URL('./',location.href).href;
   }
 
   function setState(state,detail){
-    if(!ui.title) return;
+    if(!ui.accountViews || !ui.accountViews.length) return;
     const copy={
       unconfigured:['클라우드 저장 설정 필요','현재 이 기기에만 기록 중'],
       signedout:['계정에 기록 보관','Google 계정으로 연결'],
@@ -138,10 +138,12 @@
       upgrade:['클라우드 업데이트 필요',detail||'저장소 준비 상태를 확인해 주세요'],
       error:['동기화 확인 필요',detail||'계정 화면에서 다시 시도해 주세요'],
     }[state]||['클라우드 저장',''];
-    ui.title.textContent=copy[0];
-    ui.status.textContent=copy[1];
-    ui.dot.dataset.state=state;
-    renderAccountAction();
+    ui.accountViews.forEach(view=>{
+      view.title.textContent=copy[0];
+      view.status.textContent=copy[1];
+      view.dot.dataset.state=state;
+      renderAccountAction(view);
+    });
     if(ui.sheetSync) ui.sheetSync.textContent=copy[1];
   }
   function setMessage(message,isError){
@@ -264,13 +266,6 @@
   }
   function bindUI(){
     ui={
-      title:document.getElementById('earCloudTitle'),
-      status:document.getElementById('earCloudStatus'),
-      dot:document.getElementById('earCloudDot'),
-      action:document.getElementById('earCloudAction'),
-      actionLabel:document.getElementById('earCloudActionLabel'),
-      avatar:document.getElementById('earCloudAvatar'),
-      avatarFallback:document.getElementById('earCloudAvatarFallback'),
       app:document.getElementById('app'),
       sheet:document.getElementById('cloudAuthSheet'),
       close:document.getElementById('cloudAuthClose'),
@@ -287,15 +282,27 @@
       setupHint:document.getElementById('cloudSetupHint'),
       message:document.getElementById('cloudAuthMessage'),
     };
-    if(!ui.action || !ui.sheet) return;
-    ui.action.addEventListener('click',openSheet);
+    ui.accountViews=['earCloud','recordCloud'].map(prefix=>({
+      title:document.getElementById(prefix+'Title'),
+      status:document.getElementById(prefix+'Status'),
+      dot:document.getElementById(prefix+'Dot'),
+      action:document.getElementById(prefix+'Action'),
+      actionLabel:document.getElementById(prefix+'ActionLabel'),
+      avatar:document.getElementById(prefix+'Avatar'),
+      avatarFallback:document.getElementById(prefix+'AvatarFallback'),
+    })).filter(view=>view.title && view.status && view.dot && view.action &&
+      view.actionLabel && view.avatar && view.avatarFallback);
+    if(!ui.accountViews.length || !ui.sheet) return;
+    ui.accountViews.forEach(view=>{
+      view.action.addEventListener('click',openSheet);
+      view.avatar.addEventListener('error',()=>{
+        view.avatar.hidden=true;
+        view.avatarFallback.hidden=!currentUser;
+      });
+    });
     ui.close.addEventListener('click',closeSheet);
     ui.sheet.addEventListener('click',e=>{ if(e.target===ui.sheet) closeSheet(); });
     ui.sheet.addEventListener('keydown',handleSheetKeydown);
-    ui.avatar.addEventListener('error',()=>{
-      ui.avatar.hidden=true;
-      ui.avatarFallback.hidden=!currentUser;
-    });
     ui.google.addEventListener('click',signInWithGoogle);
     ui.logout.addEventListener('click',signOut);
     ui.sync.addEventListener('click',()=>syncAndRefresh(true));

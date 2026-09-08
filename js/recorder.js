@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=176';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=177';
   const MIN_LOOP_SECONDS=.4;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
@@ -2220,6 +2220,7 @@
       await window.OliveCloud.uploadRecording(uploaded);
       rememberCloudBlob(uploaded,file);
       await loadRecordings(true);
+      recordListCard.open=true;
       const savedRow=rows.find(row=>row.id===uploaded.id)||uploaded;
       await cacheRowBlob(savedRow,file);
       setMessage('내 녹음에 추가했습니다');
@@ -2292,7 +2293,7 @@
       await window.OliveCloud.uploadRecording(saved);
       rememberCloudBlob(saved,saved.blob);
       await cacheRowBlob(saved,saved.blob);
-      discardDraft(); await loadRecordings(true); setMessage('클라우드에 저장했습니다');
+      discardDraft(); await loadRecordings(true); recordListCard.open=true; setMessage('클라우드에 저장했습니다');
     }catch(error){
       const message=/count limit/i.test(error&&error.message||'') ? '녹음은 최대 50개까지 저장할 수 있습니다'
         : /storage limit/i.test(error&&error.message||'') ? '녹음 저장 용량이 가득 찼습니다'

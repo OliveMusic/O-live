@@ -658,28 +658,29 @@
   }
 
   /* ---------- 청음 기록 달력 ---------- */
-  .ear-history{padding:0; overflow:hidden;}
-  .ear-history > summary{
+  .ear-history,.record-history{padding:0; overflow:hidden;}
+  .ear-history > summary,.record-history > summary{
     min-height:54px; padding:0 18px;
     display:flex; align-items:center; gap:10px;
     cursor:pointer; list-style:none; touch-action:manipulation; outline:none;
   }
-  .ear-history > summary:focus-visible{
+  .ear-history > summary:focus-visible,.record-history > summary:focus-visible{
     box-shadow:inset 0 0 0 1px var(--signal);
     border-radius:var(--r-lg) var(--r-lg) 0 0;
   }
-  .ear-history > summary::-webkit-details-marker{display:none;}
-  .ear-history-title{
+  .ear-history > summary::-webkit-details-marker,
+  .record-history > summary::-webkit-details-marker{display:none;}
+  .ear-history-title,.record-history-title{
     font-size:0.7188rem; font-weight:500; letter-spacing:0.0182em;
   }
-  .ear-history > summary::after{
+  .ear-history > summary::after,.record-history > summary::after{
     content:''; width:7px; height:7px; flex:0 0 auto; margin-left:auto;
     border-right:1.5px solid var(--ink-3);
     border-bottom:1.5px solid var(--ink-3);
     transform:rotate(45deg) translate(-1px,-1px);
     transition:transform .18s var(--ease-out);
   }
-  .ear-history[open] > summary::after{
+  .ear-history[open] > summary::after,.record-history[open] > summary::after{
     transform:rotate(225deg) translate(-1px,-1px);
   }
   .ear-history-body{
@@ -1667,6 +1668,14 @@
   .record-upload:active{ background:var(--signal-press); border-color:var(--signal-press); }
   .record-upload:disabled{ opacity:.45; cursor:default; }
   .record-usage{ color:var(--ink-3); font-size:.6875rem; font-variant-numeric:tabular-nums; }
+  .record-history > summary .record-usage{ margin-left:auto; }
+  .record-history > summary::after{ margin-left:2px; }
+  .record-history-body{ border-top:1px solid var(--line-soft); padding:10px 14px 0; }
+  .record-history-body .record-list-head{
+    min-height:44px; display:flex; align-items:center; justify-content:flex-end; margin-bottom:8px;
+  }
+  .record-history-body .record-list{ margin-bottom:0; }
+  .record-cloud{ margin:13px -14px 0; }
   .record-list{ margin:0 -8px -8px; }
   .record-empty{ margin:0; padding:34px 12px; text-align:center; color:var(--ink-3); font-size:.7188rem; }
   .record-entry{ border-top:1px solid var(--line-soft); }
@@ -2265,17 +2274,35 @@
           </div>
         </div>
 
-        <div class="card" id="recordListCard" hidden>
-          <div class="row record-list-head">
-            <h2 style="margin:0;">내 녹음</h2>
-            <div class="record-list-actions">
-              <input id="recordUploadInput" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.webm,.flac,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/flac" hidden>
-              <button class="record-upload" id="recordUpload" type="button">업로드</button>
-              <span class="record-usage" id="recordUsage">0 / 50</span>
+        <details class="card record-history" id="recordListCard" hidden>
+          <summary>
+            <span class="record-history-title">내 녹음</span>
+            <span class="record-usage" id="recordUsage">0 / 50</span>
+          </summary>
+          <div class="record-history-body">
+            <div class="record-list-head">
+              <div class="record-list-actions">
+                <input id="recordUploadInput" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.webm,.flac,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/flac" hidden>
+                <button class="record-upload" id="recordUpload" type="button">업로드</button>
+              </div>
+            </div>
+            <div class="record-list" id="recordList"></div>
+            <div class="ear-cloud record-cloud" id="recordCloud">
+              <div class="ear-cloud-copy">
+                <span class="ear-cloud-dot" id="recordCloudDot" data-state="unconfigured" aria-hidden="true"></span>
+                <span>
+                  <strong id="recordCloudTitle">클라우드 연결 준비 중</strong>
+                  <small id="recordCloudStatus" aria-live="polite">설정을 확인하고 있습니다</small>
+                </span>
+              </div>
+              <button class="ear-cloud-action" id="recordCloudAction" type="button" aria-label="계정 연결">
+                <span id="recordCloudActionLabel">계정 연결</span>
+                <img class="ear-cloud-avatar" id="recordCloudAvatar" alt="" referrerpolicy="no-referrer" hidden>
+                <span class="ear-cloud-avatar-fallback" id="recordCloudAvatarFallback" aria-hidden="true" hidden></span>
+              </button>
             </div>
           </div>
-          <div class="record-list" id="recordList"></div>
-        </div>
+        </details>
       </div>
     </section>
 
@@ -2422,21 +2449,21 @@
   </section>
 </div>
 
-<script src="app-version.js?v=176"></script>
+<script src="app-version.js?v=177"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=176"></script>
-<script src="js/audio-runtime.js?v=176"></script>
-<script src="js/core.js?v=176"></script>
-<script src="js/metronome.js?v=176"></script>
-<script src="js/tuner-engine.js?v=176"></script>
-<script src="js/tuner.js?v=176"></script>
-<script src="js/scales.js?v=176"></script>
-<script src="js/ear-trainer.js?v=176"></script>
-<script src="js/rhythm-trainer.js?v=176"></script>
-<script src="js/recording-cache.js?v=176"></script>
-<script src="js/recorder.js?v=176"></script>
-<script src="js/jam-session.js?v=176"></script>
-<script src="js/app-shell.js?v=176"></script>
+<script src="cloud-sync.js?v=177"></script>
+<script src="js/audio-runtime.js?v=177"></script>
+<script src="js/core.js?v=177"></script>
+<script src="js/metronome.js?v=177"></script>
+<script src="js/tuner-engine.js?v=177"></script>
+<script src="js/tuner.js?v=177"></script>
+<script src="js/scales.js?v=177"></script>
+<script src="js/ear-trainer.js?v=177"></script>
+<script src="js/rhythm-trainer.js?v=177"></script>
+<script src="js/recording-cache.js?v=177"></script>
+<script src="js/recorder.js?v=177"></script>
+<script src="js/jam-session.js?v=177"></script>
+<script src="js/app-shell.js?v=177"></script>
 </body>
 </html>

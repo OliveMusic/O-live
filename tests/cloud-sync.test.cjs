@@ -43,6 +43,8 @@ class FakeStorage{
 const elementIds=[
   'earCloudTitle','earCloudStatus','earCloudDot','earCloudAction',
   'earCloudActionLabel','earCloudAvatar','earCloudAvatarFallback',
+  'recordCloudTitle','recordCloudStatus','recordCloudDot','recordCloudAction',
+  'recordCloudActionLabel','recordCloudAvatar','recordCloudAvatarFallback',
   'cloudAuthSheet','cloudAuthClose','cloudLoggedOut','cloudLoggedIn',
   'cloudGoogleLogin','cloudLogout','cloudSyncNow','cloudDeleteData','cloudDeleteAccount',
   'cloudProviderName','cloudIdentity','cloudSheetSync','cloudSetupHint',
@@ -80,7 +82,7 @@ function makeContext({config,storage,supabase}){
       addEventListener:(name,handler)=>{ documentListeners[name]=handler; },
     },
     addEventListener:(name,handler)=>{ windowListeners[name]=handler; },
-    OLIVE_RELEASE:{version:'1.3.46',build:176,schemaVersion:11},
+    OLIVE_RELEASE:{version:'1.3.47',build:177,schemaVersion:11},
     OLIVE_CLOUD_CONFIG:config,
     supabase,
   };
@@ -287,6 +289,14 @@ async function testConfiguredQueueAndMigration(){
   assert.equal(elements.earCloudAvatar.hidden,false);
   assert.equal(elements.earCloudAvatar.src,'https://example.com/olive-avatar.png');
   assert.equal(elements.earCloudAvatarFallback.textContent,'O');
+  assert.equal(elements.recordCloudTitle.textContent,'클라우드에 저장됨');
+  assert.equal(elements.recordCloudStatus.textContent,'다른 기기에서도 이어서 연습할 수 있어요');
+  assert.equal(elements.recordCloudDot.dataset.state,'synced');
+  assert.equal(elements.recordCloudAction.classList.contains('has-account'),true);
+  assert.equal(elements.recordCloudActionLabel.hidden,true);
+  assert.equal(elements.recordCloudAvatar.hidden,false);
+  assert.equal(elements.recordCloudAvatar.src,'https://example.com/olive-avatar.png');
+  assert.equal(elements.recordCloudAvatarFallback.textContent,'O');
   assert.equal(rpcCalls.filter(call=>call.name==='import_ear_history').length,1);
   const imported=rpcCalls.find(call=>call.name==='import_ear_history').args.p_days[0];
   assert.equal(imported.interval_total_count,0);

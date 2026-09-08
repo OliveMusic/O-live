@@ -383,7 +383,13 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.46');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.47');
+}
+
+async function expandRecordList(page){
+  const details=page.locator('#recordListCard');
+  if(await details.getAttribute('open')===null) await details.locator('summary').click();
+  await expect(details).toHaveAttribute('open','');
 }
 
 test.afterEach(async({page})=>{
@@ -409,7 +415,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=176');
+  expect(workerUrl).toContain('service-worker.js?v=177');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -426,7 +432,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.46',build:176});
+  expect(payload.release).toEqual({version:'1.3.47',build:177});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -476,10 +482,43 @@ test('내 녹음 목록 요청이 잠시 실패해도 자동으로 다시 불러
   });
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
 
   await expect(page.locator('.record-row-copy strong')).toHaveText('다시 불러온 녹음');
   await expect(page.locator('#recordMessage')).toBeEmpty();
   await expect.poll(()=>page.evaluate(()=>window.__recordingListRequests||0)).toBeGreaterThanOrEqual(2);
+});
+
+test('내 녹음은 접고 펼칠 수 있고 계정 상태에서 같은 관리 화면을 연다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings',microphone:'controls',recordings:[{
+    id:'recording-collapse',title:'무제',
+    object_path:'recording-browser-user/recording-collapse.m4a',
+    duration_ms:4000,byte_size:1000,mime_type:'audio/mp4',waveform:[25,55,35],
+    playback_gain:2.5,
+    recorded_at:'2026-09-08T00:09:00.000Z',created_at:'2026-09-08T00:09:00.000Z',
+  }]});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+
+  const details=page.locator('#recordListCard');
+  await expect(details).not.toHaveAttribute('open','');
+  await expect(page.locator('#recordUsage')).toHaveText('1 / 50');
+  await expect(page.locator('#recordList')).toBeHidden();
+  await details.locator('summary').click();
+  await expect(details).toHaveAttribute('open','');
+  await expect(page.locator('#recordUpload')).toBeVisible();
+  await expect(page.locator('#recordCloudTitle')).toHaveText('클라우드에 저장됨');
+  await expect(page.locator('#recordCloudAction')).toHaveClass(/has-account/);
+  await expect(page.locator('#recordCloudAvatarFallback')).toHaveText('R');
+  await page.locator('#recordCloudAction').click();
+  await expect(page.locator('#cloudAuthSheet')).toBeVisible();
+  await expect(page.locator('#cloudSyncNow')).toBeVisible();
+  await expect(page.locator('#cloudLogout')).toBeVisible();
+  await page.locator('#cloudAuthClose').click();
+  await expect(page.locator('#cloudAuthSheet')).toBeHidden();
+  await details.locator('summary').click();
+  await expect(details).not.toHaveAttribute('open','');
+  await expect(page.locator('#recordList')).toBeHidden();
 });
 
 test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이 나타난다',async({page})=>{
@@ -497,6 +536,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   });
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
   await expect(page.locator('.record-row-open')).toHaveCount(1);
   await expect(page.locator('.record-player')).toHaveCount(0);
   await page.locator('.record-row-open').click();
@@ -593,7 +633,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=176',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=177',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -676,6 +716,7 @@ test('녹음 재생 중 메트로놈을 시작하면 녹음 버튼도 정지 상
   });
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
   await page.locator('.record-row-open').click();
   const recordingPlay=page.locator('.record-player-play');
   await recordingPlay.click();
@@ -704,6 +745,7 @@ test('iPhone PWA는 무음이 되는 직접 재생기 대신 검증된 오디오
   });
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
   await page.locator('.record-row-open').click();
   await page.locator('.record-player-play').click();
   await expect.poll(()=>page.evaluate(()=>(
@@ -771,7 +813,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=176');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=177');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -788,6 +830,7 @@ test('내 녹음 재생은 녹음 시작 시 정지되고 잠금화면에서도 
   await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal'});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
 
   await expect(page.locator('#recordUpload')).toBeVisible();
   await page.locator('#recordUploadInput').setInputFiles({
@@ -836,6 +879,7 @@ test('데스크톱에서는 오디오 파일을 내 녹음 카드에 놓아 업�
   await preparePage(page,{cloudClient:'recordings',microphone:'controls'});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
 
   const accept=await page.locator('#recordUploadInput').getAttribute('accept');
   expect(accept).toContain('.mp3');
@@ -866,6 +910,7 @@ test('MP3 메타데이터 판독이 실패하면 오디오 디코더로 길이�
   await preparePage(page,{cloudClient:'recordings',microphone:'controls'});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
   await page.evaluate(()=>{
     Object.defineProperty(HTMLMediaElement.prototype,'duration',{
       configurable:true,get(){ return Number.NaN; },
@@ -893,6 +938,7 @@ test('Storage가 MP3 MIME을 거절하면 DB 업데이트 안내를 표시한다
   });
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
   await page.locator('#recordUploadInput').setInputFiles({
     name:'Paper Hearts.mp3',mimeType:'audio/mpeg',buffer:Buffer.from('mp3 upload'),
   });
@@ -1133,6 +1179,7 @@ test('멈춰 둔 내 녹음 뒤 청음 트레이너가 일반 출력으로 재�
   });
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await page.locator('#trainerSeg .seg-btn',{hasText:'녹음'}).click();
+  await expandRecordList(page);
   await page.locator('.record-row-open').click();
   await page.locator('.record-player-play').click();
   await page.evaluate(()=>window.__resolveRecordingDownload());
