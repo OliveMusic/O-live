@@ -51,6 +51,7 @@ assert.match(index,/#recordListCard\.record-drop-active::after\{ opacity:1; visi
 assert.match(index,/id="recordTimer">0:00</);
 assert.match(index,/id="recordTimeProgress"[^>]*aria-valuemax="300"[^>]*aria-valuenow="0"/);
 assert.match(index,/id="recordState">녹음 준비</);
+assert.match(index,/id="recordState">녹음 준비<\/span>[\s\S]*?id="recordToggle"[\s\S]*?id="recordTimeProgress"[\s\S]*?id="recordLevelRow"/);
 assert.match(index,/id="recordTimeTrack"/);
 assert.match(index,/id="recordTimeFill"/);
 assert.doesNotMatch(index,/id="recordTimeMarker"/);
@@ -240,7 +241,7 @@ assert.match(recorder,/const edgeSnap=Math\.min\(12,bounds\.width\*\.04\)/);
 assert.match(recorder,/const PLAYBACK_RATE_MIN=\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_MAX=1\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_STEP=\.05/);
-assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=181'/);
+assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=182'/);
 assert.match(recorder,/function makeCloudTransportAudio\(\)/);
 assert.match(recorder,/audio\.dataset\.oliveRecordingTransport='true'/);
 assert.match(recorder,/ctx\.createMediaStreamDestination\(\)/);

@@ -585,7 +585,7 @@
       const title=document.createElement('strong');
       title.textContent=row.title;
       const source=document.createElement('small');
-      source.textContent='YouTube 링크';
+      source.textContent='YouTube';
       copy.append(title,source);
       const duration=document.createElement('span');
       duration.className='record-row-duration';

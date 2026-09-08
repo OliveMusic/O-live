@@ -74,6 +74,11 @@ assert.match(links,/record-loop-marker start/);
 assert.match(links,/record-loop-marker end/);
 assert.match(index,/\.link-track-fill\{/);
 assert.match(index,/\.link-track-line\{[\s\S]*?height:4px/);
+assert.match(index,/\.link-track-wrap\{[^}]*height:40px; padding-top:6px/);
+assert.match(index,/\.link-player-times\{[^}]*justify-content:flex-end;[^}]*margin-top:-12px/);
+assert.match(index,/\.link-time-divider\{ display:inline; \}/);
+assert.match(links,/source\.textContent='YouTube'/);
+assert.doesNotMatch(links,/source\.textContent='YouTube 링크'/);
 /* A/B를 누를 때 목록을 다시 그리면 플레이어가 새로 만들어져 영상이 처음부터
    다시 시작한다. 제자리에서만 갱신해야 한다. */
 assert.match(links,/function refreshLoopUi\(row\)/);
