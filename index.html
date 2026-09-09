@@ -1938,8 +1938,11 @@
     display:flex; justify-content:space-between; margin-top:-1px; color:var(--ink-3);
     font-size:.5938rem; font-variant-numeric:tabular-nums;
   }
+  /* 컨트롤 행은 재생 버튼 칸까지 넘어가 플레이어 전체 폭을 쓴다.
+     A/B가 왼쪽 끝에 붙고 속도 슬라이더가 그만큼 길어진다. */
   .record-player-tools{
-    display:grid; grid-template-columns:auto minmax(104px,1fr); align-items:center; gap:12px; margin-top:5px;
+    grid-column:1 / -1; min-width:0; display:grid; grid-template-columns:auto minmax(0,1fr);
+    align-items:center; gap:10px; margin-top:1px;
   }
   .record-loop-tools{
     min-width:0; height:32px; display:flex; align-items:center; gap:1px; padding:2px;
@@ -2657,22 +2660,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=187"></script>
+<script src="app-version.js?v=188"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=187"></script>
-<script src="js/audio-runtime.js?v=187"></script>
-<script src="js/core.js?v=187"></script>
-<script src="js/metronome.js?v=187"></script>
-<script src="js/tuner-engine.js?v=187"></script>
-<script src="js/tuner.js?v=187"></script>
-<script src="js/scales.js?v=187"></script>
-<script src="js/ear-trainer.js?v=187"></script>
-<script src="js/rhythm-trainer.js?v=187"></script>
-<script src="js/recording-cache.js?v=187"></script>
-<script src="js/recorder.js?v=187"></script>
-<script src="js/practice-links.js?v=187"></script>
-<script src="js/jam-session.js?v=187"></script>
-<script src="js/app-shell.js?v=187"></script>
+<script src="cloud-sync.js?v=188"></script>
+<script src="js/audio-runtime.js?v=188"></script>
+<script src="js/core.js?v=188"></script>
+<script src="js/metronome.js?v=188"></script>
+<script src="js/tuner-engine.js?v=188"></script>
+<script src="js/tuner.js?v=188"></script>
+<script src="js/scales.js?v=188"></script>
+<script src="js/ear-trainer.js?v=188"></script>
+<script src="js/rhythm-trainer.js?v=188"></script>
+<script src="js/recording-cache.js?v=188"></script>
+<script src="js/recorder.js?v=188"></script>
+<script src="js/practice-links.js?v=188"></script>
+<script src="js/jam-session.js?v=188"></script>
+<script src="js/app-shell.js?v=188"></script>
 </body>
 </html>

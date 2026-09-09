@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=187';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=188';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -2066,7 +2066,9 @@
     rateSlider.addEventListener('change',()=>setPlaybackRate(row,rateSlider.value,true));
     bindPlaybackRateReset(rateSlider,row);
     rateLabel.append(rateText,rateSlider,rateValue); tools.append(loopTools,rateLabel);
-    detail.append(waveformWrap,times,tools); player.append(play,detail);
+    /* 컨트롤 행은 재생 버튼 칸까지 넘어가 플레이어 전체 폭을 쓴다.
+       그래야 A/B가 왼쪽 끝에 붙고 속도 슬라이더가 길어진다. */
+    detail.append(waveformWrap,times); player.append(play,detail,tools);
     requestAnimationFrame(()=>updatePlayerProgress(row.id,
       cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0));
     if(!values.length) loadRowWaveform(row);

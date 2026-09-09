@@ -126,14 +126,26 @@ assert.match(recorder,/function collapsePracticeLink\(\)/);
   const body=recorder.match(/function toggleRowExpanded\(row\)\{[\s\S]*?\n  \}/)[0];
   assert.match(body,/collapsePracticeLink\(\)/,'녹음본을 펼치면 링크를 접는다');
 }
-/* 배속은 녹음본과 같은 디자인이되 YouTube가 지원하는 단계에만 멈춘다. */
-assert.match(links,/const DEFAULT_RATES=\[0\.25,0\.5,0\.75,1,1\.25,1\.5,1\.75,2\]/);
-assert.match(links,/getAvailablePlaybackRates\(\)/,'실제 지원 단계를 받아 쓴다');
+/* 배속은 녹음본과 같은 연속 슬라이더다. setPlaybackRate는 임의 값을 그대로 받는다
+   (0.85를 넣으면 0.85가 나온다). getAvailablePlaybackRates의 8단계에 묶이지 않는다. */
+assert.match(links,/const PLAYBACK_RATE_MIN=\.5;/);
+assert.match(links,/const PLAYBACK_RATE_MAX=1\.5;/);
+assert.match(links,/const PLAYBACK_RATE_STEP=\.05;/);
+assert.doesNotMatch(links,/player\.getAvailablePlaybackRates\(\)/,'단계 목록에 묶지 않는다');
 assert.match(links,/function createRateControl\(row\)/);
 assert.match(links,/label\.className='record-rate-control'/,'녹음본과 같은 클래스');
 assert.match(links,/output\.className='record-rate-value'/);
-assert.match(links,/slider\.step='1'/,'단계 인덱스를 다룬다');
+assert.match(links,/slider\.min=String\(PLAYBACK_RATE_MIN\)/);
+assert.match(links,/slider\.step=String\(PLAYBACK_RATE_STEP\)/);
 assert.match(links,/player\.setPlaybackRate\(next\)/);
+/* 녹음본과 같은 값이라 1배가 슬라이더 정중앙에 온다. */
+{
+  const min=0.5, max=1.5;
+  assert.equal((1-min)/(max-min),0.5,'1배가 가운데');
+}
+/* 컨트롤 행이 플레이어 전체 폭을 써서 A/B가 왼쪽 끝에 붙는다. */
+assert.match(index,/\.record-player-tools\{[^}]*grid-column:1 \/ -1/);
+assert.match(recorder,/player\.append\(play,detail,tools\)/);
 /* 손잡이를 두 번 누르면 원곡 속도로 돌아간다. */
 assert.match(links,/function bindPlaybackRateReset\(slider,row\)/);
 assert.match(links,/slider\.addEventListener\('dblclick',reset\)/);

@@ -18,9 +18,13 @@
   const CHECK_TIMEOUT_MS=8000;
   /* 녹음본과 같은 규칙이다. 너무 짧은 구간은 반복해도 의미가 없다. */
   const MIN_LOOP_MS=800;
-  /* YouTube는 연속 배속을 받지 않는다. getAvailablePlaybackRates()가 주는 단계만 쓴다.
-     플레이어가 준비되기 전에도 슬라이더를 그려야 하므로 기본값을 둔다. */
-  const DEFAULT_RATES=[0.25,0.5,0.75,1,1.25,1.5,1.75,2];
+  /* getAvailablePlaybackRates()가 돌려주는 8단계는 YouTube 자체 메뉴 항목일 뿐이고,
+     setPlaybackRate()는 임의 값을 그대로 받는다(0.85를 넣으면 0.85가 나온다).
+     그래서 녹음본과 같은 연속 슬라이더를 쓴다. 문서에 없는 동작이므로 언젠가
+     가까운 단계로 스냅되더라도 슬라이더는 그대로 동작한다. */
+  const PLAYBACK_RATE_MIN=.5;
+  const PLAYBACK_RATE_MAX=1.5;
+  const PLAYBACK_RATE_STEP=.05;
 
   const linkPanel=document.getElementById('linkPanel');
   const linkButton=document.getElementById('recordLink');
@@ -58,7 +62,6 @@
   let saveTimer=0;
   let pendingState=null;
   let apiPromise=null;
-  let availableRates=DEFAULT_RATES.slice();
   let searching=false;
   let selectedRow=null;
   let menuTrigger=null;
@@ -376,18 +379,12 @@
     const rate=Number(row&&row.playback_rate);
     return Number.isFinite(rate) && rate>0 ? rate : 1;
   }
-  /* 슬라이더는 단계의 인덱스를 다룬다. 그래야 YouTube가 실제로 지원하는 값에만 멈춘다. */
-  function rateIndex(rate){
-    let best=0;
-    let closest=Infinity;
-    availableRates.forEach((value,index)=>{
-      const diff=Math.abs(value-rate);
-      if(diff<closest){ closest=diff; best=index; }
-    });
-    return best;
+  function clampRate(value){
+    const rate=Math.round((Number(value)||1)/PLAYBACK_RATE_STEP)*PLAYBACK_RATE_STEP;
+    return Math.min(PLAYBACK_RATE_MAX,Math.max(PLAYBACK_RATE_MIN,Number(rate.toFixed(2))));
   }
   function setPlaybackRate(row,rate,persist){
-    const next=availableRates[rateIndex(Number(rate)||1)];
+    const next=clampRate(rate);
     row.playback_rate=next;
     if(player && playerReady){
       try{ player.setPlaybackRate(next); }catch(e){}
@@ -457,7 +454,7 @@
       if(now-lastResetAt<120) return;
       lastResetAt=now;
       if(event) event.preventDefault();
-      slider.value=String(rateIndex(1));
+      slider.value='1';
       slider.setAttribute('aria-valuetext',formatPlaybackRate(1));
       setPlaybackRate(row,1,true);
     };
@@ -481,21 +478,8 @@
     slider.addEventListener('pointercancel',()=>{ pointerId=null; lastTapAt=0; });
     slider.addEventListener('dblclick',reset);
   }
-  /* 지원 단계는 플레이어가 준비된 뒤에야 알 수 있다. 슬라이더 범위를 실제 값에 맞추고
-     저장해 둔 배속을 적용한다. */
+  /* 플레이어가 준비되면 저장해 둔 배속을 적용한다. */
   function syncRateControl(row){
-    if(player && playerReady){
-      try{
-        const rates=player.getAvailablePlaybackRates();
-        if(Array.isArray(rates) && rates.length) availableRates=rates.slice().sort((a,b)=>a-b);
-      }catch(e){}
-    }
-    const wrap=list.querySelector(`#link-player-${row.id}`);
-    const slider=wrap && wrap.querySelector('.record-rate-control input[type="range"]');
-    if(slider){
-      slider.max=String(availableRates.length-1);
-      slider.value=String(rateIndex(rowPlaybackRate(row)));
-    }
     setPlaybackRate(row,rowPlaybackRate(row),false);
   }
   function createRateControl(row){
@@ -505,23 +489,20 @@
     text.textContent='속도';
     const slider=document.createElement('input');
     slider.type='range';
-    slider.min='0';
-    slider.max=String(availableRates.length-1);
-    slider.step='1';
-    slider.value=String(rateIndex(rowPlaybackRate(row)));
+    slider.min=String(PLAYBACK_RATE_MIN);
+    slider.max=String(PLAYBACK_RATE_MAX);
+    slider.step=String(PLAYBACK_RATE_STEP);
+    slider.value=String(rowPlaybackRate(row));
     slider.setAttribute('aria-label',`${row.title} 재생 속도`);
     slider.setAttribute('aria-valuetext',formatPlaybackRate(rowPlaybackRate(row)));
     const output=document.createElement('output');
     output.className='record-rate-value';
     output.value=output.textContent=formatPlaybackRate(rowPlaybackRate(row));
     slider.addEventListener('input',()=>{
-      const rate=availableRates[Number(slider.value)||0];
-      slider.setAttribute('aria-valuetext',formatPlaybackRate(rate));
-      setPlaybackRate(row,rate,false);
+      slider.setAttribute('aria-valuetext',formatPlaybackRate(slider.value));
+      setPlaybackRate(row,slider.value,false);
     });
-    slider.addEventListener('change',()=>{
-      setPlaybackRate(row,availableRates[Number(slider.value)||0],true);
-    });
+    slider.addEventListener('change',()=>setPlaybackRate(row,slider.value,true));
     bindPlaybackRateReset(slider,row);
     label.append(text,slider,output);
     return label;
