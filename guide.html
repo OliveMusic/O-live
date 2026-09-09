@@ -106,7 +106,7 @@
     box-shadow:0 0 0 3px var(--signal-soft);
   }
   .rate-value{
-    color:var(--ink-2); font:650 .5938rem/1 inherit; font-variant-numeric:tabular-nums; text-align:right;
+    color:var(--ink-2); font-variant-numeric:tabular-nums; text-align:right;
   }
   .accidental{ color:var(--ink-3); font-size:.75rem; line-height:1; text-align:center; }
 
@@ -117,7 +117,7 @@
   }
   .tool{
     min-width:28px; height:28px; padding:0 7px; border:0; border-radius:8px;
-    background:transparent; color:var(--ink-3); font:650 .5938rem/1 inherit; cursor:pointer;
+    background:transparent; color:var(--ink-3); font-family:inherit; font-size:.6875rem; font-weight:400; cursor:pointer;
   }
   .tool.icon{ width:30px; padding:0; display:grid; place-items:center; }
   .tool.icon svg{
@@ -294,7 +294,7 @@
   .lock-btn{
     width:42px; height:42px; border:1.5px solid var(--line); border-radius:50%;
     display:grid; place-items:center; color:var(--ink-2);
-    font:600 .6875rem/1 inherit; font-variant-numeric:tabular-nums;
+    font-variant-numeric:tabular-nums;
   }
   .lock-meaning{ color:var(--ink-2); font-size:.8125rem; }
   .lock-meaning b{ color:var(--signal); }
@@ -317,7 +317,7 @@
   .demo-state b{ color:var(--signal); font-weight:600; }
   .zoom-undo{
     padding:7px 13px; border:1px solid var(--line); border-radius:999px;
-    background:var(--key); color:var(--ink-2); font:600 .6875rem/1 inherit; cursor:pointer;
+    background:var(--key); color:var(--ink-2); font-family:inherit; font-size:.6875rem; font-weight:600; cursor:pointer;
   }
 
   /* 잼 세션 진행 카드 — index.html의 .prog-bar를 약 1.6배로 */

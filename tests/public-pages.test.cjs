@@ -54,6 +54,12 @@ assert.match(worker,new RegExp(`importScripts\\('\\.\\/app-version\\.js\\?v=${re
 assert.match(worker,/const VERSION='v'\+RELEASE\.build/);
 assert.match(worker,new RegExp(`'\\.\\/cloud-sync\\.js\\?v=${release.build}'`));
 assert.match(index,new RegExp(`js/audio-runtime\\.js\\?v=${release.build}`));
+/* font 단축 속성의 글꼴 자리에 inherit을 쓰면 선언 전체가 무효가 되어
+   버튼·입력이 엔진 기본 글꼴로 떨어진다. WebKit 11px, Chromium 13.33px로 갈린다. */
+for(const [label,text] of [['index.html',indexHtml],['guide.html',guide]]){
+  assert.doesNotMatch(text,/font:\s*[^;{}]*\s+inherit\s*;/,
+    `${label}: font 단축 속성의 글꼴 자리에 inherit을 쓰지 않는다`);
+}
 /* 버전은 이제 아무 동작도 없다. 누를 수 있게 보이면 안 된다. */
 assert.match(index,/<p class="app-version" id="appVersion"><\/p>/);
 assert.match(index,/appVersion\.textContent='버전 '\+release\.version/);

@@ -205,6 +205,10 @@
 
   /* ---------- Buttons ---------- */
   button{font-family:inherit;}
+  /* font 단축 속성의 글꼴 자리에 inherit을 쓰면 CSS 전역 키워드 규칙에 걸려
+     선언 전체가 무효가 된다. 그러면 버튼·입력이 엔진 기본 글꼴로 떨어져
+     WebKit 11px, Chromium 13.33px처럼 기기마다 크기가 달라진다.
+     여기서는 font-size와 font-weight를 따로 적는다. */
   /* iOS는 user-scalable=no를 무시한다. TAP처럼 연달아 누르는 버튼에서
      더블탭 확대가 걸리는 걸 막으려면 touch-action으로 꺼야 한다. */
   button, .pill, .btn, .gcell, .chord-cell, .choice-row, .prog-bar,
@@ -1650,7 +1654,7 @@
   .record-title{
     width:100%; min-height:44px; padding:10px 12px; border-radius:var(--r);
     border:1px solid var(--line); background:var(--key); color:var(--ink);
-    font:500 .75rem/1.4 inherit; outline:none;
+    font-family:inherit; font-size:.6875rem; font-weight:400; outline:none;
   }
   .record-title:focus{ border-color:var(--signal); box-shadow:0 0 0 2px var(--signal-soft); }
   .record-draft-actions{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:8px; }
@@ -1673,7 +1677,7 @@
   .record-upload{
     min-width:58px; min-height:40px; padding:0 11px; border:1px solid var(--signal);
     border-radius:var(--r-pill); background:var(--signal); color:var(--on-signal);
-    font:500 .6875rem/1 inherit; cursor:pointer;
+    font-size:.6875rem; font-weight:400; cursor:pointer;
     transition:background .14s var(--ease-out), border-color .14s var(--ease-out),
       color .14s var(--ease-out), transform .12s var(--ease-out);
   }
@@ -1703,7 +1707,7 @@
   }
   .link-mode{
     position:relative; min-height:36px; padding:0 12px; border:0; border-radius:0;
-    background:transparent; color:var(--ink-3); font:500 .6875rem/1 inherit; cursor:pointer;
+    background:transparent; color:var(--ink-3); font-size:.6875rem; font-weight:400; cursor:pointer;
     transition:color .14s var(--ease-out), background .14s var(--ease-out);
   }
   .link-mode::after{
@@ -1723,7 +1727,7 @@
   .link-form[hidden]{ display:none; }
   .link-input{
     min-width:0; min-height:38px; padding:0 10px; border:0;
-    background:transparent; color:var(--ink); font:400 .7813rem/1 inherit;
+    background:transparent; color:var(--ink); font-family:inherit; font-size:.6875rem; font-weight:400;
   }
   .link-input:focus-visible{ outline:none; }
   .link-input::placeholder{ color:var(--ink-3); opacity:1; }
@@ -1844,7 +1848,7 @@
   .record-select-action{
     min-height:36px; padding:0 12px; border:1px solid var(--line-soft);
     border-radius:var(--r-pill); background:transparent; color:var(--ink-2);
-    font:500 .6875rem/1 inherit; cursor:pointer;
+    font-size:.6875rem; font-weight:400; cursor:pointer;
   }
   .record-select-action:active{ background:var(--key-press); }
   .record-select-action.danger{ border-color:var(--error); color:var(--error); }
@@ -2006,7 +2010,7 @@
   }
   .record-player-tool{
     min-width:28px; height:28px; padding:0 7px; border:0; border-radius:8px;
-    background:transparent; color:var(--ink-3); font:650 .5938rem/1 inherit; cursor:pointer;
+    background:transparent; color:var(--ink-3); font-size:.6875rem; font-weight:400; cursor:pointer;
   }
   .record-player-tool.icon{ width:30px; padding:0; display:grid; place-items:center; }
   .record-player-tool.icon svg{ width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
@@ -2033,7 +2037,7 @@
     width:14px; height:14px; border:0; border-radius:50%; background:var(--signal); box-shadow:0 0 0 3px var(--signal-soft);
   }
   .record-rate-value{
-    color:var(--ink-2); font:650 .5938rem/1 inherit; font-variant-numeric:tabular-nums; text-align:right;
+    color:var(--ink-2); font-variant-numeric:tabular-nums; text-align:right;
   }
   @media(max-width:390px){
     .record-player{ grid-template-columns:40px minmax(0,1fr); gap:7px; padding-right:9px; }
@@ -2065,7 +2069,7 @@
   }
   .record-menu-sheet button{
     width:100%; min-height:48px; border:0; border-top:1px solid var(--line-soft);
-    background:transparent; color:var(--ink); font:500 .7812rem/1 inherit; cursor:pointer;
+    background:transparent; color:var(--ink); font-size:.6875rem; font-weight:400; cursor:pointer;
   }
   .record-menu-sheet button:active{ background:var(--key-press); }
   .record-menu-sheet .danger{ color:var(--error); }
@@ -2727,22 +2731,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=200"></script>
+<script src="app-version.js?v=201"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=200"></script>
-<script src="js/audio-runtime.js?v=200"></script>
-<script src="js/core.js?v=200"></script>
-<script src="js/metronome.js?v=200"></script>
-<script src="js/tuner-engine.js?v=200"></script>
-<script src="js/tuner.js?v=200"></script>
-<script src="js/scales.js?v=200"></script>
-<script src="js/ear-trainer.js?v=200"></script>
-<script src="js/rhythm-trainer.js?v=200"></script>
-<script src="js/recording-cache.js?v=200"></script>
-<script src="js/recorder.js?v=200"></script>
-<script src="js/practice-links.js?v=200"></script>
-<script src="js/jam-session.js?v=200"></script>
-<script src="js/app-shell.js?v=200"></script>
+<script src="cloud-sync.js?v=201"></script>
+<script src="js/audio-runtime.js?v=201"></script>
+<script src="js/core.js?v=201"></script>
+<script src="js/metronome.js?v=201"></script>
+<script src="js/tuner-engine.js?v=201"></script>
+<script src="js/tuner.js?v=201"></script>
+<script src="js/scales.js?v=201"></script>
+<script src="js/ear-trainer.js?v=201"></script>
+<script src="js/rhythm-trainer.js?v=201"></script>
+<script src="js/recording-cache.js?v=201"></script>
+<script src="js/recorder.js?v=201"></script>
+<script src="js/practice-links.js?v=201"></script>
+<script src="js/jam-session.js?v=201"></script>
+<script src="js/app-shell.js?v=201"></script>
 </body>
 </html>
