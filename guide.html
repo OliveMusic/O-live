@@ -32,6 +32,35 @@
     font-size:.875rem; line-height:1.65;
   }
 
+  /* ── 앱 둘러보기 ──
+     설명을 위해 화면을 다시 만들지 않는다. 같은 출처의 iframe으로 앱을 그대로 띄우고
+     아래 설명만 현재 탭에 맞춰 바꾼다. 앱이 바뀌면 이 화면도 저절로 따라간다. */
+  .tour{ margin:18px 0 6px; }
+  .tour-device{
+    position:relative; width:100%; max-width:390px; margin:0 auto;
+    aspect-ratio:390/720; border:1px solid var(--line); border-radius:20px;
+    overflow:hidden; background:var(--body); box-shadow:var(--shadow,none);
+  }
+  .tour-frame{ width:100%; height:100%; border:0; display:block; }
+  .tour-live{
+    display:inline-flex; align-items:center; gap:6px; margin:11px 0 0;
+    color:var(--ink-3); font-size:.6875rem;
+  }
+  .tour-live::before{
+    content:''; width:7px; height:7px; border-radius:50%; background:var(--signal);
+  }
+  .tour-notes{
+    margin:13px 0 0; padding:15px 17px; border:1px solid var(--line-soft);
+    border-radius:14px; background:var(--panel);
+  }
+  .tour-notes h3{
+    margin:0 0 10px; font-size:.9375rem; color:var(--ink);
+  }
+  .tour-notes ol{ margin:0; padding-left:19px; display:grid; gap:8px; }
+  .tour-notes li{ color:var(--ink-2); font-size:.875rem; line-height:1.6; }
+  .tour-notes li b{ color:var(--signal); font-weight:600; }
+  .tour-notes[hidden]{ display:none; }
+
   /* ── 실제 화면 재현 ──
      앱의 컨트롤을 같은 CSS로 다시 만든다. 글로 읽는 것보다 직접 만져 보는 편이 빠르다.
      index.html의 해당 컴포넌트를 바꾸면 여기도 함께 고쳐야 한다. */
@@ -214,14 +243,15 @@
     <h1>O’live 도움말</h1>
     <p class="lead">
       화면에 다 적지 않은 동작이 몇 가지 있습니다.
-      아래의 컨트롤은 앱에 있는 것과 똑같이 만든 것이라 여기서 바로 눌러 볼 수 있습니다.
-      손으로 한 번 해 보면 설명을 읽을 필요가 없습니다.
+      아래에 <strong>O’live 앱을 그대로 띄워 두었습니다.</strong> 하단 탭을 눌러 화면을 옮기면
+      그 화면에 대한 설명이 따라 바뀝니다. 눌러 보는 대로 실제로 동작합니다.
     </p>
 
     <nav class="guide-toc" aria-labelledby="toc-title">
       <h2 id="toc-title">차례</h2>
       <ol>
         <li><a href="#start">시작하기</a></li>
+        <li><a href="#tour">앱 둘러보기</a></li>
         <li><a href="#gestures">직접 만져 보기</a></li>
         <li><a href="#metronome">메트로놈</a></li>
         <li><a href="#tuner">튜너</a></li>
@@ -246,6 +276,78 @@
       <div class="callout">
         iPhone에서는 Safari의 공유 메뉴에서 <strong>홈 화면에 추가</strong>를 누르면
         앱처럼 전체 화면으로 열리고, 잠금화면 조작도 안정적으로 동작합니다.
+      </div>
+    </section>
+
+    <section class="section" id="tour" aria-labelledby="tour-title">
+      <h2 id="tour-title">앱 둘러보기</h2>
+      <p>
+        아래는 O’live 앱 그 자체입니다. 하단 탭을 눌러 화면을 옮기면
+        설명도 따라 바뀝니다. 눌러 보는 대로 실제로 동작합니다.
+      </p>
+
+      <div class="tour">
+        <div class="tour-device">
+          <iframe class="tour-frame" id="tourFrame" src="index.html"
+            title="O’live 앱 미리보기" loading="lazy"></iframe>
+        </div>
+        <p class="tour-live">지금 보고 있는 화면: <strong id="tourWhere">메트로놈</strong></p>
+
+        <div class="tour-notes" data-notes="metronome">
+          <h3>메트로놈</h3>
+          <ol>
+            <li><b>TAP</b>을 원하는 박자에 맞춰 여러 번 누르면 그 속도로 BPM이 맞춰집니다.</li>
+            <li>박자에서 6/8·7/8·9/8·12/8을 고르면 <b>묶음의 첫 박</b>에 중간 강세가 붙습니다.</li>
+            <li>세분화는 4분음표부터 셔플·16분·점8분+16분까지 여덟 가지입니다.</li>
+            <li>화면을 잠가도 계속 울리고, 잠금화면의 <b>앞뒤 원형 버튼이 BPM을 10씩</b> 바꿉니다.</li>
+          </ol>
+        </div>
+
+        <div class="tour-notes" data-notes="tuner" hidden>
+          <h3>튜너</h3>
+          <ol>
+            <li>화면의 <b>현을 누르면 기준음</b>이 들립니다. 귀로 먼저 맞춰 볼 수 있습니다.</li>
+            <li><b>감도</b>는 50이 균형값입니다. 신호가 약한 일렉기타면 올리고, 팬 소리를 자꾸 잡으면 내립니다.</li>
+            <li>아래 파형과 dB로 지금 마이크가 무엇을 듣는지 확인합니다.</li>
+            <li>튜너로 들어오면 다른 소리가 자동으로 멈춥니다. 마이크를 방해하지 않기 위해서입니다.</li>
+          </ol>
+        </div>
+
+        <div class="tour-notes" data-notes="scales" hidden>
+          <h3>스케일</h3>
+          <ol>
+            <li>진한 색이 <b>루트음</b>, 회색이 나머지 구성음입니다.</li>
+            <li>건반의 숫자는 루트로부터의 <b>도수</b>입니다.</li>
+            <li>프렛보드를 <b>확대</b>로 바꾸면 보드가 커지고 좌우로 밀어서 봅니다.</li>
+            <li>튜닝을 바꾸면 프렛보드가 그 조율에 맞춰 다시 그려집니다.</li>
+          </ol>
+        </div>
+
+        <div class="tour-notes" data-notes="trainer" hidden>
+          <h3>트레이너</h3>
+          <ol>
+            <li>위쪽 <b>청음 · 리듬 · 트랙</b>으로 나뉩니다. 눌러서 옮겨 보세요.</li>
+            <li><b>청음</b> — 아래 기록을 펼치면 달력에서 날짜별 결과를 봅니다. 날짜를 누르면 음정·화음·음계로 나눠 보여 줍니다.</li>
+            <li><b>리듬</b> — 칸을 눌러 패턴을 직접 편집합니다. 당김음·밀도 슬라이더는 <b>두 번 탭하면 5</b>로 돌아갑니다.</li>
+            <li><b>트랙</b> — 녹음·업로드·YouTube가 한 목록에 모입니다. 계정을 연결해야 저장됩니다.</li>
+          </ol>
+        </div>
+
+        <div class="tour-notes" data-notes="jam" hidden>
+          <h3>잼 세션</h3>
+          <ol>
+            <li>코드 팔레트에서 코드를 누르면 미리 듣고, 진행에 추가됩니다.</li>
+            <li>진행에 넣은 <b>코드 이름을 누르면 3↔7화음</b>이 바뀝니다.</li>
+            <li>같은 코드 이름을 <b>길게 누르면 삭제</b>됩니다.</li>
+            <li>각 코드의 <b>−/+</b>로 마디 길이를 조절합니다.</li>
+            <li>메트로놈과 잼은 동시에 울리지 않습니다. 하나를 켜면 다른 하나가 멈춥니다.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="callout">
+        위 화면은 실제 앱이라 누르면 소리가 나고, 튜너를 켜면 마이크 권한을 물어봅니다.
+        저장은 계정을 연결했을 때만 됩니다.
       </div>
     </section>
 
@@ -615,6 +717,40 @@
       state.a=null; state.b=null; state.enabled=false; render();
     });
     render();
+  }
+
+  /* 둘러보기: 앱을 그대로 띄우고, 프레임 안에서 어떤 탭을 보고 있는지에 맞춰
+     아래 설명만 바꾼다. 탭바는 앱의 것을 그대로 쓰므로 다시 만들지 않는다. */
+  const frame=document.getElementById('tourFrame');
+  if(frame){
+    const notes=[...document.querySelectorAll('.tour-notes')];
+    const where=document.getElementById('tourWhere');
+    const labels={metronome:'메트로놈',tuner:'튜너',scales:'스케일',trainer:'트레이너',jam:'잼 세션'};
+    let current='';
+    function show(tab){
+      if(!tab || tab===current) return;
+      current=tab;
+      notes.forEach(n=>{ n.hidden=n.dataset.notes!==tab; });
+      if(where) where.textContent=labels[tab]||tab;
+    }
+    function activeTab(doc){
+      const btn=doc.querySelector('.tab-btn.active');
+      return btn?btn.dataset.tab:'';
+    }
+    function watch(){
+      let doc;
+      try{ doc=frame.contentDocument; }catch(e){ return; }
+      if(!doc || !doc.querySelector('.tab-btn')) return;
+      show(activeTab(doc));
+      /* 탭이 바뀌면 active 클래스가 옮겨 간다. 그 변화만 지켜본다. */
+      const bar=doc.querySelector('nav.tabbar');
+      if(!bar) return;
+      new MutationObserver(()=>show(activeTab(doc)))
+        .observe(bar,{attributes:true,attributeFilter:['class'],subtree:true});
+    }
+    frame.addEventListener('load',()=>setTimeout(watch,300));
+    /* 캐시에서 즉시 뜨는 경우 load가 이미 지나갔을 수 있다. */
+    setTimeout(watch,1200);
   }
 
   const favorite=document.querySelector('[data-demo="favorite"]');

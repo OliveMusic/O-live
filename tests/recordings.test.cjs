@@ -249,7 +249,7 @@ assert.match(recorder,/const edgeSnap=Math\.min\(12,bounds\.width\*\.04\)/);
 assert.match(recorder,/const PLAYBACK_RATE_MIN=\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_MAX=1\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_STEP=\.05/);
-assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=197'/);
+assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=198'/);
 assert.match(recorder,/function makeCloudTransportAudio\(\)/);
 assert.match(recorder,/audio\.dataset\.oliveRecordingTransport='true'/);
 assert.match(recorder,/ctx\.createMediaStreamDestination\(\)/);

@@ -191,6 +191,15 @@ assert.match(guide,/길게 누르면 삭제/,'잼 코드 삭제 안내');
 assert.match(guide,/누르면 해제/,'즐겨찾기 해제 안내');
 assert.match(guide,/A와 B를 지정하지 않고 반복만 켜면 <strong>처음부터 끝까지<\/strong>/);
 /* 도움말은 글이 아니라 앱과 같은 컨트롤을 직접 눌러 보게 한다. */
+/* 도움말은 화면을 다시 만들지 않고 앱을 그대로 띄운다. 그래야 설명이 낡지 않는다. */
+assert.match(guide,/<iframe class="tour-frame" id="tourFrame" src="index\.html"/);
+for(const tab of ['metronome','tuner','scales','trainer','jam']){
+  assert.match(guide,new RegExp(`data-notes="${tab}"`),`${tab} 설명이 있다`);
+}
+assert.match(guide,/\.tab-btn\.active/,'프레임의 현재 탭을 읽는다');
+assert.match(guide,/new MutationObserver/,'탭이 바뀌면 설명도 바뀐다');
+/* 앱이 iframe 안에서 열려야 하므로 frame-ancestors로 막으면 안 된다. */
+assert.doesNotMatch(indexHtml,/frame-ancestors/);
 assert.match(guide,/data-demo="rate"/);
 assert.match(guide,/data-demo="loop"/);
 assert.match(guide,/data-demo="favorite"/);
