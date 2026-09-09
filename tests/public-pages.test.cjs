@@ -252,6 +252,14 @@ assert.match(cloud,/261\.63\*Math\.pow\(2,semitone\/12\)/);
 /* 잠금화면은 iPhone과 Apple Watch 목업으로 보여 준다. */
 assert.match(guide,/class="mock mock-phone"/);
 assert.match(guide,/class="mock mock-watch"/);
+/* 목업의 올리브도 앱과 같이 씨구멍이 있어야 한다. 자리는 한 곳에서만 정한다 —
+   앱의 .record-row-olive와 같은 가로 70%, 지름 29%다. */
+assert.match(guide,/\.mock-olive::after\{[\s\S]{0,200}?left:70%; top:50%/);
+assert.match(guide,/width:calc\(var\(--olive-w\) \* \.294\)/);
+assert.equal((guide.match(/class="mock-olive"/g)||[]).length,2,'iPhone과 Apple Watch가 같은 올리브를 쓴다');
+assert.doesNotMatch(guide,/\.mock-np-art::before/,'올리브를 부모에 픽셀로 붙이지 않는다');
+/* 소리가 안 나는 첫 번째 이유는 무음 모드다. */
+assert.match(guide,/무음 모드부터 꺼 보세요/);
 assert.match(guide,/메트로놈 · 90 BPM/,'실제 잠금화면 표시와 같은 문구');
 assert.match(guide,/\.tab-btn\.active/,'프레임의 현재 탭을 읽는다');
 assert.match(guide,/new MutationObserver/,'탭이 바뀌면 설명도 바뀐다');
