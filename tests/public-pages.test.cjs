@@ -15,6 +15,10 @@ const privacy=read('privacy.html');
 const terms=read('terms.html');
 const guide=read('guide.html');
 const cloud=read('cloud-sync.js');
+const tuner=read('js/tuner.js');
+const rhythm=read('js/rhythm-trainer.js');
+const earTrainer=read('js/ear-trainer.js');
+const recorder=read('js/recorder.js');
 const worker=read('service-worker.js');
 const manifest=JSON.parse(read('manifest.json'));
 const sitemap=read('sitemap.xml');
@@ -209,10 +213,21 @@ for(const id of ['metronome','tuner','scales','trainer','jam']){
 }
 assert.deepEqual(
   [...guide.matchAll(/<section class="section"(?: id="([^"]*)")?/g)].map(m=>m[1]||''),
-  ['start','tour','gestures','lockscreen',''],
-  '남는 섹션은 다섯 개');
-/* 잠금화면은 그 기능이 있는 화면에서만 나온다. YouTube와 튜너·스케일·청음·리듬에는 없다. */
+  ['start','tour','gestures','lockscreen','lockstop',''],
+  '남는 섹션은 여섯 개');
+/* 잠금화면은 그 기능이 있는 화면에서만 나온다. */
 assert.match(guide,/id="lockscreen"[\s\S]{0,80}?data-screen="metronome jam trainer:record"/);
+/* 되는 것만 말하면 안 된다. 안 되는 것을 따로 강조한다.
+   audio-runtime.js의 transport 등록이 근거다 — background 또는 keepWhenHidden이 없으면
+   화면이 숨을 때 stopHiddenUnsafeTransports()가 세운다. */
+assert.match(guide,/id="lockstop"[\s\S]{0,100}?data-screen="tuner trainer:ear trainer:rhythm"/);
+assert.match(guide,/<div class="lock-warn" data-screen="trainer:record" hidden>/);
+assert.match(guide,/직접 잠그면 녹음이 끊길 수 있습니다/,'녹음 중 잠금 경고');
+assert.match(tuner,/registerTransport\(\{ isPlaying:\(\)=>listening \|\| micStarting/,
+  '튜너 운반자에는 background도 keepWhenHidden도 없다');
+assert.doesNotMatch(rhythm,/keepWhenHidden/,'리듬은 잠금화면으로 이어지지 않는다');
+assert.doesNotMatch(earTrainer,/keepWhenHidden/,'청음도 이어지지 않는다');
+assert.match(recorder,/keepWhenHidden:true/,'녹음과 저장 녹음 재생은 유지된다');
 /* 꾹 누르는 버튼에서 글자가 잡히면 안 된다. */
 assert.match(guide,/\.tap-key\{[\s\S]{0,220}?user-select:none/);
 assert.match(guide,/\.tap-bpm \.num\{[\s\S]{0,260}?user-select:none/);
@@ -300,7 +315,7 @@ assert.match(guide,/A8\.6 8\.6 0 1 1/,'위가 트인 원');
 assert.match(guide,/now-lastTapAt<340 && Math\.abs\(event\.clientX-lastTapX\)<28/);
 assert.match(guide,/BPM을 10씩/);
 assert.match(guide,/10초씩 이동/);
-assert.match(guide,/잠금화면에서 재생되지 않습니다/,'YouTube 잠금화면 제약');
+assert.match(guide,/잠금화면에서 <b>재생되지 않습니다\.<\/b>/,'YouTube 잠금화면 제약');
 assert.match(worker,/'\.\/guide\.html'/,'오프라인에서도 열린다');
 assert.match(sitemap,/guide\.html/);
 /* 앱에서는 도움말이 나머지 링크 위 줄에 홀로 가운데 온다. */
