@@ -18,6 +18,10 @@
   const CHECK_TIMEOUT_MS=8000;
   /* 녹음본과 같은 규칙이다. 너무 짧은 구간은 반복해도 의미가 없다. */
   const MIN_LOOP_MS=800;
+  /* 250ms 틱만으로는 B를 최대 250ms 넘겨서야 되돌아간다. 두 마디짜리 구간을
+     반복하면 매 바퀴 끝에 군더더기가 붙는 게 들린다. B가 가까워지면 남은 시간만큼
+     정밀 타이머를 걸어 둔다. */
+  const LOOP_LOOKAHEAD_MS=600;
   /* getAvailablePlaybackRates()가 돌려주는 8단계는 YouTube 자체 메뉴 항목일 뿐이고,
      setPlaybackRate()는 임의 값을 그대로 받는다(0.85를 넣으면 0.85가 나온다).
      그래서 녹음본과 같은 연속 슬라이더를 쓴다. 문서에 없는 동작이므로 언젠가
@@ -44,6 +48,7 @@
   const listCard=document.getElementById('recordListCard');
   const menuBackdrop=document.getElementById('linkMenuBackdrop');
   const menuTitle=document.getElementById('linkMenuTitle');
+  const menuPin=document.getElementById('linkMenuPin');
   const menuRename=document.getElementById('linkMenuRename');
   const menuDelete=document.getElementById('linkMenuDelete');
   const app=document.getElementById('app');
@@ -59,6 +64,7 @@
   let playerReady=false;
   let playing=false;
   let ticker=0;
+  let loopTimer=0;
   let saveTimer=0;
   let pendingState=null;
   let apiPromise=null;
@@ -212,8 +218,35 @@
     }catch(e){ /* 연습 설정 저장 실패는 재생을 막지 않는다. */ }
   }
 
+  function clearLoopTimer(){
+    if(loopTimer){ clearTimeout(loopTimer); loopTimer=0; }
+  }
+  function returnToLoopStart(row){
+    const active=activeLoopFor(row);
+    if(!active || !player || !playerReady) return;
+    try{ player.seekTo(active.a/1000,true); }catch(e){}
+    updateTimes(row,active.a);
+    updateTrack(row,active.a);
+    scheduleLoopReturn(row);
+  }
+  function scheduleLoopReturn(row){
+    clearLoopTimer();
+    if(!player || !playerReady || !playing) return;
+    const active=activeLoopFor(row);
+    if(!active) return;
+    let position=0;
+    try{ position=player.getCurrentTime()*1000; }catch(e){ return; }
+    /* 남은 시간은 실제 경과 시간 기준이므로 배속으로 나눈다. */
+    const rate=Math.max(.1,rowPlaybackRate(row));
+    const remaining=(active.b-position)/rate;
+    if(remaining<=0){ returnToLoopStart(row); return; }
+    if(remaining<=LOOP_LOOKAHEAD_MS){
+      loopTimer=setTimeout(()=>returnToLoopStart(row),remaining);
+    }
+  }
   function stopTicker(){
     if(ticker){ clearInterval(ticker); ticker=0; }
+    clearLoopTimer();
   }
   function startTicker(){
     stopTicker();
@@ -232,6 +265,7 @@
     }
     updateTimes(row,position);
     updateTrack(row,position);
+    scheduleLoopReturn(row);
   }
   function updateTimes(row,position){
     const elapsed=list.querySelector(`#link-player-${row.id} .record-player-elapsed`);
@@ -393,6 +427,7 @@
     const output=wrap && wrap.querySelector('.record-rate-value');
     if(output){ output.value=formatPlaybackRate(next); output.textContent=formatPlaybackRate(next); }
     if(persist) queueStateSave(row);
+    scheduleLoopReturn(row);
   }
   function rowDurationMs(row){
     return Math.max(0,Number(row&&row.duration_ms)||0);
@@ -515,6 +550,27 @@
     track.tabIndex=0;
     track.setAttribute('role','slider');
     track.setAttribute('aria-label',`${row.title} 재생 위치`);
+    /* 포커스만 가고 조작이 안 되는 슬라이더는 role을 안 준 것보다 나쁘다.
+       녹음본 파형과 같은 키 조작과 범위 표시를 붙인다. */
+    track.setAttribute('aria-valuemin','0');
+    track.setAttribute('aria-valuemax',String(Math.round(rowDurationMs(row)/1000)));
+    track.addEventListener('keydown',event=>{
+      if(!player || !playerReady) return;
+      const duration=rowDurationMs(row);
+      let current=0;
+      try{ current=player.getCurrentTime()*1000; }catch(e){ return; }
+      let next=current;
+      if(event.key==='ArrowLeft') next=current-5000;
+      else if(event.key==='ArrowRight') next=current+5000;
+      else if(event.key==='Home') next=0;
+      else if(event.key==='End') next=duration;
+      else return;
+      event.preventDefault();
+      const target=Math.min(duration,Math.max(0,next));
+      try{ player.seekTo(target/1000,true); }catch(e){}
+      updateTrack(row,target);
+      updateTimes(row,target);
+    });
     const loop=loopFor(row);
     const duration=rowDurationMs(row);
     if(loop.a!==null) track.style.setProperty('--loop-start',`${duration?loop.a/duration*100:0}%`);
@@ -555,6 +611,7 @@
     const track=list.querySelector(`#link-player-${row.id} .link-track`);
     if(!track) return;
     const duration=rowDurationMs(row);
+    track.setAttribute('aria-valuemax',String(Math.round(duration/1000)));
     track.style.setProperty('--wave-progress',`${duration?Math.min(100,position/duration*100):0}%`);
     track.setAttribute('aria-valuenow',String(Math.round(position/1000)));
     track.setAttribute('aria-valuetext',formatDuration(position));
@@ -595,6 +652,7 @@
     }
     const clear=wrap.querySelector('[data-role="clear"]');
     if(clear) clear.disabled=loop.a===null && loop.b===null;
+    scheduleLoopReturn(row);
     const loopTimes=wrap.querySelector('.link-loop-times');
     if(loopTimes){
       const parts=[];
@@ -716,6 +774,11 @@
     copy.className='record-row-copy';
     const title=document.createElement('strong');
     title.textContent=row.title;
+    if(row.pinned){
+      const pin=document.createElement('span');
+      pin.className='record-row-pin'; pin.textContent='고정';
+      title.appendChild(pin);
+    }
     const source=document.createElement('small');
     source.textContent='YouTube';
     copy.append(title,source);
@@ -739,7 +802,10 @@
   function entries(){
     if(!currentUser) return [];
     return rows.map(row=>({
+      id:row.id,
+      title:row.title,
       at:Date.parse(row.created_at)||0,
+      pinned:Boolean(row.pinned),
       node:()=>createEntry(row),
     }));
   }
@@ -761,7 +827,8 @@
       rows=await window.OliveCloud.listPracticeLinks();
       loopState.clear();
     }catch(e){
-      rows=[];
+      /* 오프라인이거나 일시적 실패다. 목록을 비우면 링크가 아무 설명 없이
+         사라진 것처럼 보인다. 마지막으로 받은 목록을 그대로 둔다. */
     }finally{
       loading=false;
       renderList();
@@ -769,9 +836,18 @@
   }
 
   /* ── 메뉴 ── */
+  async function togglePinSelected(){
+    const row=selectedRow; closeMenu();
+    if(!row) return;
+    try{
+      await window.OliveCloud.setPracticeLinkPinned(row.id,!row.pinned);
+      await loadLinks(true);
+    }catch(e){ setMessage('고정 상태를 바꾸지 못했습니다',true); }
+  }
   function openMenu(row,trigger){
     selectedRow=row; menuTrigger=trigger;
     menuTitle.textContent=row.title;
+    if(menuPin) menuPin.textContent=row.pinned?'고정 해제':'고정';
     if(app) app.setAttribute('inert','');
     menuBackdrop.hidden=false;
     requestAnimationFrame(()=>menuBackdrop.classList.add('open'));
@@ -969,6 +1045,7 @@
   urlInput.addEventListener('keydown',event=>{
     if(event.key==='Enter'){ event.preventDefault(); addFromUrl(); }
   });
+  if(menuPin) menuPin.addEventListener('click',togglePinSelected);
   menuRename.addEventListener('click',renameSelected);
   menuDelete.addEventListener('click',deleteSelected);
   menuBackdrop.addEventListener('click',event=>{
@@ -979,9 +1056,19 @@
   });
   window.addEventListener('pagehide',()=>{ if(saveTimer) flushState(); });
 
+  /* 목록에서 여러 항목을 고를 때 recorder.js가 링크 몫을 넘겨준다. */
+  async function deleteMany(ids){
+    const list=(ids||[]).filter(id=>rows.some(row=>row.id===id));
+    if(!list.length) return 0;
+    if(list.includes(expandedId)){ expandedId=''; destroyPlayer(); }
+    const removed=await window.OliveCloud.deletePracticeLinks(list);
+    await loadLinks(true);
+    return removed;
+  }
   window.OlivePracticeLinks={
     count:()=>rows.length,
     entries,
+    deleteMany,
     isPlaying,
     stopPlayback,
     collapse,

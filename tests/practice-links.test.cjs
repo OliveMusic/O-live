@@ -10,6 +10,7 @@ const cloud=fs.readFileSync('cloud-sync.js','utf8');
 const migration=fs.readFileSync('supabase/012_practice_links.sql','utf8');
 const edge=fs.readFileSync('supabase/functions/youtube-search/index.ts','utf8');
 const config=fs.readFileSync('supabase/config.toml','utf8');
+const migration13=fs.readFileSync('supabase/013_pinning_and_maintenance.sql','utf8');
 
 /* ── 마크업 ── */
 /* 링크는 아이콘 버튼이다. 글자가 없으므로 aria-label이 반드시 있어야 한다. */
@@ -32,7 +33,42 @@ assert.match(links,/\n    entries,\n/,'entries를 공개 API로 노출');
 assert.match(links,/at:Date\.parse\(row\.created_at\)\|\|0/);
 assert.match(recorder,/function practiceLinkEntries\(\)/);
 assert.match(recorder,/\.concat\(practiceLinkEntries\(\)\)/);
-assert.match(recorder,/entries\.sort\(\(a,b\)=>b\.at-a\.at\)/,'최신 항목이 위에 온다');
+/* 고정한 항목이 먼저, 그다음이 최신순이다. */
+assert.match(recorder,/entries\.sort\(\(a,b\)=>\(b\.pinned\?1:0\)-\(a\.pinned\?1:0\) \|\| b\.at-a\.at\)/);
+assert.match(recorder,/pinned:Boolean\(row\.pinned\)/);
+assert.match(links,/pinned:Boolean\(row\.pinned\)/);
+/* 자주 쓰는 항목을 위에 고정한다. */
+assert.match(index,/id="recordMenuPin"[^>]*>고정</);
+assert.match(index,/id="linkMenuPin"[^>]*>고정</);
+assert.match(cloud,/set_practice_recording_pinned/);
+assert.match(cloud,/set_practice_link_pinned/);
+/* 여러 항목을 골라 한 번에 지운다. 파일도 함께 지운다. */
+assert.match(index,/id="recordSelect"[^>]*aria-label="여러 항목 선택"/);
+assert.match(index,/id="recordSelectBar"/);
+assert.match(recorder,/function decorateForSelection\(node,entry\)/);
+assert.match(index,/\.record-entry\.selecting \.record-row\{ grid-template-columns:36px minmax\(0,1fr\); \}/,'체크박스 칼럼');
+assert.match(recorder,/async function deleteSelectedItems\(\)/);
+assert.match(cloud,/remove_practice_recordings/);
+assert.match(cloud,/delete_practice_links/);
+assert.match(cloud,/storage\.from\('practice-recordings'\)\.remove\(paths\)/,'파일도 함께 지운다');
+assert.match(links,/async function deleteMany\(ids\)/);
+/* 목록이 가득 차기 전에 알린다. */
+assert.match(recorder,/near-limit',total>=MAX_RECORDINGS-5/);
+assert.match(index,/\.record-usage\.near-limit\{/);
+/* 정리 함수가 실제로 불린다. 이전에는 정의만 있고 호출이 없었다. */
+assert.match(migration13,/perform public\.cleanup_ear_sync_events\(\)/);
+assert.match(migration13,/perform public\.cleanup_youtube_search_usage\(\)/);
+assert.match(cloud,/client\.rpc\('run_olive_maintenance'\)/);
+assert.match(cloud,/\n    runMaintenance\(\);/,'로그인 뒤 한 번 부른다');
+assert.match(migration13,/select 13::integer/);
+/* 트랙 슬라이더도 키보드로 조작할 수 있어야 한다. */
+assert.match(links,/track\.addEventListener\('keydown'/);
+assert.match(links,/aria-valuemin/);
+assert.match(links,/aria-valuemax/);
+/* A/B 반복은 틱만으로는 최대 250ms 늦는다. B 직전에 정밀 타이머를 건다. */
+assert.match(links,/const LOOP_LOOKAHEAD_MS=600;/);
+assert.match(links,/function scheduleLoopReturn\(row\)/);
+assert.match(links,/const remaining=\(active\.b-position\)\/rate;/,'배속을 반영한 남은 시간');
 /* 목록에는 녹음·업로드·YouTube가 함께 들어가므로 문구를 녹음으로 한정하지 않는다. */
 assert.match(recorder,/textContent='저장된 항목이 없습니다'/);
 assert.match(recorder,/textContent='목록을 불러오는 중입니다'/);
@@ -211,7 +247,7 @@ for(const fn of ['listPracticeLinks','savePracticeLink','renamePracticeLink',
   assert.match(cloud,new RegExp(`\\n    ${fn},`),`${fn} 노출`);
 }
 /* 제목·채널·썸네일은 저장하지 않는다. video_id와 사용자 별칭만 남긴다. */
-assert.match(cloud,/select\('id,provider,video_id,title,duration_ms,last_position_ms,loop_a_ms,loop_b_ms,loop_enabled,playback_rate,created_at'\)/);
+assert.match(cloud,/select\('id,provider,video_id,title,duration_ms,last_position_ms,loop_a_ms,loop_b_ms,loop_enabled,playback_rate,pinned,created_at'\)/);
 assert.doesNotMatch(cloud,/channel_title|thumbnail_url/);
 
 /* ── 마이그레이션 ── */

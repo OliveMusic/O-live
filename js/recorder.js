@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=188';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=189';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -45,6 +45,12 @@
   const recordSave=document.getElementById('recordSave');
   const recordMessage=document.getElementById('recordMessage');
   const recordUsage=document.getElementById('recordUsage');
+  const recordSelect=document.getElementById('recordSelect');
+  const recordSelectBar=document.getElementById('recordSelectBar');
+  const recordSelectCount=document.getElementById('recordSelectCount');
+  const recordSelectDelete=document.getElementById('recordSelectDelete');
+  const recordSelectCancel=document.getElementById('recordSelectCancel');
+  const menuPin=document.getElementById('recordMenuPin');
   const recordUpload=document.getElementById('recordUpload');
   const recordUploadInput=document.getElementById('recordUploadInput');
   const recordList=document.getElementById('recordList');
@@ -135,6 +141,8 @@
   const loopRegions=new Map();
   const cloudStretchModulePromises=new WeakMap();
   let loadingList=false;
+  let selecting=false;
+  const selectedIds=new Set();
   let recordingListLoadPromise=null;
   let recordingListLoadUserId='';
   let recordingListLoadToken=0;
@@ -2105,7 +2113,11 @@
       ? Number(window.OlivePracticeLinks.count())||0 : 0;
   }
   function renderUsage(){
-    recordUsage.textContent=`${rows.length+practiceLinkCount()} / ${MAX_RECORDINGS}`;
+    const total=rows.length+practiceLinkCount();
+    recordUsage.textContent=`${total} / ${MAX_RECORDINGS}`;
+    /* 가득 차고 나서야 알게 되면 늦다. 다섯 자리 남았을 때부터 색으로 알린다. */
+    recordUsage.classList.toggle('near-limit',total>=MAX_RECORDINGS-5 && total<MAX_RECORDINGS);
+    recordUsage.classList.toggle('at-limit',total>=MAX_RECORDINGS);
   }
   function createRecordingEntry(row){
     const entry=document.createElement('div'); entry.className='record-entry';
@@ -2116,6 +2128,11 @@
     open.setAttribute('aria-label',`${row.title} 녹음 ${expandedRecordingId===row.id?'접기':'열기'}`);
     const copy=document.createElement('span'); copy.className='record-row-copy';
     const title=document.createElement('strong'); title.textContent=row.title;
+    if(row.pinned){
+      const pin=document.createElement('span');
+      pin.className='record-row-pin'; pin.textContent='고정';
+      title.appendChild(pin);
+    }
     const date=document.createElement('small'); date.textContent=formatDate(row.recorded_at);
     copy.append(title,date);
     const duration=document.createElement('span'); duration.className='record-row-duration'; duration.textContent=formatDuration(row.duration_ms);
@@ -2128,6 +2145,66 @@
     if(expandedRecordingId===row.id) entry.appendChild(createExpandedPlayer(row));
     return entry;
   }
+  /* ── 여러 항목 선택 ── */
+  function renderSelectionBar(){
+    if(!recordSelectBar) return;
+    recordSelectBar.hidden=!selecting;
+    if(recordSelect) recordSelect.setAttribute('aria-pressed',String(selecting));
+    if(recordSelectCount) recordSelectCount.textContent=`${selectedIds.size}개 선택`;
+    if(recordSelectDelete) recordSelectDelete.disabled=!selectedIds.size;
+  }
+  function setSelecting(next){
+    selecting=Boolean(next);
+    selectedIds.clear();
+    if(selecting){
+      /* 펼쳐 둔 재생기는 접는다. 선택 중에는 행을 열 수 없다. */
+      collapseExpandedRow();
+      collapsePracticeLink();
+    }
+    renderSelectionBar();
+    renderList();
+  }
+  function decorateForSelection(node,entry){
+    node.classList.add('selecting');
+    const row=node.querySelector('.record-row');
+    if(!row) return;
+    const box=document.createElement('label');
+    box.className='record-select-box';
+    const input=document.createElement('input');
+    input.type='checkbox';
+    input.checked=selectedIds.has(entry.id);
+    input.setAttribute('aria-label',`${entry.title||''} 선택`);
+    input.addEventListener('change',()=>{
+      if(input.checked) selectedIds.add(entry.id);
+      else selectedIds.delete(entry.id);
+      renderSelectionBar();
+    });
+    box.appendChild(input);
+    row.insertBefore(box,row.firstChild);
+  }
+  async function deleteSelectedItems(){
+    if(!selectedIds.size) return;
+    const recordingRows=rows.filter(row=>selectedIds.has(row.id));
+    const recordingIds=new Set(recordingRows.map(row=>row.id));
+    const linkIds=[...selectedIds].filter(id=>!recordingIds.has(id));
+    const total=recordingRows.length+linkIds.length;
+    if(!window.confirm(`선택한 ${total}개를 삭제할까요?\n다른 기기에서도 사라지며 복구할 수 없습니다.`)) return;
+    setMessage('선택한 항목을 삭제하는 중입니다');
+    try{
+      if(recordingRows.length) await window.OliveCloud.deleteRecordings(recordingRows);
+      if(linkIds.length && window.OlivePracticeLinks &&
+         typeof window.OlivePracticeLinks.deleteMany==='function'){
+        await window.OlivePracticeLinks.deleteMany(linkIds);
+      }
+      setSelecting(false);
+      await loadRecordings(true);
+      setMessage(`${total}개를 삭제했습니다`);
+    }catch(error){
+      console.warn('[O\'live bulk delete]',error);
+      setMessage('선택한 항목을 삭제하지 못했습니다',true);
+    }
+  }
+
   /* 연습 링크는 자기 행만 만들어 넘긴다. 목록 DOM은 이 파일이 소유한다. */
   function practiceLinkEntries(){
     if(!window.OlivePracticeLinks || typeof window.OlivePracticeLinks.entries!=='function') return [];
@@ -2143,14 +2220,25 @@
       const state=document.createElement('p'); state.className='record-empty'; state.textContent='목록을 불러오는 중입니다';
       recordList.appendChild(state); return;
     }
-    const entries=rows.map(row=>({at:Date.parse(row.recorded_at)||0,node:()=>createRecordingEntry(row)}))
-      .concat(practiceLinkEntries());
+    const entries=rows.map(row=>({
+      id:row.id,
+      title:row.title,
+      at:Date.parse(row.recorded_at)||0,
+      pinned:Boolean(row.pinned),
+      node:()=>createRecordingEntry(row),
+    })).concat(practiceLinkEntries());
     if(!entries.length){
       const state=document.createElement('p'); state.className='record-empty'; state.textContent='저장된 항목이 없습니다';
       recordList.appendChild(state); return;
     }
-    entries.sort((a,b)=>b.at-a.at);
-    entries.forEach(entry=>recordList.appendChild(entry.node()));
+    /* 고정한 항목이 먼저, 그다음이 최신순이다. 두 목록을 합친 뒤 정렬해야
+       녹음본과 링크의 고정이 서로 섞인다. */
+    entries.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0) || b.at-a.at);
+    entries.forEach(entry=>{
+      const node=entry.node();
+      if(selecting) decorateForSelection(node,entry);
+      recordList.appendChild(node);
+    });
   }
   function waitRecordingListRetry(ms){
     return new Promise(resolve=>setTimeout(resolve,ms));
@@ -2346,8 +2434,17 @@
       recordSave.textContent='저장';
     }
   }
+  async function togglePinSelected(){
+    const row=selectedRow; closeMenu();
+    if(!row) return;
+    try{
+      await window.OliveCloud.setRecordingPinned(row.id,!row.pinned);
+      await loadRecordings(true);
+    }catch(e){ setMessage('고정 상태를 바꾸지 못했습니다',true); }
+  }
   function openMenu(row,trigger){
     selectedRow=row; menuTrigger=trigger; menuTitle.textContent=row.title;
+    if(menuPin) menuPin.textContent=row.pinned?'고정 해제':'고정';
     if(app) app.setAttribute('inert','');
     menuBackdrop.hidden=false;
     requestAnimationFrame(()=>menuBackdrop.classList.add('open'));
@@ -2446,6 +2543,10 @@
   document.addEventListener('drop',resetRecordDrop);
   menuBackdrop.addEventListener('click',event=>{ if(event.target===menuBackdrop) closeMenu(); });
   menuBackdrop.addEventListener('keydown',event=>{ if(event.key==='Escape'){ event.preventDefault(); closeMenu(); } });
+  if(menuPin) menuPin.addEventListener('click',togglePinSelected);
+  if(recordSelect) recordSelect.addEventListener('click',()=>setSelecting(!selecting));
+  if(recordSelectCancel) recordSelectCancel.addEventListener('click',()=>setSelecting(false));
+  if(recordSelectDelete) recordSelectDelete.addEventListener('click',deleteSelectedItems);
   menuRename.addEventListener('click',renameSelected);
   menuDownload.addEventListener('click',downloadSelected);
   menuDelete.addEventListener('click',deleteSelected);

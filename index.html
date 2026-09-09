@@ -1833,6 +1833,39 @@
     .link-player-controls{ gap:7px; }
   }
   .record-usage{ color:var(--ink-3); font-size:.6875rem; font-variant-numeric:tabular-nums; }
+  /* 목록이 가득 차기 전에 알려 준다. 다 차고 나서야 알게 되면 늦다. */
+  .record-usage.near-limit{ color:var(--signal); }
+  .record-usage.at-limit{ color:var(--error); }
+  /* 여러 항목을 골라 한 번에 지운다. */
+  .record-select-bar{
+    display:flex; align-items:center; gap:8px; min-height:44px; margin-bottom:8px;
+  }
+  .record-select-bar[hidden]{ display:none; }
+  .record-select-count{
+    margin-right:auto; color:var(--ink-2); font-size:.6875rem; font-variant-numeric:tabular-nums;
+  }
+  .record-select-action{
+    min-height:36px; padding:0 12px; border:1px solid var(--line-soft);
+    border-radius:var(--r-pill); background:transparent; color:var(--ink-2);
+    font:500 .6875rem/1 inherit; cursor:pointer;
+  }
+  .record-select-action:active{ background:var(--key-press); }
+  .record-select-action.danger{ border-color:var(--error); color:var(--error); }
+  .record-select-action:disabled{ opacity:.4; cursor:default; }
+  .record-select-box{
+    flex:0 0 auto; width:36px; height:36px; display:grid; place-items:center; cursor:pointer;
+  }
+  .record-select-box input{
+    width:19px; height:19px; margin:0; accent-color:var(--signal); cursor:pointer;
+  }
+  /* 선택 중에는 행을 열거나 메뉴를 띄우지 않는다.
+     체크박스가 앞에 붙으므로 칼럼도 함께 바꿔야 행이 깨지지 않는다. */
+  .record-entry.selecting .record-row{ grid-template-columns:36px minmax(0,1fr); }
+  .record-entry.selecting .record-row-open{ pointer-events:none; }
+  .record-entry.selecting .record-row-more{ display:none; }
+  .record-row-pin{
+    margin-left:5px; color:var(--signal); font-size:.625rem; vertical-align:middle;
+  }
   .record-history > summary .record-usage{ margin-left:auto; }
   .record-history > summary::after{ margin-left:2px; }
   .record-history-body{ border-top:1px solid var(--line-soft); padding:10px 14px 0; }
@@ -2455,6 +2488,9 @@
             <div class="record-list-head">
               <div class="record-list-actions">
                 <input id="recordUploadInput" type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.webm,.flac,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/flac" hidden>
+                <button class="record-upload icon" id="recordSelect" type="button" aria-label="여러 항목 선택" aria-pressed="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>
+                </button>
                 <button class="record-upload icon" id="recordLink" type="button" aria-label="YouTube 링크 추가"
                   aria-controls="linkPanel" aria-expanded="false">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path class="fill" d="M10.4 9.4v5.2l4.4-2.6z"/></svg>
@@ -2466,6 +2502,11 @@
                   </svg>
                 </button>
               </div>
+            </div>
+            <div class="record-select-bar" id="recordSelectBar" hidden>
+              <span class="record-select-count" id="recordSelectCount">0개 선택</span>
+              <button class="record-select-action danger" id="recordSelectDelete" type="button" disabled>삭제</button>
+              <button class="record-select-action" id="recordSelectCancel" type="button">취소</button>
             </div>
             <div class="link-panel" id="linkPanel" hidden>
               <div class="link-modes" role="tablist" aria-label="링크 추가 방법">
@@ -2586,6 +2627,7 @@
   <div class="record-menu-wrap">
     <section class="record-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="recordMenuTitle">
       <strong class="record-menu-title" id="recordMenuTitle"></strong>
+      <button id="recordMenuPin" type="button">고정</button>
       <button id="recordMenuRename" type="button">이름 변경</button>
       <button id="recordMenuDownload" type="button">다운로드</button>
       <button class="danger" id="recordMenuDelete" type="button">삭제</button>
@@ -2597,6 +2639,7 @@
   <div class="record-menu-wrap">
     <section class="record-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="linkMenuTitle">
       <strong class="record-menu-title" id="linkMenuTitle"></strong>
+      <button id="linkMenuPin" type="button">고정</button>
       <button id="linkMenuRename" type="button">이름 변경</button>
       <button class="danger" id="linkMenuDelete" type="button">삭제</button>
     </section>
@@ -2660,22 +2703,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=188"></script>
+<script src="app-version.js?v=189"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=188"></script>
-<script src="js/audio-runtime.js?v=188"></script>
-<script src="js/core.js?v=188"></script>
-<script src="js/metronome.js?v=188"></script>
-<script src="js/tuner-engine.js?v=188"></script>
-<script src="js/tuner.js?v=188"></script>
-<script src="js/scales.js?v=188"></script>
-<script src="js/ear-trainer.js?v=188"></script>
-<script src="js/rhythm-trainer.js?v=188"></script>
-<script src="js/recording-cache.js?v=188"></script>
-<script src="js/recorder.js?v=188"></script>
-<script src="js/practice-links.js?v=188"></script>
-<script src="js/jam-session.js?v=188"></script>
-<script src="js/app-shell.js?v=188"></script>
+<script src="cloud-sync.js?v=189"></script>
+<script src="js/audio-runtime.js?v=189"></script>
+<script src="js/core.js?v=189"></script>
+<script src="js/metronome.js?v=189"></script>
+<script src="js/tuner-engine.js?v=189"></script>
+<script src="js/tuner.js?v=189"></script>
+<script src="js/scales.js?v=189"></script>
+<script src="js/ear-trainer.js?v=189"></script>
+<script src="js/rhythm-trainer.js?v=189"></script>
+<script src="js/recording-cache.js?v=189"></script>
+<script src="js/recorder.js?v=189"></script>
+<script src="js/practice-links.js?v=189"></script>
+<script src="js/jam-session.js?v=189"></script>
+<script src="js/app-shell.js?v=189"></script>
 </body>
 </html>

@@ -503,7 +503,7 @@
   async function listRecordings(){
     await ensureRecordingAccess();
     const {data,error}=await client.from('practice_recordings')
-      .select('id,title,object_path,duration_ms,byte_size,mime_type,waveform,playback_gain,source_type,recorded_at,created_at')
+      .select('id,title,object_path,duration_ms,byte_size,mime_type,waveform,playback_gain,source_type,pinned,recorded_at,created_at')
       .eq('status','ready')
       .order('recorded_at',{ascending:false})
       .limit(50);
@@ -716,6 +716,8 @@
     renderSheet();
     notifySession();
     await syncAndRefresh(false);
+    /* 오래된 기록 정리는 여기서만 시작된다. 실패해도 무시한다. */
+    runMaintenance();
   }
   function recordAnswer(date,correct,mode){
     if(!currentUser || !activeUserId) return;
@@ -796,7 +798,7 @@
   async function listPracticeLinks(){
     await ensureRecordingAccess();
     const {data,error}=await client.from('practice_links')
-      .select('id,provider,video_id,title,duration_ms,last_position_ms,loop_a_ms,loop_b_ms,loop_enabled,playback_rate,created_at')
+      .select('id,provider,video_id,title,duration_ms,last_position_ms,loop_a_ms,loop_b_ms,loop_enabled,playback_rate,pinned,created_at')
       .order('created_at',{ascending:false})
       .limit(50);
     if(error) throw error;
@@ -879,6 +881,57 @@
       remaining:Number.isFinite(Number(data&&data.remaining))?Number(data.remaining):null,
     };
   }
+  /* 자주 쓰는 항목을 목록 위에 고정한다. */
+  async function setRecordingPinned(id,pinned){
+    await ensureRecordingAccess();
+    const {data,error}=await client.rpc('set_practice_recording_pinned',{
+      p_recording_id:String(id||''),p_pinned:Boolean(pinned),
+    });
+    if(error) throw error;
+    if(!data) throw new Error('Recording was not found');
+    return true;
+  }
+  async function setPracticeLinkPinned(id,pinned){
+    await ensureRecordingAccess();
+    const {data,error}=await client.rpc('set_practice_link_pinned',{
+      p_link_id:String(id||''),p_pinned:Boolean(pinned),
+    });
+    if(error) throw error;
+    if(!data) throw new Error('Practice link was not found');
+    return true;
+  }
+  /* 여러 항목을 한 번에 지운다. 녹음 파일은 Storage에서도 함께 지운다. */
+  async function deleteRecordings(recordings){
+    await ensureRecordingAccess();
+    const rows=(recordings||[]).filter(Boolean);
+    if(!rows.length) return 0;
+    const paths=rows.map(row=>String(row.object_path||'')).filter(Boolean);
+    if(paths.length){
+      const {error:storageError}=await client.storage.from('practice-recordings').remove(paths);
+      if(storageError) throw storageError;
+    }
+    const {data,error}=await client.rpc('remove_practice_recordings',{
+      p_ids:rows.map(row=>String(row.id||'')),
+    });
+    if(error) throw error;
+    return Number(data)||0;
+  }
+  async function deletePracticeLinks(ids){
+    await ensureRecordingAccess();
+    const list=(ids||[]).map(id=>String(id||'')).filter(Boolean);
+    if(!list.length) return 0;
+    const {data,error}=await client.rpc('delete_practice_links',{p_ids:list});
+    if(error) throw error;
+    return Number(data)||0;
+  }
+  /* 오래된 동기화 이벤트와 검색 사용량을 정리한다. 실패해도 앱 동작에 영향이 없다. */
+  async function runMaintenance(){
+    if(!client || !currentUser || !navigator.onLine) return false;
+    try{
+      const {error}=await client.rpc('run_olive_maintenance');
+      return !error;
+    }catch(e){ return false; }
+  }
   window.OliveCloud={
     init,
     recordAnswer,
@@ -898,5 +951,10 @@
     savePracticeLinkState,
     deletePracticeLink,
     searchYouTube,
+    setRecordingPinned,
+    setPracticeLinkPinned,
+    deleteRecordings,
+    deletePracticeLinks,
+    runMaintenance,
   };
 })();
