@@ -13,6 +13,7 @@ const index=indexHtml+'\n'+appScripts;
 const about=read('about.html');
 const privacy=read('privacy.html');
 const terms=read('terms.html');
+const guide=read('guide.html');
 const worker=read('service-worker.js');
 const manifest=JSON.parse(read('manifest.json'));
 const sitemap=read('sitemap.xml');
@@ -21,12 +22,12 @@ vm.createContext(releaseContext);
 vm.runInContext(read('app-version.js'),releaseContext,{filename:'app-version.js'});
 const release=releaseContext.globalThis.OLIVE_RELEASE;
 
-for(const [label,html] of Object.entries({index,about,privacy,terms})){
+for(const [label,html] of Object.entries({index,about,privacy,terms,guide})){
   assert.match(html,/lang="ko"/,`${label}: Korean language declaration`);
   assert.match(html,/og:image/,`${label}: social preview image`);
 }
 
-for(const href of ['about.html','privacy.html','terms.html']){
+for(const href of ['about.html','privacy.html','terms.html','guide.html']){
   assert.match(index,new RegExp(`href="${href}"`),`index links ${href}`);
   assert.match(worker,new RegExp(`'\\./${href}'`),`service worker caches ${href}`);
   assert.match(sitemap,new RegExp(`/O-live/${href}`),`sitemap lists ${href}`);
@@ -183,3 +184,15 @@ assert.match(index,/구분 전 기록/);
 assert.match(index,/recordAnswer\(key,correct,mode\)/);
 
 console.log('public pages tests passed');
+
+/* 사용법 문서가 실제 동작과 어긋나면 없느니만 못하다. 숨은 동작 설명을 고정한다. */
+assert.match(guide,/손잡이를 두 번 탭/,'슬라이더 초기화 안내');
+assert.match(guide,/길게 누르면 삭제/,'잼 코드 삭제 안내');
+assert.match(guide,/누르면 해제/,'즐겨찾기 해제 안내');
+assert.match(guide,/A와 B를 지정하지 않고 반복만 켜면 처음부터 끝까지/);
+assert.match(guide,/BPM을 10씩/);
+assert.match(guide,/10초씩 이동/);
+assert.match(guide,/잠금화면에서 재생되지 않습니다/,'YouTube 잠금화면 제약');
+assert.match(worker,/'\.\/guide\.html'/,'오프라인에서도 열린다');
+assert.match(sitemap,/guide\.html/);
+console.log('guide page checks passed');

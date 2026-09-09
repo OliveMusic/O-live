@@ -102,8 +102,6 @@ assert.match(recorder,/stretchPitch\.value=transposeRatio\(rowTranspose\(row\)\)
 assert.doesNotMatch(recorder,/rowPlaybackRate\(row\)!==1 &&/);
 assert.doesNotMatch(recorder,/rowPlaybackRate\(row\)!==1 \?/);
 assert.match(recorder,/const adjustedRate=needsPitchProcessing\(row\);/);
-/* 실기기 재생 실패를 추측으로 좁히지 않도록 단계를 진단에 남긴다. */
-assert.match(recorder,/recording-playback:failed/);
 assert.match(recorder,/needsPitchProcessing\(row\) \? ensureSoundTouchProcessor/);
 assert.match(recorder,/if\(needsPitchProcessing\(row\)\)\{\n      try\{ await ensureSoundTouchProcessor/);
 assert.match(recorder,/async function flushRecordingState\(row\)/);

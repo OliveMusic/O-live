@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=194';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=195';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -1583,18 +1583,6 @@
     if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
     console.warn('[O\'live recording playback]',error);
     const stage=error&&error.oliveStage;
-    /* 어느 단계에서 끊겼는지 진단에 남긴다. 이게 없으면 실기기 실패를
-       추측으로만 좁혀야 한다. */
-    if(window.OliveAudioDiagnostics){
-      window.OliveAudioDiagnostics.mark('recording-playback:failed',{
-        stage:stage||'unknown',
-        reason:String(error&&error.message||'').slice(0,120),
-        mode:cloudPlaybackMode,
-        rate:rowPlaybackRate(row),
-        transpose:rowTranspose(row),
-        cached:Boolean(cloudBlobs.get(row.id)),
-      });
-    }
     stopCloudPlayback();
     setMessage(stage==='download'
       ? (!navigator.onLine?'인터넷에 연결한 뒤 다시 재생해 주세요':'녹음 파일을 불러오지 못했습니다')
