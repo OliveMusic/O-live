@@ -539,7 +539,9 @@
     });
     slider.addEventListener('change',()=>setPlaybackRate(row,slider.value,true));
     bindPlaybackRateReset(slider,row);
-    label.append(text,slider,output);
+    const spacer=document.createElement('span');
+    spacer.setAttribute('aria-hidden','true');
+    label.append(text,slider,spacer,output);
     return label;
   }
   function createTrack(row){

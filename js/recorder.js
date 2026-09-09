@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=191';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=192';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -2189,7 +2189,10 @@
     });
     rateSlider.addEventListener('change',()=>setPlaybackRate(row,rateSlider.value,true));
     bindPlaybackRateReset(rateSlider,row);
-    rateLabel.append(rateText,rateSlider,rateValue); tools.append(loopTools,rateLabel);
+    const rateSpacer=document.createElement('span');
+    rateSpacer.setAttribute('aria-hidden','true');
+    rateLabel.append(rateText,rateSlider,rateSpacer,rateValue);
+    tools.append(loopTools,rateLabel);
     /* 컨트롤 행은 재생 버튼 칸까지 넘어가 플레이어 전체 폭을 쓴다.
        그래야 A/B가 왼쪽 끝에 붙고 속도 슬라이더가 길어진다. */
     /* 조옮김은 속도와 같은 슬라이더로 두고 바로 위에 놓는다. 반음 단위라
@@ -2276,6 +2279,10 @@
     mark.type='button';
     mark.className='record-row-favorite';
     mark.setAttribute('aria-label',`${row.title} 즐겨찾기 해제`);
+    const olive=document.createElement('span');
+    olive.className='record-row-olive';
+    olive.setAttribute('aria-hidden','true');
+    mark.appendChild(olive);
     mark.addEventListener('click',event=>{ event.stopPropagation(); onRemove(); });
     return mark;
   }

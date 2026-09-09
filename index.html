@@ -1870,11 +1870,18 @@
     width:28px; height:28px; padding:0; border:0; background:transparent;
     display:grid; place-items:center; cursor:pointer;
   }
-  .record-row-favorite::before{
-    content:''; width:15px; height:12px; border-radius:50%;
+  /* 큰 올리브 버튼과 같은 구조다. 몸통을 기울이고 그 안에 씨앗 구멍을 낸다.
+     구멍이 없으면 그냥 찌그러진 타원으로 보인다. */
+  .record-row-olive{
+    position:relative; display:block; width:17px; height:14px; border-radius:50%;
     background:var(--signal); transform:rotate(-11deg);
   }
-  .record-row-favorite:active::before{ background:var(--signal-press); }
+  .record-row-olive::after{
+    content:''; position:absolute; left:calc(50% + 3.4px); top:50%;
+    width:5px; height:5px; border-radius:50%; background:var(--panel);
+    transform:translate(-50%,-50%);
+  }
+  .record-row-favorite:active .record-row-olive{ background:var(--signal-press); }
   .record-history > summary .record-usage{ margin-left:auto; }
   .record-history > summary::after{ margin-left:2px; }
   .record-history-body{ border-top:1px solid var(--line-soft); padding:10px 14px 0; }
@@ -1990,9 +1997,9 @@
   .record-player-tools .record-loop-tools{ grid-row:1 / span 2; }
   /* 조옮김은 속도와 같은 슬라이더로 두고 바로 위에 놓는다.
      양 끝의 ♭·♯가 방향을 알려 준다. 두 바의 폭이 사실상 같도록 칼럼을 맞춘다. */
-  /* .record-rate-control이 소스 순서상 뒤에 있어 명시도가 같으면 3칼럼이 이긴다.
-     클래스를 겹쳐 4칼럼을 확실히 적용한다. */
-  .record-rate-control.record-transpose-control{ grid-template-columns:14px minmax(0,1fr) 14px 30px; }
+  /* 속도와 조옮김이 같은 칼럼을 쓰므로 두 슬라이더의 폭과 시작 위치가 정확히 같다.
+     속도 쪽 3번 칸은 빈 자리다. */
+  .record-rate-control.record-transpose-control{ grid-template-columns:28px minmax(0,1fr) 14px 30px; }
   .record-accidental{
     color:var(--ink-3); font-size:.75rem; line-height:1; text-align:center;
   }
@@ -2010,7 +2017,7 @@
   .record-player-tool:disabled{ opacity:.34; cursor:default; }
   .record-player-tool:not(:disabled):active{ background:var(--key-press); }
   .record-rate-control{
-    min-width:0; display:grid; grid-template-columns:28px minmax(0,1fr) 30px; align-items:center; gap:5px;
+    min-width:0; display:grid; grid-template-columns:28px minmax(0,1fr) 14px 30px; align-items:center; gap:5px;
     color:var(--ink-3); font-size:.5625rem; white-space:nowrap;
   }
   .record-rate-control input[type="range"]{
@@ -2722,22 +2729,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=191"></script>
+<script src="app-version.js?v=192"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=191"></script>
-<script src="js/audio-runtime.js?v=191"></script>
-<script src="js/core.js?v=191"></script>
-<script src="js/metronome.js?v=191"></script>
-<script src="js/tuner-engine.js?v=191"></script>
-<script src="js/tuner.js?v=191"></script>
-<script src="js/scales.js?v=191"></script>
-<script src="js/ear-trainer.js?v=191"></script>
-<script src="js/rhythm-trainer.js?v=191"></script>
-<script src="js/recording-cache.js?v=191"></script>
-<script src="js/recorder.js?v=191"></script>
-<script src="js/practice-links.js?v=191"></script>
-<script src="js/jam-session.js?v=191"></script>
-<script src="js/app-shell.js?v=191"></script>
+<script src="cloud-sync.js?v=192"></script>
+<script src="js/audio-runtime.js?v=192"></script>
+<script src="js/core.js?v=192"></script>
+<script src="js/metronome.js?v=192"></script>
+<script src="js/tuner-engine.js?v=192"></script>
+<script src="js/tuner.js?v=192"></script>
+<script src="js/scales.js?v=192"></script>
+<script src="js/ear-trainer.js?v=192"></script>
+<script src="js/rhythm-trainer.js?v=192"></script>
+<script src="js/recording-cache.js?v=192"></script>
+<script src="js/recorder.js?v=192"></script>
+<script src="js/practice-links.js?v=192"></script>
+<script src="js/jam-session.js?v=192"></script>
+<script src="js/app-shell.js?v=192"></script>
 </body>
 </html>

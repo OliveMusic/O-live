@@ -44,7 +44,14 @@ assert.match(index,/id="recordMenuPin"[^>]*>즐겨찾기</);
 assert.match(index,/id="linkMenuPin"[^>]*>즐겨찾기</);
 assert.doesNotMatch(index,/\.record-row-pin\{/);
 assert.match(index,/\.record-entry\.favorite \.record-row\{ grid-template-columns:28px minmax\(0,1fr\) 44px; \}/);
-assert.match(index,/\.record-row-favorite::before\{[^}]*background:var\(--signal\)/);
+/* 큰 올리브와 같은 구조여야 한다. 씨앗 구멍이 없으면 그냥 타원으로 보인다. */
+assert.match(index,/\.record-row-olive\{[^}]*background:var\(--signal\);[^}]*transform:rotate\(-11deg\)/);
+assert.match(index,/\.record-row-olive::after\{[^}]*background:var\(--panel\)/,'씨앗 구멍');
+assert.match(recorder,/olive\.className='record-row-olive'/);
+/* 속도와 조옮김 슬라이더가 정확히 같은 폭이 되도록 칼럼을 통일한다. */
+assert.match(index,/\.record-rate-control\{[^}]*grid-template-columns:28px minmax\(0,1fr\) 14px 30px/);
+assert.match(recorder,/rateLabel\.append\(rateText,rateSlider,rateSpacer,rateValue\)/);
+assert.match(links,/label\.append\(text,slider,spacer,output\)/);
 assert.match(recorder,/function createFavoriteMark\(row,onRemove\)/);
 assert.match(recorder,/aria-label',`\$\{row\.title\} 즐겨찾기 해제`/);
 assert.match(links,/aria-label',`\$\{row\.title\} 즐겨찾기 해제`/);
@@ -222,7 +229,7 @@ assert.match(recorder,/transposeFlat\.textContent='♭'/);
 assert.match(recorder,/transposeSharp\.textContent='♯'/);
 assert.match(recorder,/bindSliderReset\(transposeSlider,0,/,'두 번 누르면 원래 조로');
 assert.match(index,/\.record-player-tools \.record-loop-tools\{ grid-row:1 \/ span 2; \}/);
-assert.match(index,/\.record-rate-control\.record-transpose-control\{ grid-template-columns:14px minmax\(0,1fr\) 14px 30px; \}/);
+assert.match(index,/\.record-rate-control\.record-transpose-control\{ grid-template-columns:28px minmax\(0,1fr\) 14px 30px; \}/);
 /* 손잡이를 두 번 누르면 원곡 속도로 돌아간다. */
 assert.match(links,/function bindPlaybackRateReset\(slider,row\)/);
 assert.match(links,/slider\.addEventListener\('dblclick',reset\)/);
