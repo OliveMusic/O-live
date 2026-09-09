@@ -198,8 +198,24 @@ console.log('public pages tests passed');
 /* 도움말 문서가 실제 동작과 어긋나면 없느니만 못하다. 숨은 동작 설명을 고정한다. */
 assert.match(guide,/손잡이를 두 번 탭/,'슬라이더 초기화 안내');
 assert.match(guide,/길게 누르면 삭제/,'잼 코드 삭제 안내');
-assert.match(guide,/누르면 해제/,'즐겨찾기 해제 안내');
-assert.match(guide,/A와 B를 지정하지 않고 반복만 켜면 <strong>처음부터 끝까지<\/strong>/);
+assert.match(guide,/올리브를 눌러 해제/,'즐겨찾기 해제 안내');
+assert.match(guide,/A·B 없이 반복만 켜면\s*<strong>처음부터 끝까지<\/strong>/);
+/* 도움말은 짧게 유지한다. 차례도, 기능별 설명 나열도 두지 않는다. */
+assert.match(guide,/<title>도움말<\/title>/);
+assert.doesNotMatch(guide,/guide-toc/,'차례는 없앴다');
+for(const id of ['metronome','tuner','scales','trainer','jam']){
+  assert.doesNotMatch(guide,new RegExp(`<section class="section" id="${id}"`),
+    `${id} 기능 설명 섹션은 앱 둘러보기로 대신한다`);
+}
+assert.deepEqual(
+  [...guide.matchAll(/<section class="section"(?: id="([^"]*)")?/g)].map(m=>m[1]||''),
+  ['start','tour','gestures','lockscreen',''],
+  '남는 섹션은 다섯 개');
+/* 잠금화면은 그 기능이 있는 화면에서만 나온다. YouTube와 튜너·스케일·청음·리듬에는 없다. */
+assert.match(guide,/id="lockscreen"[\s\S]{0,80}?data-screen="metronome jam trainer:record"/);
+/* 꾹 누르는 버튼에서 글자가 잡히면 안 된다. */
+assert.match(guide,/\.tap-key\{[\s\S]{0,220}?user-select:none/);
+assert.match(guide,/\.tap-bpm \.num\{[\s\S]{0,260}?user-select:none/);
 /* 도움말은 글이 아니라 앱과 같은 컨트롤을 직접 눌러 보게 한다. */
 /* 도움말은 화면을 다시 만들지 않고 앱을 그대로 띄운다. 그래야 설명이 낡지 않는다. */
 assert.match(guide,/<iframe class="tour-frame" id="tourFrame" src="index\.html\?guide=1"/);
@@ -249,8 +265,8 @@ for(const [key,screens] of Object.entries(demoScreens)){
 /* 프레임의 탭이 바뀌면 설명과 시연을 함께 갈아 끼운다. */
 assert.match(guide,/const screened=\[\.\.\.document\.querySelectorAll\('\[data-screen\]'\)\]/);
 assert.match(guide,/el\.hidden=!match/,'그 화면 것만 남긴다');
-assert.match(guide,/\.demo\[hidden\], \.callout\[hidden\], \.demo-empty\[hidden\]\{ display:none; \}/,
-  '[hidden]이 .demo의 display에 지지 않는다');
+assert.match(guide,/\.demo\[hidden\], \.callout\[hidden\], \.demo-empty\[hidden\], \.section\[hidden\]\{ display:none; \}/,
+  '[hidden]이 .demo와 .section의 display에 지지 않는다');
 assert.match(guide,/class="demo-empty"/,'숨은 동작이 없는 화면도 말해 준다');
 assert.match(guide,/class="prog-bar"/,'실제 진행 카드 재현');
 assert.match(guide,/class="zoom-badge">확대</,'확대한 화면임을 밝힌다');
@@ -290,6 +306,6 @@ assert.match(sitemap,/guide\.html/);
 /* 앱에서는 도움말이 나머지 링크 위 줄에 홀로 가운데 온다. */
 assert.match(indexHtml,/<a class="app-help" href="guide\.html">도움말<\/a>/);
 assert.match(indexHtml,/\.app-footer \.app-help\{ flex:0 0 100%; justify-content:center; \}/);
-assert.match(guide,/<h1>O’live 도움말<\/h1>/);
+assert.match(guide,/<h1>도움말<\/h1>/);
 assert.doesNotMatch(guide,/사용법/);
 console.log('guide page checks passed');

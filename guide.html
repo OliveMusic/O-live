@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>O’live 도움말</title>
+<title>도움말</title>
 <meta name="description" content="O’live의 메트로놈, 튜너, 스케일, 청음·리듬·트랙 트레이너와 잼 세션 도움말. 두 번 탭, 길게 누르기 같은 숨은 동작을 실제 화면 그대로 만져 보며 익힙니다.">
 <meta name="theme-color" content="#d3d2cc" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#22221f" media="(prefers-color-scheme: dark)">
@@ -19,13 +19,6 @@
 <link rel="stylesheet" href="info.css">
 <style>
   /* ── 도움말 골격 ── */
-  .guide-toc{
-    margin:0 0 34px; padding:16px 18px; border:1px solid var(--line-soft);
-    border-radius:14px; background:var(--panel);
-  }
-  .guide-toc h2{ margin:0 0 10px; font-size:.8125rem; color:var(--ink-2); }
-  .guide-toc ol{ margin:0; padding-left:19px; display:grid; gap:5px; }
-  .guide-toc a{ color:var(--ink); }
   .callout{
     margin:16px 0 0; padding:13px 15px; border-left:3px solid var(--signal);
     border-radius:0 10px 10px 0; background:var(--panel); color:var(--ink-2);
@@ -330,6 +323,7 @@
     background:var(--body-hi); border:1px solid var(--line-soft); border-radius:var(--r-lg);
     display:flex; flex-direction:column; align-items:center; gap:2px; text-align:center;
     touch-action:manipulation; user-select:none; -webkit-user-select:none;
+    -webkit-touch-callout:none;
   }
   .prog-bar .bar-no{ font-size:.75rem; color:var(--ink-3); font-weight:500; letter-spacing:.07em; }
   .prog-bar .rn{ font-size:.8438rem; color:var(--ink-3); font-weight:500; letter-spacing:.05em; }
@@ -387,7 +381,8 @@
   .tap-bpm{ text-align:center; }
   .tap-bpm .num{
     appearance:none; border:0; background:transparent; padding:0; font-family:inherit;
-    display:inline-block; cursor:pointer; user-select:none; -webkit-user-select:none;
+    display:inline-block; cursor:pointer; touch-action:manipulation;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
     font-size:3.5rem; font-weight:200; line-height:.92; letter-spacing:-.05em;
     color:var(--ink); font-variant-numeric:tabular-nums;
   }
@@ -396,8 +391,11 @@
     letter-spacing:.2182em; text-transform:uppercase;
   }
   .tempo-keys{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  /* 꾹 누르는 버튼이라 글자가 선택되거나 확대 메뉴가 뜨면 안 된다. */
   .tap-key{
     min-width:0; height:46px; padding:0 14px; cursor:pointer; font-family:inherit;
+    touch-action:manipulation; user-select:none; -webkit-user-select:none;
+    -webkit-touch-callout:none;
     background:var(--key); color:var(--ink); border:1px solid var(--line);
     border-bottom-width:2px; border-radius:var(--r);
     font-size:1rem; font-weight:400; letter-spacing:0;
@@ -435,7 +433,7 @@
   .row-sheet-item:disabled{ opacity:.38; cursor:default; }
 
   /* 화면을 옮기면 그 화면의 동작만 남는다. [hidden]이 .demo의 display에 지지 않게 못 박는다. */
-  .demo[hidden], .callout[hidden], .demo-empty[hidden]{ display:none; }
+  .demo[hidden], .callout[hidden], .demo-empty[hidden], .section[hidden]{ display:none; }
   .demo-empty{
     margin:16px 0 6px; padding:15px; border:1px dashed var(--line);
     border-radius:14px; color:var(--ink-3); font-size:.8125rem; text-align:center;
@@ -455,51 +453,27 @@
 
   <main>
     <p class="eyebrow">Help</p>
-    <h1>O’live 도움말</h1>
+    <h1>도움말</h1>
     <p class="lead">
-      화면에 다 적지 않은 동작이 몇 가지 있습니다.
-      아래에 <strong>O’live 앱을 그대로 띄워 두었습니다.</strong> 예시 데이터로 로그인된 상태라
-      트랙 목록과 청음 기록까지 그대로 보입니다. 화면을 옮기면 <strong>그 화면에 필요한 설명만</strong> 따라 바뀝니다.
+      화면에 다 적지 않은 동작만 모았습니다.
+      아래는 예시 데이터를 넣은 <strong>실제 앱</strong>이고, 화면을 옮기면 설명도 따라 바뀝니다.
     </p>
-
-    <nav class="guide-toc" aria-labelledby="toc-title">
-      <h2 id="toc-title">차례</h2>
-      <ol>
-        <li><a href="#start">시작하기</a></li>
-        <li><a href="#tour">앱 둘러보기</a></li>
-        <li><a href="#gestures">직접 만져 보기</a></li>
-        <li><a href="#metronome">메트로놈</a></li>
-        <li><a href="#tuner">튜너</a></li>
-        <li><a href="#scales">스케일</a></li>
-        <li><a href="#trainer">트레이너 — 청음 · 리듬 · 트랙</a></li>
-        <li><a href="#jam">잼 세션</a></li>
-        <li><a href="#lockscreen">잠금화면에서 쓰기</a></li>
-      </ol>
-    </nav>
 
     <section class="section" id="start" aria-labelledby="start-title">
       <h2 id="start-title">시작하기</h2>
       <p>
-        메트로놈, 튜너, 스케일, 청음, 리듬, 잼은 <strong>계정 없이 바로</strong> 쓸 수 있습니다.
-        Google 계정을 연결하면 청음 기록과 연습 설정이 기기 사이에서 이어지고,
-        직접 녹음한 파일과 YouTube 연습 링크를 저장할 수 있습니다.
-      </p>
-      <p>
-        마이크 입력은 기기 안에서만 분석합니다. 직접 녹음해 저장하기 전에는
-        어떤 소리도 서버로 보내지 않습니다.
+        계정 없이 바로 씁니다. Google 계정을 연결하면 녹음·연습 링크·청음 기록이
+        기기 사이에서 이어집니다. 마이크 소리는 저장하기 전에는 서버로 나가지 않습니다.
       </p>
       <div class="callout">
-        iPhone에서는 Safari의 공유 메뉴에서 <strong>홈 화면에 추가</strong>를 누르면
-        앱처럼 전체 화면으로 열리고, 잠금화면 조작도 안정적으로 동작합니다.
+        iPhone은 Safari 공유 메뉴의 <strong>홈 화면에 추가</strong>로 설치하면
+        전체 화면으로 열리고 잠금화면 조작이 안정적입니다.
       </div>
     </section>
 
     <section class="section" id="tour" aria-labelledby="tour-title">
       <h2 id="tour-title">앱 둘러보기</h2>
-      <p>
-        아래는 O’live 앱 그 자체입니다. 하단 탭과 트레이너의 세그먼트를 눌러 보세요.
-        지금 보고 있는 화면에 해당하는 설명만 아래에 나옵니다.
-      </p>
+      <p>하단 탭과 트레이너의 세그먼트를 눌러 보세요.</p>
 
       <div class="tour">
         <div class="tour-device">
@@ -511,30 +485,24 @@
         <div class="tour-notes" data-notes="metronome">
           <h3>메트로놈</h3>
           <ol>
-            <li><b>TAP</b>을 원하는 박자에 맞춰 여러 번 누르면 그 속도로 BPM이 맞춰집니다.</li>
-            <li>박자에서 6/8·7/8·9/8·12/8을 고르면 <b>묶음의 첫 박</b>에 중간 강세가 붙습니다.</li>
-            <li>화면을 잠가도 계속 울립니다. 잠금화면의 원형 버튼이 <b>BPM을 10씩</b> 바꿉니다.</li>
-            <li>메트로놈과 잼은 동시에 울리지 않습니다. 녹음과는 함께 쓸 수 있습니다.</li>
+            <li>6/8·7/8·9/8·12/8은 <b>묶음의 첫 박</b>에 중간 강세가 붙습니다.</li>
+            <li>메트로놈과 잼은 동시에 울리지 않습니다. 녹음과는 함께 씁니다.</li>
           </ol>
         </div>
 
         <div class="tour-notes" data-notes="tuner" hidden>
           <h3>튜너</h3>
           <ol>
-            <li>화면의 <b>현을 누르면 기준음</b>이 들립니다. 귀로 먼저 맞춰 볼 수 있습니다.</li>
-            <li><b>감도</b>는 50이 균형값입니다. 신호가 약한 일렉기타면 올리고, 팬 소리를 자꾸 잡으면 내립니다.</li>
-            <li>아래 파형과 dB로 지금 마이크가 무엇을 듣는지 확인합니다.</li>
-            <li>튜너로 들어오면 다른 소리가 자동으로 멈춥니다. 마이크를 방해하지 않기 위해서입니다.</li>
+            <li>화면의 <b>현을 누르면 기준음</b>이 들립니다.</li>
+            <li>튜너에 들어오면 다른 소리가 자동으로 멈춥니다.</li>
           </ol>
         </div>
 
         <div class="tour-notes" data-notes="scales" hidden>
           <h3>스케일</h3>
           <ol>
-            <li>진한 색이 <b>루트음</b>, 회색이 나머지 구성음입니다.</li>
-            <li>건반의 숫자는 루트로부터의 <b>도수</b>입니다.</li>
-            <li>프렛보드를 <b>확대</b>로 바꾸면 보드가 커지고 좌우로 밀어서 봅니다.</li>
-            <li>튜닝을 바꾸면 프렛보드가 그 조율에 맞춰 다시 그려집니다.</li>
+            <li>진한 색이 <b>루트음</b>, 숫자는 루트로부터의 <b>도수</b>입니다.</li>
+            <li><b>확대</b>로 바꾸면 프렛보드를 좌우로 밀어서 봅니다.</li>
           </ol>
         </div>
 
@@ -542,9 +510,7 @@
           <h3>트레이너 · 청음</h3>
           <ol>
             <li>음정·화음·음계를 초급부터 고급까지 고릅니다.</li>
-            <li>화음 선택지는 이름과 구성 도수를 같은 줄에 보여 줍니다.</li>
-            <li>아래 <b>청음 기록</b>을 펼치면 달력에서 날짜별 결과를 봅니다.</li>
-            <li>달력의 날짜를 누르면 그날의 음정·화음·음계를 <b>나눠서</b> 보여 줍니다.</li>
+            <li><b>청음 기록</b>의 달력에서 날짜를 누르면 그날 결과를 나눠서 봅니다.</li>
           </ol>
         </div>
 
@@ -552,20 +518,15 @@
           <h3>트레이너 · 리듬</h3>
           <ol>
             <li>16분음표 칸을 눌러 패턴을 <b>직접 편집</b>합니다.</li>
-            <li>당김음·밀도 슬라이더는 <b>손잡이를 두 번 탭하면 5</b>로 돌아갑니다.</li>
-            <li>새 리듬을 누르면 두 슬라이더 성향에 맞춰 패턴이 자동 생성됩니다.</li>
-            <li>6/8은 프리셋에 없고 박자 목록에서 고릅니다.</li>
+            <li>6/8은 프리셋이 아니라 박자 목록에 있습니다.</li>
           </ol>
         </div>
 
         <div class="tour-notes" data-notes="trainer:record" hidden>
           <h3>트레이너 · 트랙</h3>
           <ol>
-            <li>녹음·업로드·YouTube가 <b>한 목록</b>에 최신순으로 쌓입니다.</li>
-            <li>왼쪽에 올리브가 붙은 항목이 <b>즐겨찾기</b>라 맨 위에 옵니다. 올리브를 누르면 해제됩니다.</li>
+            <li>녹음·업로드·YouTube가 <b>한 목록</b>에 쌓이고 즐겨찾기가 맨 위에 옵니다.</li>
             <li>행을 누르면 재생기가 펼쳐집니다. <b>한 번에 하나만</b> 열립니다.</li>
-            <li>재생기에서 <b>A · B</b>를 찍으면 그 구간이 바로 반복됩니다. A·B 없이 반복만 켜면 전체를 돕니다.</li>
-            <li>속도와 조옮김 슬라이더는 <b>두 번 탭하면</b> 각각 1배와 원래 키로 돌아갑니다.</li>
             <li>위쪽 체크 아이콘으로 <b>여러 개를 골라 한 번에</b> 지웁니다.</li>
           </ol>
         </div>
@@ -573,27 +534,20 @@
         <div class="tour-notes" data-notes="jam" hidden>
           <h3>잼 세션</h3>
           <ol>
-            <li>코드 팔레트에서 코드를 누르면 미리 듣고, 진행에 추가됩니다.</li>
-            <li>진행에 넣은 <b>코드 이름을 누르면 3↔7화음</b>이 바뀝니다.</li>
-            <li>같은 코드 이름을 <b>길게 누르면 삭제</b>됩니다.</li>
-            <li>각 코드의 <b>−/+</b>로 마디 길이를 조절합니다.</li>
+            <li>코드 팔레트에서 누르면 미리 듣고 진행에 추가됩니다.</li>
+            <li>진행에 넣은 코드는 <b>길게 누르면 삭제</b>됩니다.</li>
           </ol>
         </div>
       </div>
 
       <div class="callout">
-        위 화면은 실제 앱이고, 목록의 <strong>피아노 메이저 스케일</strong>과
-        <strong>Stand By Me 백킹 트랙</strong>은 도움말용 예시입니다.
-        여기서 바꾼 것은 저장되지 않습니다. 튜너를 켜면 마이크 권한을 물어봅니다.
+        목록의 두 항목은 도움말용 예시입니다. 여기서 바꾼 것은 저장되지 않습니다.
       </div>
     </section>
 
     <section class="section" id="gestures" aria-labelledby="gestures-title">
       <h2 id="gestures-title">직접 만져 보기</h2>
-      <p>
-        위 화면을 따라갑니다. 지금 보고 있는 <b id="gestureWhere">메트로놈</b> 화면에
-        숨어 있는 동작만 나옵니다. 앱과 똑같이 동작하니 그대로 눌러 보세요.
-      </p>
+      <p>지금 보고 있는 <b id="gestureWhere">메트로놈</b> 화면의 숨은 동작입니다. 눌러 보세요.</p>
 
       <div class="demo" data-demo="chord" data-screen="jam" hidden>
         <p class="demo-label">잼 세션 · 진행 카드 <span class="zoom-badge">확대</span></p>
@@ -612,7 +566,7 @@
             <button class="zoom-undo" type="button" hidden>마디 되돌리기</button>
           </div>
         </div>
-        <p class="demo-hint">코드 이름을 탭해 보세요. 카드의 빈 곳을 0.5초 꾹 누르면 지워집니다.</p>
+        <p class="demo-hint">코드 이름을 탭해 보세요. 빈 곳을 0.5초 꾹 누르면 지워집니다.</p>
         <p class="demo-state" role="status">지금은 3화음 <b>C</b>, 4박입니다.</p>
       </div>
 
@@ -632,10 +586,7 @@
           </div>
         </div>
         <p class="demo-hint">−와 +를 꾹 눌러 보세요. 숫자를 두 번 탭해도 됩니다.</p>
-        <p class="demo-state" role="status">
-          −/+는 한 번에 1씩, 숫자는 두 번 탭하면 기본값 <b>90</b>입니다.
-          TAP은 누른 간격의 평균으로 맞춥니다.
-        </p>
+        <p class="demo-state" role="status">−/+는 1씩, 꾹 누르면 10씩. 숫자를 두 번 탭하면 <b>90</b>.</p>
       </div>
 
       <div class="demo" data-demo="sens" data-screen="tuner" hidden>
@@ -649,10 +600,7 @@
           </label>
         </div>
         <p class="demo-hint">손잡이를 옮긴 다음, 손잡이를 두 번 탭해 보세요.</p>
-        <p class="demo-state" role="status">
-          두 번 탭하면 기본값 <b>50</b>으로 돌아갑니다.
-          주변이 시끄럽거나 신호가 약하면 올리고, 팬·에어컨 소리를 자꾸 잡으면 내립니다.
-        </p>
+        <p class="demo-state" role="status">두 번 탭하면 기본값 <b>50</b>. 시끄러우면 올리고, 잡음을 자꾸 잡으면 내립니다.</p>
       </div>
 
       <div class="demo" data-demo="rhythm" data-screen="trainer:rhythm" hidden>
@@ -672,10 +620,7 @@
           </label>
         </div>
         <p class="demo-hint">손잡이를 두 번 탭해 보세요.</p>
-        <p class="demo-state" role="status">
-          두 번 탭하면 둘 다 기본값 <b>5</b>로 돌아갑니다.
-          당김음을 올리면 박 사이가 늘고, 밀도를 올리면 음이 촘촘해집니다.
-        </p>
+        <p class="demo-state" role="status">두 번 탭하면 둘 다 기본값 <b>5</b>로 돌아갑니다.</p>
       </div>
 
       <div class="demo" data-demo="wave" data-screen="trainer:record" hidden>
@@ -691,7 +636,7 @@
           </div>
         </div>
         <p class="demo-hint">파형을 탭하거나 좌우로 끌어 보세요.</p>
-        <p class="demo-state" role="status">누른 자리부터 다시 재생됩니다. 지나온 구간은 올리브색으로 칠해집니다.</p>
+        <p class="demo-state" role="status">누른 자리부터 다시 재생됩니다.</p>
       </div>
 
       <div class="demo" data-demo="loop" data-screen="trainer:record" hidden>
@@ -721,9 +666,8 @@
         </div>
         <p class="demo-hint">A를 누르고, 트랙을 옮긴 다음 B를 눌러 보세요.</p>
         <p class="demo-note">
-          두 지점이 정해지면 <strong>바로 반복이 시작</strong>됩니다. 순환 화살표로 끄고 켜며,
-          A와 B를 지정하지 않고 반복만 켜면 <strong>처음부터 끝까지</strong> 돕니다.
-          X를 누르면 A·B가 지워집니다. 실제 앱에서는 파형을 탭하거나 끌어서 위치를 옮깁니다.
+          두 지점이 정해지면 <strong>바로 반복</strong>됩니다. A·B 없이 반복만 켜면
+          <strong>처음부터 끝까지</strong> 돕니다. X는 A·B를 지웁니다.
         </p>
       </div>
 
@@ -744,10 +688,7 @@
           </label>
         </div>
         <p class="demo-hint">손잡이를 옮긴 다음, 손잡이를 두 번 탭해 보세요.</p>
-        <p class="demo-note">
-          두 번 탭하면 기본값으로 돌아갑니다. 속도는 1배, 조옮김은 원래 키입니다.
-          왼쪽이 플랫, 오른쪽이 샵입니다.
-        </p>
+        <p class="demo-note">두 번 탭하면 속도는 1배, 조옮김은 원래 키로. 왼쪽이 플랫, 오른쪽이 샵입니다.</p>
       </div>
 
       <div class="demo" data-demo="favorite" data-screen="trainer:record" hidden>
@@ -770,129 +711,21 @@
             <button class="row-sheet-item danger" type="button" disabled>삭제</button>
           </div>
         </div>
-        <p class="demo-hint">왼쪽 올리브를 눌러 해제하고, •••에서 다시 넣어 보세요.</p>
-        <p class="demo-state" role="status">
-          올리브가 붙은 항목이 즐겨찾기이고 목록 맨 위에 옵니다.
-          여기서는 즐겨찾기만 눌립니다.
-        </p>
+        <p class="demo-hint">올리브를 눌러 해제하고, •••에서 다시 넣어 보세요.</p>
+        <p class="demo-state" role="status">올리브가 붙은 항목이 즐겨찾기라 맨 위에 옵니다.</p>
       </div>
 
       <div class="callout" data-screen="trainer:record" hidden>
-        데스크톱에서는 오디오 파일을 <strong>목록 위로 끌어다 놓기만 해도</strong> 올라갑니다.
-        휴대폰에서는 업로드 버튼을 쓰세요.
+        데스크톱에서는 오디오 파일을 <strong>목록 위에 끌어다 놓아</strong> 올릴 수 있습니다.
       </div>
 
-      <p class="demo-empty" hidden>
-        이 화면에는 숨어 있는 동작이 없습니다. 보이는 대로 누르면 됩니다.
-      </p>
+      <p class="demo-empty" hidden>이 화면에는 숨은 동작이 없습니다.</p>
     </section>
 
-    <section class="section" id="metronome" aria-labelledby="metronome-title">
-      <h2 id="metronome-title">메트로놈</h2>
-      <p>
-        30–260 BPM. <strong>TAP</strong>을 원하는 박자에 맞춰 여러 번 누르면 그 속도로 맞춰집니다.
-        박자는 2/4부터 12/8까지 고를 수 있고, 6/8·7/8·9/8·12/8 같은 겹박자는
-        묶음의 첫 박에 중간 강세가 붙습니다.
-      </p>
-      <p>
-        세분화는 4분음표부터 셔플, 16분, 점8분+16분까지 여덟 가지입니다.
-        첫박 강세는 따로 끄고 켤 수 있습니다.
-      </p>
-      <div class="callout">
-        메트로놈과 잼 세션은 동시에 울리지 않습니다. 하나를 켜면 다른 하나가 멈춥니다.
-        <strong>녹음과는 함께</strong> 쓸 수 있습니다.
-      </div>
-    </section>
-
-    <section class="section" id="tuner" aria-labelledby="tuner-title">
-      <h2 id="tuner-title">튜너</h2>
-      <p>
-        기타 표준·Drop D, 4현 베이스, 우쿨렐레, 만돌린을 지원합니다.
-        화면의 현을 누르면 기준음이 들립니다.
-      </p>
-      <p>
-        <strong>감도 슬라이더</strong>는 0–100이고 50이 균형값입니다. 주변이 시끄럽거나
-        일렉기타처럼 신호가 약할 때 올리고, 팬·에어컨 소리를 자꾸 잡으면 내립니다.
-        아래의 입력 파형과 dB 표시로 지금 마이크가 무엇을 듣고 있는지 확인할 수 있습니다.
-      </p>
-      <div class="callout">
-        이어폰을 연결하면 마이크 경로가 이어폰 쪽으로 바뀔 수 있습니다.
-        소리가 잡히지 않으면 이어폰을 빼고 다시 시도해 보세요.
-      </div>
-    </section>
-
-    <section class="section" id="scales" aria-labelledby="scales-title">
-      <h2 id="scales-title">스케일</h2>
-      <p>
-        12개 루트와 메이저·마이너, 펜타토닉, 블루스, 교회선법, 하모닉·멜로딕 마이너를
-        건반과 프렛보드에서 함께 봅니다. 진한 색이 루트음, 회색이 나머지 구성음이고
-        건반의 숫자는 루트로부터의 도수입니다.
-      </p>
-      <p>
-        프렛보드는 <strong>맞춤</strong>과 <strong>확대</strong>를 고를 수 있습니다.
-        확대하면 보드가 커지고 좌우로 밀어서 봅니다.
-      </p>
-    </section>
-
-    <section class="section" id="trainer" aria-labelledby="trainer-title">
-      <h2 id="trainer-title">트레이너</h2>
-      <p>트레이너 안에는 <strong>청음 · 리듬 · 트랙</strong> 세 가지가 있습니다.</p>
-
-      <h3>청음</h3>
-      <p>
-        음정·화음·음계를 초급부터 고급까지 연습합니다. 정답률과 연속 정답이 함께 기록되고,
-        아래의 <strong>청음 기록</strong>을 펼치면 달력에서 날짜별 결과를 볼 수 있습니다.
-        날짜를 누르면 음정·화음·음계를 나눠서 보여 줍니다.
-      </p>
-
-      <h3>리듬</h3>
-      <p>
-        16분음표 단위로 패턴을 직접 편집하고 반복해서 들어 봅니다. 칸을 눌러 켜고 끕니다.
-        당김음과 밀도 슬라이더로 자동 생성의 성격을 바꿀 수 있고,
-        8비트·기본 락·포크 스트럼·셔플·보사노바·레게·왈츠 프리셋이 있습니다.
-      </p>
-
-      <h3>트랙</h3>
-      <p>
-        직접 녹음하거나, 가진 오디오 파일을 올리거나, YouTube에서 곡을 찾아
-        연습 링크로 저장합니다. 셋 다 같은 <strong>목록</strong>에 최신순으로 쌓이고,
-        즐겨찾기한 항목이 맨 위에 옵니다. 한 번에 하나만 펼쳐집니다.
-      </p>
-      <p>
-        속도는 0.5×–1.5×이고 음높이는 그대로 유지됩니다. 조옮김은 −12에서 +12 반음입니다.
-        두 값과 A/B 구간은 계정에 저장돼 다음에 열어도 그대로입니다.
-      </p>
-      <p>
-        목록 위 <strong>체크 아이콘</strong>을 누르면 선택 모드가 되어 여러 항목을 한 번에 지울 수 있습니다.
-        목록은 녹음·업로드·링크를 합쳐 50개까지이고, 45개를 넘으면 개수 표시 색이 바뀝니다.
-      </p>
-      <div class="callout">
-        YouTube 링크는 공식 플레이어로 재생합니다. 소유자가 외부 재생을 막아 둔 영상은
-        O’live 안에서 열 수 없어 추가할 때 미리 알려 드립니다. 음악 레이블이 올린 공식 영상은
-        막혀 있는 경우가 많고, 커버·연주·레슨 영상은 대체로 재생됩니다.
-        YouTube 영상은 파형과 조옮김을 쓸 수 없습니다. 두 기능이 필요하면 파일을 직접 올려 주세요.
-      </div>
-    </section>
-
-    <section class="section" id="jam" aria-labelledby="jam-title">
-      <h2 id="jam-title">잼 세션</h2>
-      <p>
-        조성과 BPM을 고르고 코드 팔레트에서 진행을 만듭니다. 팝 스탠다드, 감성 발라드,
-        머니코드, 왕도 진행, 재즈 2-5-1, 캐논, 12마디 블루스 같은 프리셋으로 시작해도 됩니다.
-      </p>
-      <p>
-        진행에 넣은 <strong>코드 이름을 누르면 3화음과 7화음이 바뀌고, 길게 누르면 삭제</strong>됩니다.
-        각 코드의 <strong>−/+</strong>로 마디 길이를 조절합니다.
-        반주 스타일은 Rock·Pop·Ballad·Funk·Shuffle이고 드럼·베이스·코드·메트로놈 트랙을 따로 끌 수 있습니다.
-      </p>
-    </section>
-
-    <section class="section" id="lockscreen" aria-labelledby="lock-title">
+    <section class="section" id="lockscreen" aria-labelledby="lock-title"
+             data-screen="metronome jam trainer:record" hidden>
       <h2 id="lock-title">잠금화면에서 쓰기</h2>
-      <p>
-        메트로놈·잼 세션·저장한 녹음은 화면을 잠가도 계속 들립니다.
-        잠금화면에서 재생과 일시정지를 할 수 있는데, <strong>원형 버튼의 뜻이 서로 다릅니다.</strong>
-      </p>
+      <p>화면을 잠가도 계속 들립니다. 잠금화면에서 재생과 일시정지를 할 수 있습니다.</p>
 
       <div class="mock-row">
         <figure class="mock mock-phone">
@@ -910,9 +743,9 @@
               </div>
               <div class="mock-np-bar" aria-hidden="true"><span></span></div>
               <div class="mock-np-controls">
-                <span class="mock-skip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.04 4.41A8.6 8.6 0 1 1 7.96 4.41" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M5.31 5.82 6.83 2.29 9.09 6.53Z" fill="#fff"/></svg><b>10</b></span>
+                <span class="mock-skip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.93 4.95A8.6 8.6 0 1 1 12.3 3.41" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M7.7 3.41 12.95 0.56 12.95 6.26Z" fill="#fff"/></svg><b>10</b></span>
                 <span class="mock-pause" aria-hidden="true"><i></i><i></i></span>
-                <span class="mock-skip fwd" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.04 4.41A8.6 8.6 0 1 1 7.96 4.41" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M5.31 5.82 6.83 2.29 9.09 6.53Z" fill="#fff"/></svg><b>10</b></span>
+                <span class="mock-skip fwd" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.93 4.95A8.6 8.6 0 1 1 12.3 3.41" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M7.7 3.41 12.95 0.56 12.95 6.26Z" fill="#fff"/></svg><b>10</b></span>
               </div>
             </div>
           </div>
@@ -925,18 +758,16 @@
             <p class="mock-watch-title">메트로놈 · 90 BPM</p>
             <p class="mock-watch-sub">음악 연습</p>
             <div class="mock-watch-controls">
-              <span class="mock-skip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.04 4.41A8.6 8.6 0 1 1 7.96 4.41" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M5.31 5.82 6.83 2.29 9.09 6.53Z" fill="#fff"/></svg><b>10</b></span>
+              <span class="mock-skip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.93 4.95A8.6 8.6 0 1 1 12.3 3.41" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M7.7 3.41 12.95 0.56 12.95 6.26Z" fill="#fff"/></svg><b>10</b></span>
               <span class="mock-pause" aria-hidden="true"><i></i><i></i></span>
-              <span class="mock-skip fwd" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.04 4.41A8.6 8.6 0 1 1 7.96 4.41" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M5.31 5.82 6.83 2.29 9.09 6.53Z" fill="#fff"/></svg><b>10</b></span>
+              <span class="mock-skip fwd" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.93 4.95A8.6 8.6 0 1 1 12.3 3.41" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M7.7 3.41 12.95 0.56 12.95 6.26Z" fill="#fff"/></svg><b>10</b></span>
             </div>
           </div>
           <figcaption>Apple Watch</figcaption>
         </figure>
       </div>
 
-      <p class="demo-note" style="text-align:center">
-        잠금화면 조작은 Apple Watch에서도 그대로 됩니다. 손목에서 BPM을 바꿀 수 있습니다.
-      </p>
+      <p class="demo-note" style="text-align:center">Apple Watch에서도 그대로 됩니다.</p>
 
       <div class="demo">
         <p class="demo-label">같은 버튼, 다른 뜻</p>
@@ -952,18 +783,12 @@
             <span class="lock-meaning">저장한 녹음 → <b>10초씩 이동</b></span>
           </div>
         </div>
-        <p class="demo-note">
-          모양이 같아 헷갈리기 쉽습니다. 지금 무엇을 재생하고 있는지에 따라 뜻이 바뀝니다.
-        </p>
+        <p class="demo-note">지금 무엇을 재생하고 있는지에 따라 뜻이 바뀝니다.</p>
       </div>
 
-      <p>
-        잠금화면에서 메트로놈이나 잼을 다시 재생하면 중간 박이 아니라
-        <strong>진행의 첫 박부터</strong> 시작합니다.
-      </p>
+      <p>메트로놈과 잼을 다시 재생하면 <strong>진행의 첫 박부터</strong> 시작합니다.</p>
       <div class="callout">
-        YouTube 연습 링크는 잠금화면에서 재생되지 않습니다.
-        YouTube 정책이 화면에 보이지 않는 플레이어의 재생을 금지하기 때문입니다.
+        YouTube 연습 링크는 잠금화면에서 재생되지 않습니다. YouTube 정책 때문입니다.
       </div>
     </section>
 
@@ -1116,13 +941,13 @@
       if(!key || key===current) return;
       current=key;
       notes.forEach(n=>{ n.hidden=n.dataset.notes!==key; });
-      let shown=0;
+      let demos=0;
       screened.forEach(el=>{
         const match=el.dataset.screen.split(' ').indexOf(key)>=0;
         el.hidden=!match;
-        if(match) shown++;
+        if(match && el.classList.contains('demo')) demos++;
       });
-      if(empty) empty.hidden=shown>0;
+      if(empty) empty.hidden=demos>0;
       if(where) where.textContent=labels[key]||key;
       if(gestureWhere) gestureWhere.textContent=labels[key]||key;
     }
