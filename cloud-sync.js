@@ -875,8 +875,8 @@
   async function searchYouTube(query){
     if(guideMode){
       return {results:[{
-        videoId:'ibMxYyK75WI',title:'Stand By Me - Backing Track Chords and Tabs',
-        channelTitle:'AgaZagA',thumbnail:'https://i.ytimg.com/vi/ibMxYyK75WI/mqdefault.jpg',
+        videoId:'pcowzkuulqE',title:'[Official Audio] 송수미 (Sumi Song) - 밤바람 (Night Breeze)',
+        channelTitle:'송수미',thumbnail:'https://i.ytimg.com/vi/pcowzkuulqE/mqdefault.jpg',
       }],remaining:null};
     }
     await ensureRecordingAccess();
@@ -990,7 +990,7 @@
   }
   function guideRecordings(){
     return [{
-      id:'guide-recording-1',title:'피아노 메이저 스케일',
+      id:'guide-recording-1',title:'C Major Scale',
       object_path:'guide/scale.wav',duration_ms:8000,byte_size:352844,
       mime_type:'audio/wav',source_type:'recording',
       waveform:Array.from({length:80},(_,i)=>18+Math.round(Math.abs(Math.sin(i/3.2))*70)),
@@ -1002,8 +1002,8 @@
   }
   function guideLinks(){
     return [{
-      id:'guide-link-1',provider:'youtube',video_id:'ibMxYyK75WI',
-      title:'Stand By Me 백킹 트랙',duration_ms:202000,last_position_ms:0,
+      id:'guide-link-1',provider:'youtube',video_id:'pcowzkuulqE',
+      title:'송수미 - 밤바람',duration_ms:204000,last_position_ms:0,
       loop_a_ms:null,loop_b_ms:null,loop_enabled:false,playback_rate:1,pinned:true,
       created_at:new Date(Date.now()-864e5).toISOString(),
     }];

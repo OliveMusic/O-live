@@ -243,9 +243,12 @@ assert.match(guide,/#trainerSeg \.seg-btn\.active/,'트레이너는 세그먼트
 assert.match(cloud,/const guideMode=\/\[\?&\]guide=1/);
 assert.match(cloud,/if\(guideMode\) return guideRecordings\(\)/);
 assert.match(cloud,/if\(guideMode\) return guideLinks\(\)/);
-assert.match(cloud,/title:'피아노 메이저 스케일'/);
-assert.match(cloud,/title:'Stand By Me 백킹 트랙'/);
-assert.match(cloud,/video_id:'ibMxYyK75WI'/);
+assert.match(cloud,/title:'C Major Scale'/);
+assert.match(cloud,/title:'송수미 - 밤바람'/);
+assert.match(cloud,/video_id:'pcowzkuulqE'/);
+/* 예시 녹음은 C4에서 시작하는 장음계다. 제목과 어긋나면 안 된다. */
+assert.match(cloud,/const steps=\[0,2,4,5,7,9,11,12\]/);
+assert.match(cloud,/261\.63\*Math\.pow\(2,semitone\/12\)/);
 /* 잠금화면은 iPhone과 Apple Watch 목업으로 보여 준다. */
 assert.match(guide,/class="mock mock-phone"/);
 assert.match(guide,/class="mock mock-watch"/);
@@ -310,7 +313,14 @@ assert.match(guide,/pin\.textContent=on\?'즐겨찾기 해제':'즐겨찾기'/,'
 assert.match(guide,/2\.25\+value\/100\*16\.75/);
 /* 잠금화면 10초 버튼은 iOS와 같은 모양이다. 원을 그리고 좌우로 뒤집어 쓴다. */
 assert.match(guide,/\.mock-skip\.fwd svg\{ transform:scaleX\(-1\); \}/);
-assert.match(guide,/A8\.6 8\.6 0 1 1/,'위가 트인 원');
+assert.match(guide,/\.lock-btn\.fwd svg\{ transform:scaleX\(-1\); \}/);
+/* 목업과 '같은 버튼, 다른 뜻'이 같은 그림을 쓴다. 하나만 고치면 어긋난다. */
+assert.equal((guide.match(/M18\.08 5\.92A8\.6 8\.6 0 1 1 12 3\.4/g)||[]).length,8,
+  'iPhone 2 + Watch 2 + 비교표 4, 여덟 개가 같은 경로다');
+assert.doesNotMatch(guide,/<span class="lock-btn" aria-hidden="true">10<\/span>/,
+  '동그라미에 숫자만 넣지 않는다');
+/* 제목이 제목으로 보여야 한다. info.css의 눈썹 라벨 크기를 도움말에서 덮는다. */
+assert.match(guide,/\.section > h2\{[\s\S]{0,160}?font-size:1\.375rem/);
 /* 두 번 탭 판정은 앱과 같은 값이어야 헷갈리지 않는다. */
 assert.match(guide,/now-lastTapAt<340 && Math\.abs\(event\.clientX-lastTapX\)<28/);
 assert.match(guide,/BPM을 10씩/);
