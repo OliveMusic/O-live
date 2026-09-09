@@ -185,7 +185,7 @@ assert.match(index,/recordAnswer\(key,correct,mode\)/);
 
 console.log('public pages tests passed');
 
-/* 사용법 문서가 실제 동작과 어긋나면 없느니만 못하다. 숨은 동작 설명을 고정한다. */
+/* 도움말 문서가 실제 동작과 어긋나면 없느니만 못하다. 숨은 동작 설명을 고정한다. */
 assert.match(guide,/손잡이를 두 번 탭/,'슬라이더 초기화 안내');
 assert.match(guide,/길게 누르면 삭제/,'잼 코드 삭제 안내');
 assert.match(guide,/누르면 해제/,'즐겨찾기 해제 안내');
@@ -195,4 +195,9 @@ assert.match(guide,/10초씩 이동/);
 assert.match(guide,/잠금화면에서 재생되지 않습니다/,'YouTube 잠금화면 제약');
 assert.match(worker,/'\.\/guide\.html'/,'오프라인에서도 열린다');
 assert.match(sitemap,/guide\.html/);
+/* 앱에서는 도움말이 나머지 링크 위 줄에 홀로 가운데 온다. */
+assert.match(indexHtml,/<a class="app-help" href="guide\.html">도움말<\/a>/);
+assert.match(indexHtml,/\.app-footer \.app-help\{ flex:0 0 100%; justify-content:center; \}/);
+assert.match(guide,/<h1>O’live 도움말<\/h1>/);
+assert.doesNotMatch(guide,/사용법/);
 console.log('guide page checks passed');
