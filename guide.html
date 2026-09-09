@@ -203,6 +203,89 @@
   }
   .row.is-plain .row-favorite{ visibility:hidden; }
 
+  /* ── 잠금화면 목업 ──
+     iOS 화면이므로 O'live 팔레트가 아니라 iOS의 어두운 배경과 흰 글자를 쓴다.
+     스크린샷이 아니라 그린 것이다. */
+  .mock-row{
+    display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:center;
+    gap:18px; margin:16px 0 0;
+  }
+  .mock figcaption{
+    margin-top:9px; color:var(--ink-3); font-size:.6875rem; text-align:center;
+  }
+  .mock{ margin:0; }
+  .ios{
+    color:#fff; background:linear-gradient(170deg,#2c3340,#14161b 62%,#0b0c0f);
+    font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  }
+  .mock-phone .ios{
+    width:196px; height:392px; padding:26px 14px 16px; border-radius:26px;
+    border:1px solid var(--line); box-sizing:border-box;
+    display:flex; flex-direction:column;
+  }
+  .mock-lock-icon{ text-align:center; font-size:.75rem; opacity:.65; }
+  .mock-time{
+    margin:2px 0 0; text-align:center; font-size:2.75rem; font-weight:250;
+    letter-spacing:-.02em; line-height:1.05;
+  }
+  .mock-date{ margin:1px 0 0; text-align:center; font-size:.6875rem; opacity:.72; }
+  .mock-np{
+    margin-top:auto; padding:11px 11px 12px; border-radius:15px;
+    background:rgba(255,255,255,.13);
+  }
+  .mock-np-head{ display:flex; align-items:center; gap:8px; }
+  .mock-np-art{
+    position:relative; flex:0 0 auto; width:30px; height:30px; border-radius:7px;
+    background:#22221f; display:grid; place-items:center;
+  }
+  .mock-np-art::before{
+    content:''; width:15px; height:12px; border-radius:50%;
+    background:#97a982; transform:rotate(-11deg);
+  }
+  .mock-np-copy{ min-width:0; display:grid; gap:1px; }
+  .mock-np-copy strong{ font-size:.6875rem; font-weight:600; }
+  .mock-np-copy small{ font-size:.625rem; opacity:.66; }
+  .mock-np-bar{
+    height:3px; margin:10px 0 9px; border-radius:3px; background:rgba(255,255,255,.24);
+  }
+  .mock-np-bar span{ display:block; width:38%; height:100%; border-radius:3px; background:#fff; }
+  .mock-np-controls{
+    display:flex; align-items:center; justify-content:center; gap:22px;
+  }
+  .mock-skip{ position:relative; width:26px; height:26px; }
+  .mock-skip svg{ width:26px; height:26px; fill:none; stroke:#fff; stroke-width:1.5; }
+  .mock-skip b{
+    position:absolute; inset:0; display:grid; place-items:center;
+    font-size:.5rem; font-weight:600;
+  }
+  .mock-pause{
+    width:26px; height:26px; display:grid; grid-template-columns:repeat(2,4px);
+    gap:5px; justify-content:center; align-content:center;
+  }
+  .mock-pause i{ display:block; width:4px; height:17px; border-radius:1px; background:#fff; }
+  /* Apple Watch */
+  .mock-watch .ios{
+    width:118px; height:142px; padding:13px 10px 11px; border-radius:28px;
+    border:1px solid var(--line); box-sizing:border-box;
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .mock-watch-app{
+    display:flex; align-items:center; gap:4px; font-size:.5625rem; color:#97a982;
+  }
+  .mock-watch-app::before{
+    content:''; width:9px; height:7px; border-radius:50%;
+    background:#97a982; transform:rotate(-11deg);
+  }
+  .mock-watch-title{ margin:0; font-size:.625rem; font-weight:600; line-height:1.35; }
+  .mock-watch-sub{ margin:0; font-size:.5625rem; opacity:.6; }
+  .mock-watch-controls{
+    margin-top:auto; display:flex; align-items:center; justify-content:space-between;
+  }
+  .mock-watch-controls .mock-skip{ width:21px; height:21px; }
+  .mock-watch-controls .mock-skip svg{ width:21px; height:21px; }
+  .mock-watch-controls .mock-pause{ width:21px; grid-template-columns:repeat(2,3px); gap:4px; }
+  .mock-watch-controls .mock-pause i{ width:3px; height:13px; }
+
   /* 잠금화면 버튼 비교 */
   .lock-row{
     display:grid; grid-template-columns:auto auto minmax(0,1fr); align-items:center; gap:9px;
@@ -216,15 +299,103 @@
   .lock-meaning{ color:var(--ink-2); font-size:.8125rem; }
   .lock-meaning b{ color:var(--signal); }
 
-  /* 제스처 요약 */
-  .gesture{ display:grid; gap:11px; margin:12px 0 0; padding:0; list-style:none; }
-  .gesture li{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:11px; align-items:start; }
-  .gesture .tag{
-    min-width:74px; padding:4px 9px; border-radius:999px; text-align:center;
+  /* ── 확대해서 만져 보기 ──
+     숨은 동작은 글로 적으면 잘 안 읽힌다. 앱의 그 부분만 떼어 크게 그리고,
+     눌렀을 때 무엇이 바뀌는지 바로 아래 한 줄로 말해 준다. */
+  .zoom-badge{
+    display:inline-block; margin-left:6px; padding:2px 7px; border-radius:999px;
     background:var(--signal-soft); color:var(--signal);
-    font-size:.6875rem; font-weight:600; line-height:1.5;
+    font-size:.5938rem; font-weight:600; letter-spacing:.02em;
   }
-  .gesture p{ margin:2px 0 0; }
+  .zoom-frame{ padding:18px 12px; }
+  /* 폭을 컨테이너에 맞춰 둬야 안쪽의 파형이 내용 크기로 쪼그라들지 않는다. */
+  .zoom-stage{ display:grid; justify-items:center; align-items:center; gap:10px; width:100%; }
+  .demo-state{
+    margin:10px 0 0; padding:9px 11px; border-radius:9px; background:var(--panel);
+    color:var(--ink-2); font-size:.75rem; line-height:1.55;
+  }
+  .demo-state b{ color:var(--signal); font-weight:600; }
+  .zoom-undo{
+    padding:7px 13px; border:1px solid var(--line); border-radius:999px;
+    background:var(--key); color:var(--ink-2); font:600 .6875rem/1 inherit; cursor:pointer;
+  }
+
+  /* 잼 세션 진행 카드 — index.html의 .prog-bar를 약 1.6배로 */
+  .prog-bar{
+    position:relative; min-width:134px; padding:16px 15px 15px;
+    background:var(--body-hi); border:1px solid var(--line-soft); border-radius:var(--r-lg);
+    display:flex; flex-direction:column; align-items:center; gap:2px; text-align:center;
+    touch-action:manipulation; user-select:none; -webkit-user-select:none;
+  }
+  .prog-bar .bar-no{ font-size:.75rem; color:var(--ink-3); font-weight:500; letter-spacing:.07em; }
+  .prog-bar .rn{ font-size:.8438rem; color:var(--ink-3); font-weight:500; letter-spacing:.05em; }
+  .prog-bar .nm{
+    appearance:none; border:0; background:transparent; color:inherit; font-family:inherit;
+    font-size:1.875rem; font-weight:300; letter-spacing:-.045em;
+    margin:3px 0 8px; padding:2px 7px; border-radius:8px; cursor:pointer;
+    transition:background .1s ease;
+  }
+  .prog-bar .nm:active{ background:var(--signal-soft); }
+  .prog-bar .beats{ display:flex; align-items:center; gap:7px; }
+  .prog-bar .bv{
+    min-width:32px; color:var(--ink-3); font-size:.8438rem; font-variant-numeric:tabular-nums;
+  }
+  .prog-bar .stp{
+    width:30px; height:30px; padding:0; line-height:1; cursor:pointer; font-family:inherit;
+    background:var(--key); border:1px solid var(--line); border-radius:50%;
+    color:var(--ink-2); font-size:1.0625rem;
+  }
+  .prog-bar .stp:active{ background:var(--key-press); }
+  /* 0.5초를 채우면 지워진다. 앱과 같은 시간을 눈으로 보여 준다. */
+  .prog-bar::after{
+    content:''; position:absolute; left:0; bottom:0; width:0; height:3px;
+    border-radius:0 0 var(--r-lg) var(--r-lg); background:var(--signal);
+  }
+  .prog-bar.holding::after{ width:100%; transition:width .5s linear; }
+  .prog-bar[hidden]{ display:none; }
+
+  /* 녹음본 파형 — index.html의 .record-waveform과 같은 구조 */
+  .wave{
+    --wave-progress:0%;
+    position:relative; width:min(300px,100%); height:74px; border-radius:8px;
+    cursor:pointer; touch-action:pan-y; user-select:none; -webkit-user-select:none;
+  }
+  .wave.scrubbing{ background:var(--key-press); cursor:grabbing; }
+  .wave svg{ position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .wave svg path{
+    fill:none; stroke:var(--ink-3); stroke-width:1.2; stroke-linecap:round;
+    vector-effect:non-scaling-stroke;
+  }
+  .wave svg.played{ clip-path:inset(0 calc(100% - var(--wave-progress)) 0 0); }
+  .wave svg.played path{ stroke:var(--signal); }
+  .wave-head{
+    position:absolute; z-index:2; top:-5px; bottom:-5px; left:var(--wave-progress);
+    width:2px; margin-left:-1px; border-radius:2px; background:var(--signal);
+  }
+  .wave-times{
+    width:min(300px,100%); display:flex; justify-content:space-between;
+    color:var(--ink-3); font-size:.6875rem; font-variant-numeric:tabular-nums;
+  }
+
+  /* 메트로놈 TAP — index.html의 .metro-left 값 그대로 */
+  .tap-stage{ grid-auto-flow:column; justify-content:center; gap:22px; }
+  .tap-bpm{ text-align:center; }
+  .tap-bpm .num{
+    font-size:3.5rem; font-weight:200; line-height:.92; letter-spacing:-.05em;
+    color:var(--ink); font-variant-numeric:tabular-nums;
+  }
+  .tap-bpm .lbl{
+    margin-top:2px; color:var(--ink-3); font-size:.5312rem; font-weight:500;
+    letter-spacing:.2182em; text-transform:uppercase;
+  }
+  .tap-key{
+    min-width:104px; height:52px; padding:0 18px; cursor:pointer; font-family:inherit;
+    background:var(--key); color:var(--ink); border:1px solid var(--line);
+    border-bottom-width:2px; border-radius:var(--r);
+    font-size:.8125rem; font-weight:500; letter-spacing:.09em;
+  }
+  .tap-key:active{ background:var(--key-press); }
+  .tap-key.live{ background:var(--signal); border-color:var(--signal); color:#fff; }
 </style>
 </head>
 <body>
@@ -243,8 +414,8 @@
     <h1>O’live 도움말</h1>
     <p class="lead">
       화면에 다 적지 않은 동작이 몇 가지 있습니다.
-      아래에 <strong>O’live 앱을 그대로 띄워 두었습니다.</strong> 하단 탭을 눌러 화면을 옮기면
-      그 화면에 대한 설명이 따라 바뀝니다. 눌러 보는 대로 실제로 동작합니다.
+      아래에 <strong>O’live 앱을 그대로 띄워 두었습니다.</strong> 예시 데이터로 로그인된 상태라
+      트랙 목록과 청음 기록까지 그대로 보입니다. 화면을 옮기면 <strong>그 화면에 필요한 설명만</strong> 따라 바뀝니다.
     </p>
 
     <nav class="guide-toc" aria-labelledby="toc-title">
@@ -282,13 +453,13 @@
     <section class="section" id="tour" aria-labelledby="tour-title">
       <h2 id="tour-title">앱 둘러보기</h2>
       <p>
-        아래는 O’live 앱 그 자체입니다. 하단 탭을 눌러 화면을 옮기면
-        설명도 따라 바뀝니다. 눌러 보는 대로 실제로 동작합니다.
+        아래는 O’live 앱 그 자체입니다. 하단 탭과 트레이너의 세그먼트를 눌러 보세요.
+        지금 보고 있는 화면에 해당하는 설명만 아래에 나옵니다.
       </p>
 
       <div class="tour">
         <div class="tour-device">
-          <iframe class="tour-frame" id="tourFrame" src="index.html"
+          <iframe class="tour-frame" id="tourFrame" src="index.html?guide=1"
             title="O’live 앱 미리보기" loading="lazy"></iframe>
         </div>
         <p class="tour-live">지금 보고 있는 화면: <strong id="tourWhere">메트로놈</strong></p>
@@ -298,8 +469,8 @@
           <ol>
             <li><b>TAP</b>을 원하는 박자에 맞춰 여러 번 누르면 그 속도로 BPM이 맞춰집니다.</li>
             <li>박자에서 6/8·7/8·9/8·12/8을 고르면 <b>묶음의 첫 박</b>에 중간 강세가 붙습니다.</li>
-            <li>세분화는 4분음표부터 셔플·16분·점8분+16분까지 여덟 가지입니다.</li>
-            <li>화면을 잠가도 계속 울리고, 잠금화면의 <b>앞뒤 원형 버튼이 BPM을 10씩</b> 바꿉니다.</li>
+            <li>화면을 잠가도 계속 울립니다. 잠금화면의 원형 버튼이 <b>BPM을 10씩</b> 바꿉니다.</li>
+            <li>메트로놈과 잼은 동시에 울리지 않습니다. 녹음과는 함께 쓸 수 있습니다.</li>
           </ol>
         </div>
 
@@ -323,13 +494,35 @@
           </ol>
         </div>
 
-        <div class="tour-notes" data-notes="trainer" hidden>
-          <h3>트레이너</h3>
+        <div class="tour-notes" data-notes="trainer:ear" hidden>
+          <h3>트레이너 · 청음</h3>
           <ol>
-            <li>위쪽 <b>청음 · 리듬 · 트랙</b>으로 나뉩니다. 눌러서 옮겨 보세요.</li>
-            <li><b>청음</b> — 아래 기록을 펼치면 달력에서 날짜별 결과를 봅니다. 날짜를 누르면 음정·화음·음계로 나눠 보여 줍니다.</li>
-            <li><b>리듬</b> — 칸을 눌러 패턴을 직접 편집합니다. 당김음·밀도 슬라이더는 <b>두 번 탭하면 5</b>로 돌아갑니다.</li>
-            <li><b>트랙</b> — 녹음·업로드·YouTube가 한 목록에 모입니다. 계정을 연결해야 저장됩니다.</li>
+            <li>음정·화음·음계를 초급부터 고급까지 고릅니다.</li>
+            <li>화음 선택지는 이름과 구성 도수를 같은 줄에 보여 줍니다.</li>
+            <li>아래 <b>청음 기록</b>을 펼치면 달력에서 날짜별 결과를 봅니다.</li>
+            <li>달력의 날짜를 누르면 그날의 음정·화음·음계를 <b>나눠서</b> 보여 줍니다.</li>
+          </ol>
+        </div>
+
+        <div class="tour-notes" data-notes="trainer:rhythm" hidden>
+          <h3>트레이너 · 리듬</h3>
+          <ol>
+            <li>16분음표 칸을 눌러 패턴을 <b>직접 편집</b>합니다.</li>
+            <li>당김음·밀도 슬라이더는 <b>손잡이를 두 번 탭하면 5</b>로 돌아갑니다.</li>
+            <li>새 리듬을 누르면 두 슬라이더 성향에 맞춰 패턴이 자동 생성됩니다.</li>
+            <li>6/8은 프리셋에 없고 박자 목록에서 고릅니다.</li>
+          </ol>
+        </div>
+
+        <div class="tour-notes" data-notes="trainer:record" hidden>
+          <h3>트레이너 · 트랙</h3>
+          <ol>
+            <li>녹음·업로드·YouTube가 <b>한 목록</b>에 최신순으로 쌓입니다.</li>
+            <li>왼쪽에 올리브가 붙은 항목이 <b>즐겨찾기</b>라 맨 위에 옵니다. 올리브를 누르면 해제됩니다.</li>
+            <li>행을 누르면 재생기가 펼쳐집니다. <b>한 번에 하나만</b> 열립니다.</li>
+            <li>재생기에서 <b>A · B</b>를 찍으면 그 구간이 바로 반복됩니다. A·B 없이 반복만 켜면 전체를 돕니다.</li>
+            <li>속도와 조옮김 슬라이더는 <b>두 번 탭하면</b> 각각 1배와 원래 키로 돌아갑니다.</li>
+            <li>위쪽 체크 아이콘으로 <b>여러 개를 골라 한 번에</b> 지웁니다.</li>
           </ol>
         </div>
 
@@ -340,20 +533,20 @@
             <li>진행에 넣은 <b>코드 이름을 누르면 3↔7화음</b>이 바뀝니다.</li>
             <li>같은 코드 이름을 <b>길게 누르면 삭제</b>됩니다.</li>
             <li>각 코드의 <b>−/+</b>로 마디 길이를 조절합니다.</li>
-            <li>메트로놈과 잼은 동시에 울리지 않습니다. 하나를 켜면 다른 하나가 멈춥니다.</li>
           </ol>
         </div>
       </div>
 
       <div class="callout">
-        위 화면은 실제 앱이라 누르면 소리가 나고, 튜너를 켜면 마이크 권한을 물어봅니다.
-        저장은 계정을 연결했을 때만 됩니다.
+        위 화면은 실제 앱이고, 목록의 <strong>피아노 메이저 스케일</strong>과
+        <strong>Stand By Me 백킹 트랙</strong>은 도움말용 예시입니다.
+        여기서 바꾼 것은 저장되지 않습니다. 튜너를 켜면 마이크 권한을 물어봅니다.
       </div>
     </section>
 
     <section class="section" id="gestures" aria-labelledby="gestures-title">
       <h2 id="gestures-title">직접 만져 보기</h2>
-      <p>아래 셋은 앱과 똑같이 동작합니다. 눌러 보세요.</p>
+      <p>여기 있는 것은 모두 앱과 똑같이 동작합니다. 눌러 보세요.</p>
 
       <div class="demo" data-demo="rate">
         <p class="demo-label">트랙 재생기 · 속도와 조옮김</p>
@@ -434,28 +627,67 @@
       </div>
 
       <h3>그 밖의 동작</h3>
-      <ul class="gesture">
-        <li>
-          <span class="tag">길게 누르기</span>
-          <p>잼 세션의 코드 이름 → 그 코드 삭제</p>
-        </li>
-        <li>
-          <span class="tag">탭</span>
-          <p>잼 세션의 코드 이름 → 3화음과 7화음 전환</p>
-        </li>
-        <li>
-          <span class="tag">탭·드래그</span>
-          <p>녹음본 파형 → 원하는 위치로 이동</p>
-        </li>
-        <li>
-          <span class="tag">여러 번 탭</span>
-          <p>메트로놈·잼의 <strong>TAP</strong> → 누른 박자로 BPM 맞춤</p>
-        </li>
-        <li>
-          <span class="tag">끌어 놓기</span>
-          <p>데스크톱에서 오디오 파일을 목록 위에 놓으면 업로드</p>
-        </li>
-      </ul>
+      <p>
+        눈에 띄지 않는 동작들입니다. 앱의 그 부분만 크게 떼어 왔으니,
+        눌러 보면 무엇이 어떻게 바뀌는지 그 자리에서 보입니다.
+      </p>
+
+      <div class="demo" data-demo="chord">
+        <p class="demo-label">잼 세션 · 진행 카드 <span class="zoom-badge">확대</span></p>
+        <div class="demo-frame zoom-frame">
+          <div class="zoom-stage">
+            <div class="prog-bar">
+              <span class="bar-no">1</span>
+              <span class="rn">I</span>
+              <button class="nm" type="button" aria-label="C, 3화음과 7화음 전환">C</button>
+              <span class="beats">
+                <button class="stp" type="button" data-act="dec" aria-label="1마디 박자 줄이기">−</button>
+                <span class="bv">4</span>
+                <button class="stp" type="button" data-act="inc" aria-label="1마디 박자 늘리기">+</button>
+              </span>
+            </div>
+            <button class="zoom-undo" type="button" hidden>마디 되돌리기</button>
+          </div>
+        </div>
+        <p class="demo-hint">코드 이름을 탭해 보세요. 카드의 빈 곳을 0.5초 꾹 누르면 지워집니다.</p>
+        <p class="demo-state" role="status">지금은 3화음 <b>C</b>, 4박입니다.</p>
+      </div>
+
+      <div class="demo" data-demo="wave">
+        <p class="demo-label">녹음본 · 파형 <span class="zoom-badge">확대</span></p>
+        <div class="demo-frame zoom-frame">
+          <div class="zoom-stage">
+            <div class="wave" role="img" aria-label="녹음본 파형 예시">
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d=""></path></svg>
+              <svg class="played" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d=""></path></svg>
+              <span class="wave-head" aria-hidden="true"></span>
+            </div>
+            <div class="wave-times"><span class="wave-now">0:00</span><span>1:12</span></div>
+          </div>
+        </div>
+        <p class="demo-hint">파형을 탭하거나 좌우로 끌어 보세요.</p>
+        <p class="demo-state" role="status">누른 자리부터 다시 재생됩니다. 지나온 구간은 올리브색으로 칠해집니다.</p>
+      </div>
+
+      <div class="demo" data-demo="tap">
+        <p class="demo-label">메트로놈 · TAP <span class="zoom-badge">확대</span></p>
+        <div class="demo-frame zoom-frame">
+          <div class="zoom-stage tap-stage">
+            <div class="tap-bpm">
+              <div class="num">90</div>
+              <div class="lbl">BPM</div>
+            </div>
+            <button class="tap-key" type="button">TAP</button>
+          </div>
+        </div>
+        <p class="demo-hint">맞추고 싶은 박자에 맞춰 네 번쯤 눌러 보세요.</p>
+        <p class="demo-state" role="status">누른 간격의 평균으로 BPM이 맞춰집니다. 잼 세션과 리듬 트레이너의 TAP도 같습니다.</p>
+      </div>
+
+      <div class="callout">
+        데스크톱에서는 오디오 파일을 <strong>목록 위로 끌어다 놓기만 해도</strong> 올라갑니다.
+        휴대폰에서는 업로드 버튼을 쓰세요.
+      </div>
     </section>
 
     <section class="section" id="metronome" aria-labelledby="metronome-title">
@@ -565,8 +797,52 @@
         잠금화면에서 재생과 일시정지를 할 수 있는데, <strong>원형 버튼의 뜻이 서로 다릅니다.</strong>
       </p>
 
+      <div class="mock-row">
+        <figure class="mock mock-phone">
+          <div class="ios">
+            <p class="mock-lock-icon" aria-hidden="true">&#128274;</p>
+            <p class="mock-time">9:41</p>
+            <p class="mock-date">9월 9일 화요일</p>
+            <div class="mock-np">
+              <div class="mock-np-head">
+                <span class="mock-np-art" aria-hidden="true"></span>
+                <span class="mock-np-copy">
+                  <strong>메트로놈 · 90 BPM</strong>
+                  <small>O’live</small>
+                </span>
+              </div>
+              <div class="mock-np-bar" aria-hidden="true"><span></span></div>
+              <div class="mock-np-controls">
+                <span class="mock-skip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2.5L8.5 5.5 12 8.5V6a6 6 0 1 1-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>10</b></span>
+                <span class="mock-pause" aria-hidden="true"><i></i><i></i></span>
+                <span class="mock-skip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2.5l3.5 3-3.5 3V6a6 6 0 1 0 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>10</b></span>
+              </div>
+            </div>
+          </div>
+          <figcaption>iPhone 잠금화면</figcaption>
+        </figure>
+
+        <figure class="mock mock-watch">
+          <div class="ios">
+            <p class="mock-watch-app">O’live</p>
+            <p class="mock-watch-title">메트로놈 · 90 BPM</p>
+            <p class="mock-watch-sub">음악 연습</p>
+            <div class="mock-watch-controls">
+              <span class="mock-skip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2.5L8.5 5.5 12 8.5V6a6 6 0 1 1-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>10</b></span>
+              <span class="mock-pause" aria-hidden="true"><i></i><i></i></span>
+              <span class="mock-skip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2.5l3.5 3-3.5 3V6a6 6 0 1 0 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>10</b></span>
+            </div>
+          </div>
+          <figcaption>Apple Watch</figcaption>
+        </figure>
+      </div>
+
+      <p class="demo-note" style="text-align:center">
+        잠금화면 조작은 Apple Watch에서도 그대로 됩니다. 손목에서 BPM을 바꿀 수 있습니다.
+      </p>
+
       <div class="demo">
-        <p class="demo-label">잠금화면의 앞뒤 버튼</p>
+        <p class="demo-label">같은 버튼, 다른 뜻</p>
         <div class="demo-frame">
           <div class="lock-row">
             <span class="lock-btn" aria-hidden="true">10</span>
@@ -719,38 +995,45 @@
     render();
   }
 
-  /* 둘러보기: 앱을 그대로 띄우고, 프레임 안에서 어떤 탭을 보고 있는지에 맞춰
-     아래 설명만 바꾼다. 탭바는 앱의 것을 그대로 쓰므로 다시 만들지 않는다. */
+  /* 둘러보기: 앱을 그대로 띄우고, 지금 보고 있는 화면에 해당하는 설명만 남긴다.
+     트레이너는 안쪽 세그먼트까지 봐야 트랙 설명이 엉뚱한 곳에 나오지 않는다. */
   const frame=document.getElementById('tourFrame');
   if(frame){
     const notes=[...document.querySelectorAll('.tour-notes')];
     const where=document.getElementById('tourWhere');
-    const labels={metronome:'메트로놈',tuner:'튜너',scales:'스케일',trainer:'트레이너',jam:'잼 세션'};
+    const labels={
+      metronome:'메트로놈',tuner:'튜너',scales:'스케일',jam:'잼 세션',
+      'trainer:ear':'트레이너 · 청음','trainer:rhythm':'트레이너 · 리듬',
+      'trainer:record':'트레이너 · 트랙',
+    };
     let current='';
-    function show(tab){
-      if(!tab || tab===current) return;
-      current=tab;
-      notes.forEach(n=>{ n.hidden=n.dataset.notes!==tab; });
-      if(where) where.textContent=labels[tab]||tab;
+    function show(key){
+      if(!key || key===current) return;
+      current=key;
+      notes.forEach(n=>{ n.hidden=n.dataset.notes!==key; });
+      if(where) where.textContent=labels[key]||key;
     }
-    function activeTab(doc){
-      const btn=doc.querySelector('.tab-btn.active');
-      return btn?btn.dataset.tab:'';
+    function currentKey(doc){
+      const tab=doc.querySelector('.tab-btn.active');
+      if(!tab) return '';
+      if(tab.dataset.tab!=='trainer') return tab.dataset.tab;
+      const seg=doc.querySelector('#trainerSeg .seg-btn.active');
+      return 'trainer:'+(seg?seg.dataset.mode:'ear');
     }
     function watch(){
       let doc;
       try{ doc=frame.contentDocument; }catch(e){ return; }
       if(!doc || !doc.querySelector('.tab-btn')) return;
-      show(activeTab(doc));
-      /* 탭이 바뀌면 active 클래스가 옮겨 간다. 그 변화만 지켜본다. */
+      show(currentKey(doc));
+      const update=()=>show(currentKey(doc));
       const bar=doc.querySelector('nav.tabbar');
-      if(!bar) return;
-      new MutationObserver(()=>show(activeTab(doc)))
-        .observe(bar,{attributes:true,attributeFilter:['class'],subtree:true});
+      const seg=doc.querySelector('#trainerSeg');
+      const observer=new MutationObserver(update);
+      if(bar) observer.observe(bar,{attributes:true,attributeFilter:['class'],subtree:true});
+      if(seg) observer.observe(seg,{attributes:true,attributeFilter:['class'],subtree:true});
     }
     frame.addEventListener('load',()=>setTimeout(watch,300));
-    /* 캐시에서 즉시 뜨는 경우 load가 이미 지나갔을 수 있다. */
-    setTimeout(watch,1200);
+    setTimeout(watch,1500);
   }
 
   const favorite=document.querySelector('[data-demo="favorite"]');
@@ -760,6 +1043,131 @@
     mark.addEventListener('click',()=>{
       const on=row.classList.toggle('is-plain');
       mark.setAttribute('aria-label',on?'즐겨찾기 추가':'즐겨찾기 해제');
+    });
+  }
+
+  /* 잼 세션 진행 카드. 앱과 같이 코드 이름은 3↔7화음, 카드를 0.5초 누르면 삭제다.
+     앱에서 코드 이름과 −/+가 누름을 가로채므로 여기서도 똑같이 가로챈다. */
+  const chord=document.querySelector('[data-demo="chord"]');
+  if(chord){
+    const card=chord.querySelector('.prog-bar');
+    const name=card.querySelector('.nm');
+    const beatsOut=card.querySelector('.bv');
+    const undo=chord.querySelector('.zoom-undo');
+    const state=chord.querySelector('.demo-state');
+    let seventh=false,beats=4,hold=null;
+    const say=html=>{ state.innerHTML=html; };
+    const render=()=>{
+      name.textContent=seventh?'Cmaj7':'C';
+      name.setAttribute('aria-label',name.textContent+', 3화음과 7화음 전환');
+      beatsOut.textContent=String(beats);
+    };
+    name.addEventListener('pointerdown',event=>event.stopPropagation());
+    name.addEventListener('click',()=>{
+      seventh=!seventh;
+      render();
+      say(seventh
+        ? '코드 이름을 탭 → 3화음 <b>C</b>가 7화음 <b>Cmaj7</b>이 되었습니다.'
+        : '한 번 더 탭 → 다시 3화음 <b>C</b>입니다.');
+    });
+    card.querySelectorAll('.stp').forEach(button=>{
+      button.addEventListener('pointerdown',event=>event.stopPropagation());
+      button.addEventListener('click',()=>{
+        beats=Math.max(1,Math.min(8,beats+(button.dataset.act==='inc'?1:-1)));
+        render();
+        say('−와 +로 마디 길이 → 이 마디는 <b>'+beats+'박</b>입니다.');
+      });
+    });
+    const startHold=()=>{
+      card.classList.add('holding');
+      hold=setTimeout(()=>{
+        card.classList.remove('holding');
+        card.hidden=true; undo.hidden=false;
+        say('0.5초 길게 누르기 → 이 마디가 <b>진행에서 지워졌습니다.</b>');
+      },500);
+    };
+    const cancelHold=()=>{ clearTimeout(hold); card.classList.remove('holding'); };
+    card.addEventListener('pointerdown',startHold);
+    card.addEventListener('pointerup',cancelHold);
+    card.addEventListener('pointerleave',cancelHold);
+    card.addEventListener('pointercancel',cancelHold);
+    card.addEventListener('contextmenu',event=>event.preventDefault());
+    undo.addEventListener('click',()=>{
+      card.hidden=false; undo.hidden=true;
+      say('되돌렸습니다. 앱에서는 코드 팔레트에서 다시 눌러 넣습니다.');
+    });
+    render();
+  }
+
+  /* 녹음본 파형. 탭하거나 끌면 그 자리로 옮긴다.
+     막대 모양은 recorder.js의 waveformPath와 같은 계산이다. */
+  const wave=document.querySelector('[data-demo="wave"]');
+  if(wave){
+    const area=wave.querySelector('.wave');
+    const clock=wave.querySelector('.wave-now');
+    const state=wave.querySelector('.demo-state');
+    const total=72;
+    const peaks=Array.from({length:72},(unused,index)=>{
+      const beat=index%9;
+      return Math.round(30+66*Math.exp(-beat/3.4)*(.84+.16*Math.sin(index*1.7)));
+    });
+    const path=peaks.map((value,index)=>{
+      const x=((index+.5)/peaks.length*100).toFixed(3);
+      const half=(2.25+value/100*16.75).toFixed(3);
+      return 'M'+x+' '+(20-half).toFixed(3)+'V'+(20+Number(half)).toFixed(3);
+    }).join('');
+    area.querySelectorAll('path').forEach(node=>node.setAttribute('d',path));
+    const stamp=seconds=>Math.floor(seconds/60)+':'+String(Math.floor(seconds%60)).padStart(2,'0');
+    let position=0;
+    const render=()=>{
+      area.style.setProperty('--wave-progress',(position/total*100)+'%');
+      clock.textContent=stamp(position);
+    };
+    const seek=event=>{
+      const rect=area.getBoundingClientRect();
+      if(!rect.width) return;
+      position=total*Math.min(1,Math.max(0,(event.clientX-rect.left)/rect.width));
+      render();
+      state.innerHTML='재생 위치가 <b>'+stamp(position)+'</b>으로 갔습니다. 지나온 구간이 올리브색입니다.';
+    };
+    area.addEventListener('pointerdown',event=>{
+      area.setPointerCapture(event.pointerId);
+      area.classList.add('scrubbing');
+      seek(event);
+    });
+    area.addEventListener('pointermove',event=>{
+      if(area.classList.contains('scrubbing')) seek(event);
+    });
+    const release=()=>area.classList.remove('scrubbing');
+    area.addEventListener('pointerup',release);
+    area.addEventListener('pointercancel',release);
+    render();
+  }
+
+  /* TAP. core.js의 bindTapTempo와 같이 3초 안의 탭만 모아 평균 간격을 쓴다. */
+  const tap=document.querySelector('[data-demo="tap"]');
+  if(tap){
+    const key=tap.querySelector('.tap-key');
+    const readout=tap.querySelector('.tap-bpm .num');
+    const state=tap.querySelector('.demo-state');
+    let taps=[],flash=null;
+    key.addEventListener('click',()=>{
+      const now=performance.now();
+      taps.push(now);
+      taps=taps.filter(time=>now-time<3000);
+      key.classList.add('live');
+      clearTimeout(flash);
+      flash=setTimeout(()=>key.classList.remove('live'),110);
+      if(taps.length<2){
+        state.textContent='한 번 더 누르면 두 탭 사이의 간격으로 BPM을 잡습니다.';
+        return;
+      }
+      const gaps=[];
+      for(let i=1;i<taps.length;i++) gaps.push(taps[i]-taps[i-1]);
+      const average=gaps.reduce((a,b)=>a+b,0)/gaps.length;
+      const bpm=Math.max(30,Math.min(260,Math.round(60000/average)));
+      readout.textContent=String(bpm);
+      state.innerHTML='탭 '+taps.length+'번 → <b>'+bpm+' BPM</b>. 3초 넘게 쉬면 처음부터 다시 셉니다.';
     });
   }
 })();

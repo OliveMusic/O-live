@@ -17,6 +17,9 @@
   );
 
   let client=null;
+  /* 도움말이 앱을 iframe으로 띄울 때만 켜지는 시연 모드다. 로그인한 것처럼 보이게
+     예시 데이터를 주고, 네트워크에 붙거나 저장하지 않는다. */
+  const guideMode=/[?&]guide=1(?:&|$)/.test(location.search);
   let currentUser=null;
   let activeUserId='';
   let syncing=false;
@@ -501,6 +504,7 @@
     }
   }
   async function listRecordings(){
+    if(guideMode) return guideRecordings();
     await ensureRecordingAccess();
     const {data,error}=await client.from('practice_recordings')
       .select('id,title,object_path,duration_ms,byte_size,mime_type,waveform,playback_gain,source_type,pinned,playback_rate,transpose,loop_a_ms,loop_b_ms,loop_enabled,recorded_at,created_at')
@@ -564,6 +568,7 @@
     }
   }
   async function renameRecording(id,title){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('rename_practice_recording',{
       p_recording_id:id,p_title:title,
@@ -583,6 +588,7 @@
     return true;
   }
   async function deleteRecording(recording){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const path=String(recording&&recording.object_path||'');
     const id=String(recording&&recording.id||'');
@@ -593,6 +599,7 @@
     return true;
   }
   async function downloadRecording(recording){
+    if(guideMode) return {blob:guideScaleBlob()};
     await ensureRecordingAccess();
     const {data,error}=await client.storage.from('practice-recordings')
       .download(String(recording&&recording.object_path||''));
@@ -749,6 +756,7 @@
     handlers=nextHandlers;
     bindUI();
     renderSheet();
+    if(guideMode){ startGuideDemo(); return; }
     if(!configured || !window.supabase){
       setState('unconfigured');
       return;
@@ -796,6 +804,7 @@
      설정만 남긴다. 검색 결과의 제목·채널·썸네일은 화면에 보여줄 때만 쓰고
      저장하지 않는다. */
   async function listPracticeLinks(){
+    if(guideMode) return guideLinks();
     await ensureRecordingAccess();
     const {data,error}=await client.from('practice_links')
       .select('id,provider,video_id,title,duration_ms,last_position_ms,loop_a_ms,loop_b_ms,loop_enabled,playback_rate,pinned,created_at')
@@ -805,6 +814,7 @@
     return data||[];
   }
   async function savePracticeLink(videoId,title,durationMs){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const id=makeId();
     const {data,error}=await client.rpc('save_practice_link',{
@@ -818,6 +828,7 @@
     return id;
   }
   async function renamePracticeLink(id,title){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('rename_practice_link',{
       p_link_id:String(id||''),p_title:String(title||''),
@@ -828,6 +839,7 @@
   }
   /* 마지막 위치·A/B·배속은 연습 중 자주 바뀌므로 한 번에 저장한다. */
   async function savePracticeLinkState(id,state){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     /* Number(null)이 0이므로 빈 값을 먼저 걸러야 지정되지 않은 A/B가 0으로 저장되지 않는다. */
     const loopMs=value=>{
@@ -851,6 +863,7 @@
     return true;
   }
   async function deletePracticeLink(id){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('delete_practice_link',{p_link_id:String(id||'')});
     if(error) throw error;
@@ -860,6 +873,12 @@
   /* 검색은 Edge Function을 거친다. 브라우저가 Google API를 직접 부르지 않으므로
      API 키가 노출되지 않고 CSP의 connect-src도 Supabase로 유지된다. */
   async function searchYouTube(query){
+    if(guideMode){
+      return {results:[{
+        videoId:'ibMxYyK75WI',title:'Stand By Me - Backing Track Chords and Tabs',
+        channelTitle:'AgaZagA',thumbnail:'https://i.ytimg.com/vi/ibMxYyK75WI/mqdefault.jpg',
+      }],remaining:null};
+    }
     await ensureRecordingAccess();
     const {data,error}=await client.functions.invoke('youtube-search',{
       body:{query:String(query||'')},
@@ -884,6 +903,7 @@
   /* 녹음본의 배속·A/B·조옮김을 계정에 저장한다. 지금까지는 메모리에만 있어
      새로고침하면 사라졌다. 연습 링크와 같은 방식이다. */
   async function saveRecordingState(id,state){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const loopMs=value=>{
       if(value===null || value===undefined || value==='') return null;
@@ -904,6 +924,7 @@
   }
   /* 자주 쓰는 항목을 목록 위에 고정한다. */
   async function setRecordingPinned(id,pinned){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('set_practice_recording_pinned',{
       p_recording_id:String(id||''),p_pinned:Boolean(pinned),
@@ -913,6 +934,7 @@
     return true;
   }
   async function setPracticeLinkPinned(id,pinned){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('set_practice_link_pinned',{
       p_link_id:String(id||''),p_pinned:Boolean(pinned),
@@ -923,6 +945,7 @@
   }
   /* 여러 항목을 한 번에 지운다. 녹음 파일은 Storage에서도 함께 지운다. */
   async function deleteRecordings(recordings){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const rows=(recordings||[]).filter(Boolean);
     if(!rows.length) return 0;
@@ -938,6 +961,7 @@
     return Number(data)||0;
   }
   async function deletePracticeLinks(ids){
+    if(guideMode) return true;
     await ensureRecordingAccess();
     const list=(ids||[]).map(id=>String(id||'')).filter(Boolean);
     if(!list.length) return 0;
@@ -947,12 +971,86 @@
   }
   /* 오래된 동기화 이벤트와 검색 사용량을 정리한다. 실패해도 앱 동작에 영향이 없다. */
   async function runMaintenance(){
+    if(guideMode) return false;
     if(!client || !currentUser || !navigator.onLine) return false;
     try{
       const {error}=await client.rpc('run_olive_maintenance');
       return !error;
     }catch(e){ return false; }
   }
+  /* ── 도움말 시연 모드 ── */
+  const GUIDE_USER={
+    id:'guide-demo-user',email:'demo@olive.example',
+    app_metadata:{provider:'google'},user_metadata:{full_name:'연습 예시'},
+  };
+  function guideDay(offset){
+    const d=new Date();
+    d.setDate(d.getDate()-offset);
+    return d.toISOString().slice(0,10);
+  }
+  function guideRecordings(){
+    return [{
+      id:'guide-recording-1',title:'피아노 메이저 스케일',
+      object_path:'guide/scale.wav',duration_ms:8000,byte_size:352844,
+      mime_type:'audio/wav',source_type:'recording',
+      waveform:Array.from({length:80},(_,i)=>18+Math.round(Math.abs(Math.sin(i/3.2))*70)),
+      playback_gain:1,pinned:false,
+      playback_rate:1,transpose:0,loop_a_ms:null,loop_b_ms:null,loop_enabled:false,
+      recorded_at:new Date(Date.now()-36e5).toISOString(),
+      created_at:new Date(Date.now()-36e5).toISOString(),
+    }];
+  }
+  function guideLinks(){
+    return [{
+      id:'guide-link-1',provider:'youtube',video_id:'ibMxYyK75WI',
+      title:'Stand By Me 백킹 트랙',duration_ms:202000,last_position_ms:0,
+      loop_a_ms:null,loop_b_ms:null,loop_enabled:false,playback_rate:1,pinned:true,
+      created_at:new Date(Date.now()-864e5).toISOString(),
+    }];
+  }
+  /* 예시 녹음은 실제로 들려야 의미가 있다. C 메이저 스케일을 즉석에서 만든다. */
+  function guideScaleBlob(){
+    const rate=22050;
+    const steps=[0,2,4,5,7,9,11,12];
+    const perNote=rate;              /* 한 음 1초 × 8음 = 8초, duration_ms와 맞춘다 */
+    const total=perNote*steps.length;
+    const buffer=new ArrayBuffer(44+total*2);
+    const view=new DataView(buffer);
+    const ascii=(offset,text)=>{ for(let i=0;i<text.length;i++) view.setUint8(offset+i,text.charCodeAt(i)); };
+    ascii(0,'RIFF'); view.setUint32(4,36+total*2,true); ascii(8,'WAVEfmt ');
+    view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
+    view.setUint32(24,rate,true); view.setUint32(28,rate*2,true);
+    view.setUint16(32,2,true); view.setUint16(34,16,true);
+    ascii(36,'data'); view.setUint32(40,total*2,true);
+    let at=44;
+    steps.forEach(semitone=>{
+      const freq=261.63*Math.pow(2,semitone/12);
+      for(let i=0;i<perNote;i++){
+        const t=i/rate;
+        /* 피아노처럼 들리도록 배음을 얹고 감쇠를 준다. */
+        const env=Math.exp(-3.4*t)*Math.min(1,i/220);
+        const wave=Math.sin(2*Math.PI*freq*t)
+          +0.42*Math.sin(4*Math.PI*freq*t)
+          +0.18*Math.sin(6*Math.PI*freq*t);
+        view.setInt16(at,Math.max(-1,Math.min(1,wave*env*0.32))*32767,true);
+        at+=2;
+      }
+    });
+    return new Blob([buffer],{type:'audio/wav'});
+  }
+  function startGuideDemo(){
+    currentUser=GUIDE_USER;
+    activeUserId=GUIDE_USER.id;
+    handlers.useUserHistory(GUIDE_USER.id,{
+      [guideDay(0)]:{correct:8,total:10,byMode:{interval:{correct:5,total:6},chord:{correct:3,total:4},scale:{correct:0,total:0}}},
+      [guideDay(1)]:{correct:12,total:15,byMode:{interval:{correct:6,total:7},chord:{correct:4,total:5},scale:{correct:2,total:3}}},
+      [guideDay(3)]:{correct:5,total:9,byMode:{interval:{correct:3,total:5},chord:{correct:2,total:4},scale:{correct:0,total:0}}},
+    });
+    setState('synced','예시 데이터로 보는 중입니다');
+    renderSheet();
+    notifySession();
+  }
+
   window.OliveCloud={
     init,
     recordAnswer,

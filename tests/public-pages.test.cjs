@@ -14,6 +14,7 @@ const about=read('about.html');
 const privacy=read('privacy.html');
 const terms=read('terms.html');
 const guide=read('guide.html');
+const cloud=read('cloud-sync.js');
 const worker=read('service-worker.js');
 const manifest=JSON.parse(read('manifest.json'));
 const sitemap=read('sitemap.xml');
@@ -192,10 +193,23 @@ assert.match(guide,/누르면 해제/,'즐겨찾기 해제 안내');
 assert.match(guide,/A와 B를 지정하지 않고 반복만 켜면 <strong>처음부터 끝까지<\/strong>/);
 /* 도움말은 글이 아니라 앱과 같은 컨트롤을 직접 눌러 보게 한다. */
 /* 도움말은 화면을 다시 만들지 않고 앱을 그대로 띄운다. 그래야 설명이 낡지 않는다. */
-assert.match(guide,/<iframe class="tour-frame" id="tourFrame" src="index\.html"/);
-for(const tab of ['metronome','tuner','scales','trainer','jam']){
-  assert.match(guide,new RegExp(`data-notes="${tab}"`),`${tab} 설명이 있다`);
+assert.match(guide,/<iframe class="tour-frame" id="tourFrame" src="index\.html\?guide=1"/);
+/* 설명은 화면별로 좁힌다. 메트로놈을 보는데 트랙 재생기 얘기가 나오면 안 된다. */
+for(const key of ['metronome','tuner','scales','jam','trainer:ear','trainer:rhythm','trainer:record']){
+  assert.match(guide,new RegExp(`data-notes="${key}"`),`${key} 설명이 있다`);
 }
+assert.match(guide,/#trainerSeg \.seg-btn\.active/,'트레이너는 세그먼트까지 본다');
+/* 시연 모드는 도움말이 띄울 때만 켜지고 저장하지 않는다. */
+assert.match(cloud,/const guideMode=\/\[\?&\]guide=1/);
+assert.match(cloud,/if\(guideMode\) return guideRecordings\(\)/);
+assert.match(cloud,/if\(guideMode\) return guideLinks\(\)/);
+assert.match(cloud,/title:'피아노 메이저 스케일'/);
+assert.match(cloud,/title:'Stand By Me 백킹 트랙'/);
+assert.match(cloud,/video_id:'ibMxYyK75WI'/);
+/* 잠금화면은 iPhone과 Apple Watch 목업으로 보여 준다. */
+assert.match(guide,/class="mock mock-phone"/);
+assert.match(guide,/class="mock mock-watch"/);
+assert.match(guide,/메트로놈 · 90 BPM/,'실제 잠금화면 표시와 같은 문구');
 assert.match(guide,/\.tab-btn\.active/,'프레임의 현재 탭을 읽는다');
 assert.match(guide,/new MutationObserver/,'탭이 바뀌면 설명도 바뀐다');
 /* 앱이 iframe 안에서 열려야 하므로 frame-ancestors로 막으면 안 된다. */
@@ -205,6 +219,22 @@ assert.match(guide,/data-demo="loop"/);
 assert.match(guide,/data-demo="favorite"/);
 assert.match(guide,/class="rate-control"/,'실제 슬라이더 재현');
 assert.match(guide,/class="row-olive"/,'실제 올리브 재현');
+/* 숨은 동작은 글로 나열하지 않고 앱의 그 부분을 확대해 직접 눌러 보게 한다. */
+assert.doesNotMatch(guide,/class="gesture"/,'제스처 목록은 확대 시연으로 대체됐다');
+for(const key of ['chord','wave','tap']){
+  assert.match(guide,new RegExp(`data-demo="${key}"`),`${key} 확대 시연이 있다`);
+}
+assert.match(guide,/class="prog-bar"/,'실제 진행 카드 재현');
+assert.match(guide,/class="zoom-badge">확대</,'확대한 화면임을 밝힌다');
+/* 삭제 타이머는 앱과 같은 0.5초다. 코드 이름과 −/+는 앱처럼 그 타이머를 가로챈다. */
+assert.match(guide,/card\.classList\.remove\('holding'\);\s*card\.hidden=true;/);
+assert.match(guide,/\},500\);/,'길게 누르기 판정은 0.5초');
+assert.match(guide,/name\.addEventListener\('pointerdown',event=>event\.stopPropagation\(\)\)/);
+/* TAP 계산은 core.js의 bindTapTempo와 같아야 한다. */
+assert.match(guide,/taps=taps\.filter\(time=>now-time<3000\)/);
+assert.match(guide,/Math\.max\(30,Math\.min\(260,Math\.round\(60000\/average\)\)\)/);
+/* 파형 막대는 recorder.js의 waveformPath와 같은 식으로 그린다. */
+assert.match(guide,/2\.25\+value\/100\*16\.75/);
 /* 두 번 탭 판정은 앱과 같은 값이어야 헷갈리지 않는다. */
 assert.match(guide,/now-lastTapAt<340 && Math\.abs\(event\.clientX-lastTapX\)<28/);
 assert.match(guide,/BPM을 10씩/);

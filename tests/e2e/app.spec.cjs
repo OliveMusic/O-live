@@ -1,4 +1,12 @@
 const {test,expect}=require('playwright/test');
+const fs=require('node:fs');
+const vm=require('node:vm');
+
+/* 버전 문자열을 여기에 적어 두면 올릴 때마다 94개가 한꺼번에 깨진다. 한 곳에서 읽는다. */
+const releaseContext={globalThis:{}};
+vm.createContext(releaseContext);
+vm.runInContext(fs.readFileSync('app-version.js','utf8'),releaseContext,{filename:'app-version.js'});
+const RELEASE=releaseContext.globalThis.OLIVE_RELEASE;
 
 const pageErrors=new WeakMap();
 
@@ -431,7 +439,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.68');
+  await expect(page.locator('#appVersion')).toHaveText('버전 '+RELEASE.version);
 }
 
 async function expandRecordList(page){
@@ -463,7 +471,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=198');
+  expect(workerUrl).toContain('service-worker.js?v='+RELEASE.build);
 });
 
 test('도움말 링크가 나머지 정보 링크 위 줄 가운데에 놓인다',async({page})=>{
@@ -496,7 +504,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.68',build:198});
+  expect(payload.release).toEqual({version:RELEASE.version,build:RELEASE.build});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
