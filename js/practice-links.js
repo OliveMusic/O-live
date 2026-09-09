@@ -796,6 +796,11 @@
       mark.type='button';
       mark.className='record-row-favorite';
       mark.setAttribute('aria-label',`${row.title} 즐겨찾기 해제`);
+      /* 올리브 몸통은 별도 요소다. 이걸 빠뜨리면 빈 버튼만 그려진다. */
+      const olive=document.createElement('span');
+      olive.className='record-row-olive';
+      olive.setAttribute('aria-hidden','true');
+      mark.appendChild(olive);
       mark.addEventListener('click',event=>{ event.stopPropagation(); setFavorite(row,false); });
       item.appendChild(mark);
     }

@@ -48,6 +48,7 @@ assert.match(index,/\.record-entry\.favorite \.record-row\{ grid-template-column
 assert.match(index,/\.record-row-olive\{[^}]*background:var\(--signal\);[^}]*transform:rotate\(-11deg\)/);
 assert.match(index,/\.record-row-olive::after\{[^}]*background:var\(--panel\)/,'씨앗 구멍');
 assert.match(recorder,/olive\.className='record-row-olive'/);
+assert.match(links,/olive\.className='record-row-olive'/,'링크 쪽도 올리브 몸통을 그린다');
 /* 속도와 조옮김 슬라이더가 정확히 같은 폭이 되도록 칼럼을 통일한다. */
 assert.match(index,/\.record-rate-control\{[^}]*grid-template-columns:28px minmax\(0,1fr\) 14px 30px/);
 assert.match(recorder,/rateLabel\.append\(rateText,rateSlider,rateSpacer,rateValue\)/);
@@ -96,6 +97,13 @@ assert.match(recorder,/Math\.pow\(2,\(Number\(semitones\)\|\|0\)\/12\)/);
 assert.match(recorder,/if\(needsPitchProcessing\(row\) && typeof AudioWorkletNode==='function'\)/);
 assert.doesNotMatch(recorder,/if\(rate!==1 && typeof AudioWorkletNode/);
 assert.match(recorder,/stretchPitch\.value=transposeRatio\(rowTranspose\(row\)\)/);
+/* SoundTouch가 필요한지 판단하는 곳이 하나여야 한다. 워크릿 로드와 경로 선택이
+   따로 놀면 1배속 조옮김에서 노드를 만들 때 터지거나 native로 새어 나간다. */
+assert.doesNotMatch(recorder,/rowPlaybackRate\(row\)!==1 &&/);
+assert.doesNotMatch(recorder,/rowPlaybackRate\(row\)!==1 \?/);
+assert.match(recorder,/const adjustedRate=needsPitchProcessing\(row\);/);
+assert.match(recorder,/needsPitchProcessing\(row\) \? ensureSoundTouchProcessor/);
+assert.match(recorder,/if\(needsPitchProcessing\(row\)\)\{\n      try\{ await ensureSoundTouchProcessor/);
 assert.match(recorder,/async function flushRecordingState\(row\)/);
 assert.match(recorder,/queueRecordingStateSave\(row\)/);
 /* 클라우드에 저장된 구간을 초 단위로 되살린다. */

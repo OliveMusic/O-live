@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=192';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=193';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -528,7 +528,7 @@
     setAudioSession('playback');
     const ctx=cloudDecodedContext||cloudTransportContext||audioCtx;
     const offset=Number(playbackPositions.get(row.id))||0;
-    if(rowPlaybackRate(row)!==1 && !cloudMediaUsesPersistentNative && cloudMediaSource &&
+    if(needsPitchProcessing(row) && !cloudMediaUsesPersistentNative && cloudMediaSource &&
        cloudPlaybackMode==='native-paused'){
       switchActivePlaybackToPitchPreserving(row,offset);
       return;
@@ -537,7 +537,7 @@
       cloudPlaybackMode='decoded';
       Promise.all([
         ctx && ctx.state!=='running' ? resumeCtx(ctx) : Promise.resolve(),
-        rowPlaybackRate(row)!==1 ? ensureSoundTouchProcessor(ctx) : Promise.resolve(),
+        needsPitchProcessing(row) ? ensureSoundTouchProcessor(ctx) : Promise.resolve(),
         armCloudTransport(ctx,row),
       ]).then(()=>{
         if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
@@ -1528,7 +1528,7 @@
     try{ buffer=await decodeAudioBlob(ctx,result.blob); }
     catch(error){ throw playbackStageError('decode',error); }
     if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-    if(rowPlaybackRate(row)!==1){
+    if(needsPitchProcessing(row)){
       try{ await ensureSoundTouchProcessor(ctx); }
       catch(error){ throw playbackStageError('audio',error); }
     }
@@ -1749,7 +1749,9 @@
     // iPhone 홈 화면 앱에서는 직접 재생 경로가 무음이 될 수 있으므로 1배속은
     // 검증된 연결 경로를 쓴다. 배속 재생은 파일을 디코딩한 뒤 SoundTouch가
     // 음높이를 보존하며 처리하고, 출력은 같은 잠금화면 운반자로 보낸다.
-    const adjustedRate=rowPlaybackRate(row)!==1;
+    /* 조옮김도 SoundTouch가 필요하다. 판단을 needsPitchProcessing() 한 곳으로 모은다.
+       여기서 놓치면 1배속 조옮김이 native 경로로 가서 아무 일도 일어나지 않는다. */
+    const adjustedRate=needsPitchProcessing(row);
     const normalized=usePersistentNative
       ? (playbackUrl
         ? startPersistentNativePlayback(playbackUrl,row,token,offset)
