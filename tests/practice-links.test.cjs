@@ -38,9 +38,19 @@ assert.match(recorder,/\.concat\(practiceLinkEntries\(\)\)/);
 assert.match(recorder,/entries\.sort\(\(a,b\)=>\(b\.pinned\?1:0\)-\(a\.pinned\?1:0\) \|\| b\.at-a\.at\)/);
 assert.match(recorder,/pinned:Boolean\(row\.pinned\)/);
 assert.match(links,/pinned:Boolean\(row\.pinned\)/);
-/* 자주 쓰는 항목을 위에 고정한다. */
-assert.match(index,/id="recordMenuPin"[^>]*>고정</);
-assert.match(index,/id="linkMenuPin"[^>]*>고정</);
+/* 자주 쓰는 항목을 즐겨찾기로 위에 올린다. 제목 뒤 배지는 제목이 길면 잘리므로
+   행 맨 왼쪽에 올리브로 표시하고, 그 올리브를 누르면 해제된다. */
+assert.match(index,/id="recordMenuPin"[^>]*>즐겨찾기</);
+assert.match(index,/id="linkMenuPin"[^>]*>즐겨찾기</);
+assert.doesNotMatch(index,/\.record-row-pin\{/);
+assert.match(index,/\.record-entry\.favorite \.record-row\{ grid-template-columns:28px minmax\(0,1fr\) 44px; \}/);
+assert.match(index,/\.record-row-favorite::before\{[^}]*background:var\(--signal\)/);
+assert.match(recorder,/function createFavoriteMark\(row,onRemove\)/);
+assert.match(recorder,/aria-label',`\$\{row\.title\} 즐겨찾기 해제`/);
+assert.match(links,/aria-label',`\$\{row\.title\} 즐겨찾기 해제`/);
+assert.match(recorder,/event\.stopPropagation\(\); onRemove\(\);/,'행이 열리지 않게 한다');
+/* 선택 모드에서는 체크박스가 앞에 오므로 올리브를 뺀다. */
+assert.match(recorder,/node\.classList\.remove\('favorite'\)/);
 assert.match(cloud,/set_practice_recording_pinned/);
 assert.match(cloud,/set_practice_link_pinned/);
 /* 여러 항목을 골라 한 번에 지운다. 파일도 함께 지운다. */
@@ -204,7 +214,15 @@ assert.match(links,/player\.setPlaybackRate\(next\)/);
 }
 /* 컨트롤 행이 플레이어 전체 폭을 써서 A/B가 왼쪽 끝에 붙는다. */
 assert.match(index,/\.record-player-tools\{[^}]*grid-column:1 \/ -1/);
-assert.match(recorder,/times\.insertBefore\(transposeGroup,times\.lastChild\)/);
+/* 조옮김은 속도와 같은 슬라이더이며 바로 위 줄에 놓인다. 양 끝은 ♭·♯다. */
+assert.match(recorder,/tools\.insertBefore\(transposeLabel,rateLabel\)/);
+assert.match(recorder,/transposeSlider\.step='1'/,'반음 단위');
+assert.match(recorder,/transposeSlider\.min=String\(TRANSPOSE_MIN\)/);
+assert.match(recorder,/transposeFlat\.textContent='♭'/);
+assert.match(recorder,/transposeSharp\.textContent='♯'/);
+assert.match(recorder,/bindSliderReset\(transposeSlider,0,/,'두 번 누르면 원래 조로');
+assert.match(index,/\.record-player-tools \.record-loop-tools\{ grid-row:1 \/ span 2; \}/);
+assert.match(index,/\.record-rate-control\.record-transpose-control\{ grid-template-columns:14px minmax\(0,1fr\) 14px 30px; \}/);
 /* 손잡이를 두 번 누르면 원곡 속도로 돌아간다. */
 assert.match(links,/function bindPlaybackRateReset\(slider,row\)/);
 assert.match(links,/slider\.addEventListener\('dblclick',reset\)/);

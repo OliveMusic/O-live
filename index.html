@@ -1863,9 +1863,18 @@
   .record-entry.selecting .record-row{ grid-template-columns:36px minmax(0,1fr); }
   .record-entry.selecting .record-row-open{ pointer-events:none; }
   .record-entry.selecting .record-row-more{ display:none; }
-  .record-row-pin{
-    margin-left:5px; color:var(--signal); font-size:.625rem; vertical-align:middle;
+  /* 즐겨찾기는 제목 뒤 배지로 두면 제목이 길 때 잘린다. 행 맨 왼쪽에 올리브로
+     표시하고, 그 올리브를 누르면 즐겨찾기가 풀린다. */
+  .record-entry.favorite .record-row{ grid-template-columns:28px minmax(0,1fr) 44px; }
+  .record-row-favorite{
+    width:28px; height:28px; padding:0; border:0; background:transparent;
+    display:grid; place-items:center; cursor:pointer;
   }
+  .record-row-favorite::before{
+    content:''; width:15px; height:12px; border-radius:50%;
+    background:var(--signal); transform:rotate(-11deg);
+  }
+  .record-row-favorite:active::before{ background:var(--signal-press); }
   .record-history > summary .record-usage{ margin-left:auto; }
   .record-history > summary::after{ margin-left:2px; }
   .record-history-body{ border-top:1px solid var(--line-soft); padding:10px 14px 0; }
@@ -1974,17 +1983,18 @@
   /* 컨트롤 행은 재생 버튼 칸까지 넘어가 플레이어 전체 폭을 쓴다.
      A/B가 왼쪽 끝에 붙고 속도 슬라이더가 그만큼 길어진다. */
   .record-player-tools{
-    grid-column:1 / -1; min-width:0; display:grid; grid-template-columns:auto minmax(0,1fr);
-    align-items:center; gap:10px; margin-top:1px;
+    grid-column:1 / -1; min-width:0; display:grid;
+    grid-template-columns:auto minmax(0,1fr); grid-template-rows:auto auto;
+    align-items:center; gap:5px 10px; margin-top:1px;
   }
-  /* 조옮김은 반음 단위라 슬라이더보다 스테퍼가 맞다. 경과·전체 시간 사이의
-     빈 공간에 넣어 플레이어 높이를 늘리지 않는다. */
-  .record-transpose{ display:flex; align-items:center; gap:1px; }
-  .record-extra-label{ margin-right:3px; color:var(--ink-3); font-size:.5625rem; }
-  .record-transpose .record-player-tool{ min-width:24px; height:22px; padding:0 5px; }
-  .record-transpose-value{
-    min-width:22px; text-align:center; color:var(--ink-2);
-    font:650 .5938rem/1 inherit; font-variant-numeric:tabular-nums;
+  .record-player-tools .record-loop-tools{ grid-row:1 / span 2; }
+  /* 조옮김은 속도와 같은 슬라이더로 두고 바로 위에 놓는다.
+     양 끝의 ♭·♯가 방향을 알려 준다. 두 바의 폭이 사실상 같도록 칼럼을 맞춘다. */
+  /* .record-rate-control이 소스 순서상 뒤에 있어 명시도가 같으면 3칼럼이 이긴다.
+     클래스를 겹쳐 4칼럼을 확실히 적용한다. */
+  .record-rate-control.record-transpose-control{ grid-template-columns:14px minmax(0,1fr) 14px 30px; }
+  .record-accidental{
+    color:var(--ink-3); font-size:.75rem; line-height:1; text-align:center;
   }
   .record-loop-tools{
     min-width:0; height:32px; display:flex; align-items:center; gap:1px; padding:2px;
@@ -2000,7 +2010,7 @@
   .record-player-tool:disabled{ opacity:.34; cursor:default; }
   .record-player-tool:not(:disabled):active{ background:var(--key-press); }
   .record-rate-control{
-    min-width:0; display:grid; grid-template-columns:auto minmax(52px,1fr) 30px; align-items:center; gap:7px;
+    min-width:0; display:grid; grid-template-columns:28px minmax(0,1fr) 30px; align-items:center; gap:5px;
     color:var(--ink-3); font-size:.5625rem; white-space:nowrap;
   }
   .record-rate-control input[type="range"]{
@@ -2636,7 +2646,7 @@
   <div class="record-menu-wrap">
     <section class="record-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="recordMenuTitle">
       <strong class="record-menu-title" id="recordMenuTitle"></strong>
-      <button id="recordMenuPin" type="button">고정</button>
+      <button id="recordMenuPin" type="button">즐겨찾기</button>
       <button id="recordMenuRename" type="button">이름 변경</button>
       <button id="recordMenuDownload" type="button">다운로드</button>
       <button class="danger" id="recordMenuDelete" type="button">삭제</button>
@@ -2648,7 +2658,7 @@
   <div class="record-menu-wrap">
     <section class="record-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="linkMenuTitle">
       <strong class="record-menu-title" id="linkMenuTitle"></strong>
-      <button id="linkMenuPin" type="button">고정</button>
+      <button id="linkMenuPin" type="button">즐겨찾기</button>
       <button id="linkMenuRename" type="button">이름 변경</button>
       <button class="danger" id="linkMenuDelete" type="button">삭제</button>
     </section>
@@ -2712,22 +2722,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=190"></script>
+<script src="app-version.js?v=191"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=190"></script>
-<script src="js/audio-runtime.js?v=190"></script>
-<script src="js/core.js?v=190"></script>
-<script src="js/metronome.js?v=190"></script>
-<script src="js/tuner-engine.js?v=190"></script>
-<script src="js/tuner.js?v=190"></script>
-<script src="js/scales.js?v=190"></script>
-<script src="js/ear-trainer.js?v=190"></script>
-<script src="js/rhythm-trainer.js?v=190"></script>
-<script src="js/recording-cache.js?v=190"></script>
-<script src="js/recorder.js?v=190"></script>
-<script src="js/practice-links.js?v=190"></script>
-<script src="js/jam-session.js?v=190"></script>
-<script src="js/app-shell.js?v=190"></script>
+<script src="cloud-sync.js?v=191"></script>
+<script src="js/audio-runtime.js?v=191"></script>
+<script src="js/core.js?v=191"></script>
+<script src="js/metronome.js?v=191"></script>
+<script src="js/tuner-engine.js?v=191"></script>
+<script src="js/tuner.js?v=191"></script>
+<script src="js/scales.js?v=191"></script>
+<script src="js/ear-trainer.js?v=191"></script>
+<script src="js/rhythm-trainer.js?v=191"></script>
+<script src="js/recording-cache.js?v=191"></script>
+<script src="js/recorder.js?v=191"></script>
+<script src="js/practice-links.js?v=191"></script>
+<script src="js/jam-session.js?v=191"></script>
+<script src="js/app-shell.js?v=191"></script>
 </body>
 </html>

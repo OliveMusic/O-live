@@ -774,11 +774,6 @@
     copy.className='record-row-copy';
     const title=document.createElement('strong');
     title.textContent=row.title;
-    if(row.pinned){
-      const pin=document.createElement('span');
-      pin.className='record-row-pin'; pin.textContent='고정';
-      title.appendChild(pin);
-    }
     const source=document.createElement('small');
     source.textContent='YouTube';
     copy.append(title,source);
@@ -793,6 +788,15 @@
     more.textContent='•••';
     more.setAttribute('aria-label',`${row.title} 메뉴`);
     more.addEventListener('click',()=>openMenu(row,more));
+    if(row.pinned){
+      entry.classList.add('favorite');
+      const mark=document.createElement('button');
+      mark.type='button';
+      mark.className='record-row-favorite';
+      mark.setAttribute('aria-label',`${row.title} 즐겨찾기 해제`);
+      mark.addEventListener('click',event=>{ event.stopPropagation(); setFavorite(row,false); });
+      item.appendChild(mark);
+    }
     item.append(open,more);
     entry.appendChild(item);
     if(expandedId===row.id) entry.appendChild(createPlayer(row));
@@ -836,18 +840,21 @@
   }
 
   /* ── 메뉴 ── */
-  async function togglePinSelected(){
-    const row=selectedRow; closeMenu();
+  async function setFavorite(row,next){
     if(!row) return;
     try{
-      await window.OliveCloud.setPracticeLinkPinned(row.id,!row.pinned);
+      await window.OliveCloud.setPracticeLinkPinned(row.id,next);
       await loadLinks(true);
-    }catch(e){ setMessage('고정 상태를 바꾸지 못했습니다',true); }
+    }catch(e){ setMessage('즐겨찾기를 바꾸지 못했습니다',true); }
+  }
+  async function togglePinSelected(){
+    const row=selectedRow; closeMenu();
+    await setFavorite(row,!(row&&row.pinned));
   }
   function openMenu(row,trigger){
     selectedRow=row; menuTrigger=trigger;
     menuTitle.textContent=row.title;
-    if(menuPin) menuPin.textContent=row.pinned?'고정 해제':'고정';
+    if(menuPin) menuPin.textContent=row.pinned?'즐겨찾기 해제':'즐겨찾기';
     if(app) app.setAttribute('inert','');
     menuBackdrop.hidden=false;
     requestAnimationFrame(()=>menuBackdrop.classList.add('open'));

@@ -431,7 +431,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.60');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.61');
 }
 
 async function expandRecordList(page){
@@ -463,7 +463,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=190');
+  expect(workerUrl).toContain('service-worker.js?v=191');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -480,7 +480,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.60',build:190});
+  expect(payload.release).toEqual({version:'1.3.61',build:191});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -780,16 +780,25 @@ test('녹음본의 배속·구간·조옮김을 계정에서 되살리고 바뀌
   await page.locator('.record-row-open').click();
 
   /* 새로고침해도 남아 있어야 한다. 예전에는 메모리에만 있어 사라졌다. */
-  await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('1.25');
-  await expect(page.locator('.record-rate-value')).toHaveText('1.25×');
+  await expect(page.locator('.record-speed-control input[type="range"]')).toHaveValue('1.25');
+  await expect(page.locator('.record-speed-control .record-rate-value')).toHaveText('1.25×');
+  await expect(page.locator('.record-transpose-control input[type="range"]')).toHaveValue('-2');
   await expect(page.locator('.record-transpose-value')).toHaveText('-2');
   await expect(page.locator('.record-player-tool.point').first()).toHaveClass(/active/);
   await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
 
-  /* 조옮김을 바꾸면 계정에 저장한다. */
-  await page.locator('[data-role="transpose-up"]').click();
-  await expect(page.locator('.record-transpose-value')).toHaveText('-1');
-  await expect.poll(async()=>await page.evaluate(()=>window.__savedRecordingState?.p_transpose),{timeout:6000}).toBe(-1);
+  /* 조옮김을 바꾸면 계정에 저장한다. 양 끝은 ♭·♯다. */
+  await expect(page.locator('.record-transpose-control .record-accidental').first()).toHaveText('♭');
+  await expect(page.locator('.record-transpose-control .record-accidental').last()).toHaveText('♯');
+  await page.locator('.record-transpose-control input[type="range"]').fill('3');
+  await expect(page.locator('.record-transpose-value')).toHaveText('+3');
+  await expect.poll(async()=>await page.evaluate(()=>window.__savedRecordingState?.p_transpose),{timeout:6000}).toBe(3);
+  /* 조옮김도 손잡이를 두 번 누르면 원래 키로 돌아간다. */
+  await page.locator('.record-transpose-control input[type="range"]').dblclick();
+  await expect(page.locator('.record-transpose-value')).toHaveText('0');
+  await expect(page.locator('.record-transpose-control input[type="range"]')).toHaveValue('0');
+  await expect.poll(async()=>await page.evaluate(()=>window.__savedRecordingState?.p_transpose),{timeout:6000}).toBe(0);
+
   const saved=await page.evaluate(()=>window.__savedRecordingState);
   expect(saved.p_playback_rate).toBeCloseTo(1.25,2);
   expect(saved.p_loop_a_ms).toBe(5000);
@@ -819,7 +828,14 @@ test('고정한 항목이 최신 항목보다 위에 온다',async({page})=>{
   const titles=await page.locator('#recordList .record-entry .record-row-copy strong').allTextContents();
   expect(titles[0]).toContain('오래된 링크');
   expect(titles[1]).toContain('최신 녹음');
-  await expect(page.locator('.record-entry',{hasText:'오래된 링크'}).locator('.record-row-pin')).toHaveText('고정');
+  /* 즐겨찾기는 행 맨 왼쪽 올리브로 표시하고, 누르면 해제된다. */
+  const mark=page.locator('.record-entry',{hasText:'오래된 링크'}).locator('.record-row-favorite');
+  await expect(mark).toBeVisible();
+  await expect(mark).toHaveAttribute('aria-label','오래된 링크 즐겨찾기 해제');
+  await mark.click();
+  await expect(page.locator('.record-row-favorite')).toHaveCount(0);
+  const after=await page.locator('#recordList .record-entry .record-row-copy strong').allTextContents();
+  expect(after[0]).toContain('최신 녹음');
 });
 
 test('목록은 녹음본과 YouTube를 섞어 최신 항목부터 보여준다',async({page})=>{
@@ -905,7 +921,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-player-tool.point')).toHaveCount(2);
   await expect(page.locator('.record-player-tool.repeat')).toBeEnabled();
   await expect(page.locator('.record-player-tool.repeat svg')).toBeVisible();
-  await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('1');
+  await expect(page.locator('.record-speed-control input[type="range"]')).toHaveValue('1');
   await expect(page.locator('.record-row-copy small')).toHaveText(/2026\. 09\. 06\. \d{2}:\d{2}/);
 
   const waveformControl=page.locator('.record-waveform');
@@ -914,9 +930,9 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   const waveformSvgBox=await page.locator('.record-waveform-svg.base').boundingBox();
   const playBox=await page.locator('.record-player-play').boundingBox();
   const playerBox=await page.locator('.record-player').boundingBox();
-  /* 조옮김 스테퍼가 시간 줄에 들어가면서 8px 늘었다. 버튼을 더 줄이면
-     누르기 어려워져 여기까지만 허용한다. */
-  expect(playerBox.height).toBeLessThanOrEqual(144);
+  /* 조옮김이 속도와 같은 크기의 슬라이더가 되면서 컨트롤이 두 줄이 되었다.
+     통일감을 위해 높이를 감수한 결정이다. */
+  expect(playerBox.height).toBeLessThanOrEqual(180);
   expect(box.height).toBeCloseTo(44,0);
   expect(waveformSvgBox.y-box.y).toBeCloseTo(2,0);
   expect((box.y+box.height)-(waveformSvgBox.y+waveformSvgBox.height)).toBeCloseTo(2,0);
@@ -983,9 +999,9 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     window.__testMediaSession.positionState&&window.__testMediaSession.positionState.position
   ))).toBeGreaterThan(22);
 
-  await page.locator('.record-rate-control input[type="range"]').fill('0.75');
-  await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('0.75');
-  await expect(page.locator('.record-rate-value')).toHaveText('0.75×');
+  await page.locator('.record-speed-control input[type="range"]').fill('0.75');
+  await expect(page.locator('.record-speed-control input[type="range"]')).toHaveValue('0.75');
+  await expect(page.locator('.record-speed-control .record-rate-value')).toHaveText('0.75×');
   await expect.poll(()=>page.evaluate(()=>({
     module:window.__micHarness.workletModule,
     processor:window.__micHarness.workletName,
@@ -993,12 +1009,12 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=190',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=191',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
-  await page.locator('.record-rate-control input[type="range"]').dblclick();
-  await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('1');
-  await expect(page.locator('.record-rate-value')).toHaveText('1×');
+  await page.locator('.record-speed-control input[type="range"]').dblclick();
+  await expect(page.locator('.record-speed-control input[type="range"]')).toHaveValue('1');
+  await expect(page.locator('.record-speed-control .record-rate-value')).toHaveText('1×');
   await expect.poll(()=>page.evaluate(()=>([
     window.__micHarness.bufferSource.playbackRate.value,
     window.__micHarness.workletNode.parameters.get('playbackRate').value,
@@ -1173,7 +1189,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=190');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=191');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),

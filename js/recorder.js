@@ -12,7 +12,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=190';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=191';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -134,6 +134,7 @@
   let cloudMediaPositionUpdatedAt=0;
   let cloudPlayToken=0;
   let cloudProgressFrame=0;
+  let cloudPositionTimer=0;
   let scrubbingRecordingId='';
   let recordingInterruptedWhileHidden=false;
   const cloudBlobs=new Map();
@@ -1209,10 +1210,35 @@
   function stopCloudProgress(){
     cancelAnimationFrame(cloudProgressFrame);
     cloudProgressFrame=0;
+    stopCloudPositionTimer();
+  }
+  function stopCloudPositionTimer(){
+    if(cloudPositionTimer){ clearInterval(cloudPositionTimer); cloudPositionTimer=0; }
+  }
+  /* 화면이 잠기면 requestAnimationFrame이 멈춘다. 소리는 AudioBufferSourceNode의
+     loop로 계속 돌지만 잠금화면에 알려 준 위치가 그대로 남아, 시간 표시가 A/B 구간을
+     지나 흘러가는 것처럼 보인다. 타이머로 실제 위치를 계속 알린다. */
+  function startCloudPositionTimer(){
+    stopCloudPositionTimer();
+    cloudPositionTimer=setInterval(()=>{
+      if(!cloudPlayingId){ stopCloudPositionTimer(); return; }
+      const row=rows.find(item=>item.id===cloudPlayingId);
+      if(!row) return;
+      const region=activeLoopFor(row);
+      let position=currentCloudPosition();
+      /* native 경로는 되감기도 이 루프에서 한다. 잠금 중에는 tick이 돌지 않는다. */
+      if(region && isNativePlaybackMode() && !region.whole && position>=region.b){
+        position=region.a;
+        try{ activeCloudAudio().currentTime=region.a; }catch(error){}
+      }
+      playbackPositions.set(cloudPlayingId,position);
+      refreshCloudMediaSessionPosition(0);
+    },1000);
   }
   function startCloudProgress(){
     stopCloudProgress();
     cloudMediaPositionUpdatedAt=0;
+    startCloudPositionTimer();
     const tick=()=>{
       if(!cloudPlayingId) return;
       let position=currentCloudPosition();
@@ -1955,7 +1981,7 @@
     playbackRates.set(row.id,rate);
     if(commit) queueRecordingStateSave(row);
     const player=document.getElementById(`record-player-${row.id}`);
-    const output=player&&player.querySelector('.record-rate-value');
+    const output=player&&player.querySelector('.record-speed-control .record-rate-value');
     if(output) output.value=output.textContent=formatPlaybackRate(rate);
     if(isActive){
       if(isNativePlaybackMode()){
@@ -2004,12 +2030,10 @@
     const changed=next!==rowTranspose(row);
     transposes.set(row.id,next);
     const player=document.getElementById(`record-player-${row.id}`);
-    const output=player&&player.querySelector('.record-transpose-value');
+    const output=player&&player.querySelector('.record-transpose-control .record-transpose-value');
     if(output) output.textContent=formatTranspose(next);
-    const down=player&&player.querySelector('[data-role="transpose-down"]');
-    const up=player&&player.querySelector('[data-role="transpose-up"]');
-    if(down) down.disabled=next<=TRANSPOSE_MIN;
-    if(up) up.disabled=next>=TRANSPOSE_MAX;
+    const slider=player&&player.querySelector('.record-transpose-control input[type="range"]');
+    if(slider && Number(slider.value)!==next) slider.value=String(next);
     if(changed) queueRecordingStateSave(row);
     if(isActive){
       /* 조옮김은 SoundTouch 경로에서만 된다. 없으면 그 경로로 옮긴다. */
@@ -2039,7 +2063,9 @@
     if(!semitones) return '0';
     return `${semitones>0?'+':''}${semitones}`;
   }
-  function bindPlaybackRateReset(slider,row){
+  /* 손잡이를 두 번 누르면 기준값으로 돌아간다. 배속은 1배, 조옮김은 원래 조다.
+     드래그 중에는 발동하지 않는다. */
+  function bindSliderReset(slider,resetValue,apply){
     let pointerId=null;
     let startX=0;
     let moved=false;
@@ -2051,9 +2077,8 @@
       if(now-lastResetAt<120) return;
       lastResetAt=now;
       if(event) event.preventDefault();
-      slider.value='1';
-      slider.setAttribute('aria-valuetext',formatPlaybackRate(1));
-      setPlaybackRate(row,1,true);
+      slider.value=String(resetValue);
+      apply(resetValue);
     };
     slider.addEventListener('pointerdown',event=>{
       if(event.isPrimary===false) return;
@@ -2074,6 +2099,12 @@
     });
     slider.addEventListener('pointercancel',()=>{ pointerId=null; lastTapAt=0; });
     slider.addEventListener('dblclick',reset);
+  }
+  function bindPlaybackRateReset(slider,row){
+    bindSliderReset(slider,1,value=>{
+      slider.setAttribute('aria-valuetext',formatPlaybackRate(value));
+      setPlaybackRate(row,value,true);
+    });
   }
   function createExpandedPlayer(row){
     const player=document.createElement('div');
@@ -2144,7 +2175,7 @@
     clear.setAttribute('aria-label','A/B 지점 지우기');
     clear.disabled=region.a===null && region.b===null; clear.addEventListener('click',()=>clearLoop(row));
     loopTools.append(pointA,pointB,repeat,clear);
-    const rateLabel=document.createElement('label'); rateLabel.className='record-rate-control';
+    const rateLabel=document.createElement('label'); rateLabel.className='record-rate-control record-speed-control';
     const rateText=document.createElement('span'); rateText.textContent='속도';
     const rateSlider=document.createElement('input'); rateSlider.type='range';
     rateSlider.min=String(PLAYBACK_RATE_MIN); rateSlider.max=String(PLAYBACK_RATE_MAX);
@@ -2161,34 +2192,41 @@
     rateLabel.append(rateText,rateSlider,rateValue); tools.append(loopTools,rateLabel);
     /* 컨트롤 행은 재생 버튼 칸까지 넘어가 플레이어 전체 폭을 쓴다.
        그래야 A/B가 왼쪽 끝에 붙고 속도 슬라이더가 길어진다. */
-    /* 조옮김은 반음 단위라 슬라이더보다 스테퍼가 맞다. 새 줄을 만들면 플레이어가
-       높아지므로, 경과·전체 시간 사이의 빈 공간에 넣는다. */
-    const transposeGroup=document.createElement('div');
-    transposeGroup.className='record-transpose';
-    const transposeLabel=document.createElement('span');
-    transposeLabel.className='record-extra-label';
-    transposeLabel.textContent='조';
-    const transposeDown=document.createElement('button');
-    transposeDown.type='button';
-    transposeDown.className='record-player-tool';
-    transposeDown.dataset.role='transpose-down';
-    transposeDown.textContent='−';
-    transposeDown.setAttribute('aria-label',`${row.title} 반음 내리기`);
-    transposeDown.disabled=rowTranspose(row)<=TRANSPOSE_MIN;
-    transposeDown.addEventListener('click',()=>setTranspose(row,rowTranspose(row)-1,false));
+    /* 조옮김은 속도와 같은 슬라이더로 두고 바로 위에 놓는다. 반음 단위라
+       step은 1이며, 손잡이를 두 번 누르면 원래 조로 돌아간다. */
+    const transposeLabel=document.createElement('label');
+    transposeLabel.className='record-rate-control record-transpose-control';
+    /* 왼쪽 끝은 플랫, 오른쪽 끝은 샵이라 방향이 바로 읽힌다. */
+    const transposeFlat=document.createElement('span');
+    transposeFlat.className='record-accidental';
+    transposeFlat.setAttribute('aria-hidden','true');
+    transposeFlat.textContent='♭';
+    const transposeSharp=document.createElement('span');
+    transposeSharp.className='record-accidental';
+    transposeSharp.setAttribute('aria-hidden','true');
+    transposeSharp.textContent='♯';
+    const transposeSlider=document.createElement('input');
+    transposeSlider.type='range';
+    transposeSlider.min=String(TRANSPOSE_MIN);
+    transposeSlider.max=String(TRANSPOSE_MAX);
+    transposeSlider.step='1';
+    transposeSlider.value=String(rowTranspose(row));
+    transposeSlider.setAttribute('aria-label',`${row.title} 조옮김`);
+    transposeSlider.setAttribute('aria-valuetext',formatTranspose(rowTranspose(row)));
     const transposeValue=document.createElement('output');
-    transposeValue.className='record-transpose-value';
-    transposeValue.textContent=formatTranspose(rowTranspose(row));
-    const transposeUp=document.createElement('button');
-    transposeUp.type='button';
-    transposeUp.className='record-player-tool';
-    transposeUp.dataset.role='transpose-up';
-    transposeUp.textContent='+';
-    transposeUp.setAttribute('aria-label',`${row.title} 반음 올리기`);
-    transposeUp.disabled=rowTranspose(row)>=TRANSPOSE_MAX;
-    transposeUp.addEventListener('click',()=>setTranspose(row,rowTranspose(row)+1,false));
-    transposeGroup.append(transposeLabel,transposeDown,transposeValue,transposeUp);
-    times.insertBefore(transposeGroup,times.lastChild);
+    transposeValue.className='record-rate-value record-transpose-value';
+    transposeValue.value=transposeValue.textContent=formatTranspose(rowTranspose(row));
+    transposeSlider.addEventListener('input',()=>{
+      transposeSlider.setAttribute('aria-valuetext',formatTranspose(transposeSlider.value));
+      setTranspose(row,transposeSlider.value,false);
+    });
+    transposeSlider.addEventListener('change',()=>setTranspose(row,transposeSlider.value,true));
+    bindSliderReset(transposeSlider,0,value=>{
+      transposeSlider.setAttribute('aria-valuetext',formatTranspose(value));
+      setTranspose(row,value,true);
+    });
+    transposeLabel.append(transposeFlat,transposeSlider,transposeSharp,transposeValue);
+    tools.insertBefore(transposeLabel,rateLabel);
     detail.append(waveformWrap,times); player.append(play,detail,tools);
     requestAnimationFrame(()=>updatePlayerProgress(row.id,
       cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0));
@@ -2232,6 +2270,15 @@
     recordUsage.classList.toggle('near-limit',total>=MAX_RECORDINGS-5 && total<MAX_RECORDINGS);
     recordUsage.classList.toggle('at-limit',total>=MAX_RECORDINGS);
   }
+  /* 목록 맨 왼쪽의 작은 올리브. 누르면 즐겨찾기가 풀린다. */
+  function createFavoriteMark(row,onRemove){
+    const mark=document.createElement('button');
+    mark.type='button';
+    mark.className='record-row-favorite';
+    mark.setAttribute('aria-label',`${row.title} 즐겨찾기 해제`);
+    mark.addEventListener('click',event=>{ event.stopPropagation(); onRemove(); });
+    return mark;
+  }
   function createRecordingEntry(row){
     const entry=document.createElement('div'); entry.className='record-entry';
     const item=document.createElement('div'); item.className='record-row';
@@ -2241,11 +2288,6 @@
     open.setAttribute('aria-label',`${row.title} 녹음 ${expandedRecordingId===row.id?'접기':'열기'}`);
     const copy=document.createElement('span'); copy.className='record-row-copy';
     const title=document.createElement('strong'); title.textContent=row.title;
-    if(row.pinned){
-      const pin=document.createElement('span');
-      pin.className='record-row-pin'; pin.textContent='고정';
-      title.appendChild(pin);
-    }
     const date=document.createElement('small'); date.textContent=formatDate(row.recorded_at);
     copy.append(title,date);
     const duration=document.createElement('span'); duration.className='record-row-duration'; duration.textContent=formatDuration(row.duration_ms);
@@ -2254,6 +2296,10 @@
     const more=document.createElement('button'); more.type='button'; more.className='record-row-more';
     more.textContent='•••'; more.setAttribute('aria-label',`${row.title} 메뉴`);
     more.addEventListener('click',()=>openMenu(row,more));
+    if(row.pinned){
+      entry.classList.add('favorite');
+      item.appendChild(createFavoriteMark(row,()=>setRecordingFavorite(row,false)));
+    }
     item.append(open,more); entry.appendChild(item);
     if(expandedRecordingId===row.id) entry.appendChild(createExpandedPlayer(row));
     return entry;
@@ -2307,8 +2353,11 @@
   }
   function decorateForSelection(node,entry){
     node.classList.add('selecting');
+    node.classList.remove('favorite');
     const row=node.querySelector('.record-row');
     if(!row) return;
+    const mark=row.querySelector('.record-row-favorite');
+    if(mark) mark.remove();
     const box=document.createElement('label');
     box.className='record-select-box';
     const input=document.createElement('input');
@@ -2575,17 +2624,20 @@
       recordSave.textContent='저장';
     }
   }
-  async function togglePinSelected(){
-    const row=selectedRow; closeMenu();
+  async function setRecordingFavorite(row,next){
     if(!row) return;
     try{
-      await window.OliveCloud.setRecordingPinned(row.id,!row.pinned);
+      await window.OliveCloud.setRecordingPinned(row.id,next);
       await loadRecordings(true);
-    }catch(e){ setMessage('고정 상태를 바꾸지 못했습니다',true); }
+    }catch(e){ setMessage('즐겨찾기를 바꾸지 못했습니다',true); }
+  }
+  async function togglePinSelected(){
+    const row=selectedRow; closeMenu();
+    await setRecordingFavorite(row,!(row&&row.pinned));
   }
   function openMenu(row,trigger){
     selectedRow=row; menuTrigger=trigger; menuTitle.textContent=row.title;
-    if(menuPin) menuPin.textContent=row.pinned?'고정 해제':'고정';
+    if(menuPin) menuPin.textContent=row.pinned?'즐겨찾기 해제':'즐겨찾기';
     if(app) app.setAttribute('inert','');
     menuBackdrop.hidden=false;
     requestAnimationFrame(()=>menuBackdrop.classList.add('open'));
