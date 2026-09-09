@@ -315,8 +315,12 @@ assert.match(guide,/2\.25\+value\/100\*16\.75/);
 assert.match(guide,/\.mock-skip\.fwd svg\{ transform:scaleX\(-1\); \}/);
 assert.match(guide,/\.lock-btn\.fwd svg\{ transform:scaleX\(-1\); \}/);
 /* 목업과 '같은 버튼, 다른 뜻'이 같은 그림을 쓴다. 하나만 고치면 어긋난다. */
-assert.equal((guide.match(/M18\.08 5\.92A8\.6 8\.6 0 1 1 12 3\.4/g)||[]).length,8,
+assert.equal((guide.match(/M16\.59 5\.45A8 8 0 1 1 10\.61 4\.12/g)||[]).length,8,
   'iPhone 2 + Watch 2 + 비교표 4, 여덟 개가 같은 경로다');
+/* 화살촉 밑변이 호의 둥근 끝을 덮어야 한다. 밀어낸 거리가 선 두께의 절반보다 작으면
+   끝이 삐져나와 반쪽짜리 화살표로 보인다. */
+assert.match(guide,/stroke-width="2\.2"/,'선 두께 2.2');
+assert.match(guide,/M6\.86 4\.78 11\.14 1\.39 12\.04 6\.51Z/,'화살촉');
 assert.doesNotMatch(guide,/<span class="lock-btn" aria-hidden="true">10<\/span>/,
   '동그라미에 숫자만 넣지 않는다');
 /* 제목이 제목으로 보여야 한다. info.css의 눈썹 라벨 크기를 도움말에서 덮는다. */
