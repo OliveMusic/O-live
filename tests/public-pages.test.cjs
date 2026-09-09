@@ -189,7 +189,15 @@ console.log('public pages tests passed');
 assert.match(guide,/손잡이를 두 번 탭/,'슬라이더 초기화 안내');
 assert.match(guide,/길게 누르면 삭제/,'잼 코드 삭제 안내');
 assert.match(guide,/누르면 해제/,'즐겨찾기 해제 안내');
-assert.match(guide,/A와 B를 지정하지 않고 반복만 켜면 처음부터 끝까지/);
+assert.match(guide,/A와 B를 지정하지 않고 반복만 켜면 <strong>처음부터 끝까지<\/strong>/);
+/* 도움말은 글이 아니라 앱과 같은 컨트롤을 직접 눌러 보게 한다. */
+assert.match(guide,/data-demo="rate"/);
+assert.match(guide,/data-demo="loop"/);
+assert.match(guide,/data-demo="favorite"/);
+assert.match(guide,/class="rate-control"/,'실제 슬라이더 재현');
+assert.match(guide,/class="row-olive"/,'실제 올리브 재현');
+/* 두 번 탭 판정은 앱과 같은 값이어야 헷갈리지 않는다. */
+assert.match(guide,/now-lastTapAt<340 && Math\.abs\(event\.clientX-lastTapX\)<28/);
 assert.match(guide,/BPM을 10씩/);
 assert.match(guide,/10초씩 이동/);
 assert.match(guide,/잠금화면에서 재생되지 않습니다/,'YouTube 잠금화면 제약');
