@@ -12,12 +12,15 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=189';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=190';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
     (window.OLIVE_RELEASE&&window.OLIVE_RELEASE.schemaVersion)||0).padStart(3,'0');
   const MIN_LOOP_SECONDS=.4;
+  const TRANSPOSE_MIN=-12;
+  const TRANSPOSE_MAX=12;
+  const STATE_SAVE_DELAY=1200;
   // 보통 박의 0.40 → 0.0001, 45ms 감쇠 틱을 평균 낸 체감 에너지에 맞춘다.
   const METRONOME_REFERENCE_RMS=.1;
   const PLAYBACK_GAIN_MIN=.5;
@@ -138,6 +141,7 @@
   const waveformLoads=new Map();
   const playbackPositions=new Map();
   const playbackRates=new Map();
+  const transposes=new Map();
   const loopRegions=new Map();
   const cloudStretchModulePromises=new WeakMap();
   let loadingList=false;
@@ -385,18 +389,53 @@
     return node;
   }
   function rowDurationSeconds(row){ return Math.max(0,Number(row&&row.duration_ms)||0)/1000; }
+  /* Number(null)은 0이라 그대로 쓰면 지정된 적 없는 A/B가 0초로 읽힌다. */
+  function msOrNull(value){
+    if(value===null || value===undefined || value==='') return null;
+    const number=Number(value);
+    return Number.isFinite(number)?number:null;
+  }
+  /* 연습 설정은 계정에 저장된다. 이 세션에서 바꾼 값이 있으면 그것을,
+     없으면 클라우드에서 받아 온 값을 쓴다. */
   function rowPlaybackRate(row){
-    const value=Number(playbackRates.get(row&&row.id))||1;
+    const stored=playbackRates.get(row&&row.id);
+    const value=Number.isFinite(Number(stored))
+      ? Number(stored)
+      : (Number(row&&row.playback_rate)||1);
     return clamp(Math.round(value/PLAYBACK_RATE_STEP)*PLAYBACK_RATE_STEP,
       PLAYBACK_RATE_MIN,PLAYBACK_RATE_MAX);
+  }
+  function rowTranspose(row){
+    const stored=transposes.get(row&&row.id);
+    const value=Number.isFinite(Number(stored))
+      ? Number(stored)
+      : (Number(row&&row.transpose)||0);
+    return clamp(Math.round(value),TRANSPOSE_MIN,TRANSPOSE_MAX);
+  }
+  /* 반음 단위 조옮김을 재생 배율로 바꾼다. */
+  function transposeRatio(semitones){
+    return Math.pow(2,(Number(semitones)||0)/12);
+  }
+  /* 배속이 1이어도 조옮김이 있으면 SoundTouch 경로가 필요하다. */
+  function needsPitchProcessing(row){
+    return rowPlaybackRate(row)!==1 || rowTranspose(row)!==0;
   }
   function formatPlaybackRate(value){
     const rate=Number(value)||1;
     return `${rate.toFixed(2).replace(/0+$/,'').replace(/\.$/,'')}×`;
   }
   function loopRegionFor(row){
-    const region=loopRegions.get(row&&row.id);
-    if(!region) return {a:null,b:null,enabled:false};
+    let region=loopRegions.get(row&&row.id);
+    if(!region){
+      /* 클라우드에 저장된 구간을 초 단위로 되살린다. */
+      const a=msOrNull(row&&row.loop_a_ms);
+      const b=msOrNull(row&&row.loop_b_ms);
+      region={
+        a:a===null?null:a/1000,
+        b:b===null?null:b/1000,
+        enabled:Boolean(row&&row.loop_enabled),
+      };
+    }
     return {
       a:Number.isFinite(region.a)?clamp(region.a,0,rowDurationSeconds(row)):null,
       b:Number.isFinite(region.b)?clamp(region.b,0,rowDurationSeconds(row)):null,
@@ -1417,7 +1456,7 @@
       }
       gain.gain.value=rowPlaybackGain(row);
       try{ source.playbackRate.value=rate; }catch(error){}
-      if(rate!==1 && typeof AudioWorkletNode==='function'){
+      if(needsPitchProcessing(row) && typeof AudioWorkletNode==='function'){
         const stretch=new AudioWorkletNode(ctx,'soundtouch-processor',{
           numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],
           processorOptions:{sampleBufferType:'circular'},
@@ -1425,7 +1464,7 @@
         const stretchRate=stretch.parameters&&stretch.parameters.get('playbackRate');
         const stretchPitch=stretch.parameters&&stretch.parameters.get('pitch');
         if(stretchRate) stretchRate.value=rate;
-        if(stretchPitch) stretchPitch.value=1;
+        if(stretchPitch) stretchPitch.value=transposeRatio(rowTranspose(row));
         source.connect(stretch).connect(gain);
         cloudStretchNode=stretch;
       }else source.connect(gain);
@@ -1884,6 +1923,7 @@
       next.enabled=true;
     }
     loopRegions.set(row.id,next);
+    queueRecordingStateSave(row);
     applyLoopToActivePlayback(row,current);
     setMessage('');
     renderList();
@@ -1893,6 +1933,7 @@
     const current=cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0;
     region.enabled=!region.enabled;
     loopRegions.set(row.id,region);
+    queueRecordingStateSave(row);
     if(isNativePlaybackMode()) applyNativePlaybackSettings(row);
     applyLoopToActivePlayback(row,current);
     renderList();
@@ -1901,6 +1942,7 @@
     const current=cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0;
     const region=loopRegionFor(row);
     loopRegions.set(row.id,{a:null,b:null,enabled:region.enabled});
+    queueRecordingStateSave(row);
     if(isNativePlaybackMode()) applyNativePlaybackSettings(row);
     applyLoopToActivePlayback(row,current);
     renderList();
@@ -1911,12 +1953,13 @@
     const rate=clamp(Math.round((Number(value)||1)/PLAYBACK_RATE_STEP)*PLAYBACK_RATE_STEP,
       PLAYBACK_RATE_MIN,PLAYBACK_RATE_MAX);
     playbackRates.set(row.id,rate);
+    if(commit) queueRecordingStateSave(row);
     const player=document.getElementById(`record-player-${row.id}`);
     const output=player&&player.querySelector('.record-rate-value');
     if(output) output.value=output.textContent=formatPlaybackRate(rate);
     if(isActive){
       if(isNativePlaybackMode()){
-        if(rate!==1 && !cloudMediaUsesPersistentNative){
+        if(needsPitchProcessing(row) && !cloudMediaUsesPersistentNative){
           switchActivePlaybackToPitchPreserving(row,activePosition);
           return;
         }
@@ -1925,7 +1968,7 @@
         return;
       }
       if(cloudPlaybackMode==='decoded' && cloudSource && cloudDecodedContext){
-        if(rate!==1 && !cloudStretchNode){
+        if(needsPitchProcessing(row) && !cloudStretchNode){
           switchActivePlaybackToPitchPreserving(row,activePosition);
           return;
         }
@@ -1943,7 +1986,7 @@
         updateCloudMediaSessionPosition(row,activePosition);
         return;
       }
-      if(rate!==1) switchActivePlaybackToPitchPreserving(row,activePosition);
+      if(needsPitchProcessing(row)) switchActivePlaybackToPitchPreserving(row,activePosition);
       return;
     }
     if(cloudMediaId===row.id){
@@ -1953,6 +1996,48 @@
       return;
     }
     if(commit) renderList();
+  }
+  function setTranspose(row,value,commit=false){
+    const isActive=cloudPlayingId===row.id;
+    const activePosition=isActive?currentCloudPosition():null;
+    const next=clamp(Math.round(Number(value)||0),TRANSPOSE_MIN,TRANSPOSE_MAX);
+    const changed=next!==rowTranspose(row);
+    transposes.set(row.id,next);
+    const player=document.getElementById(`record-player-${row.id}`);
+    const output=player&&player.querySelector('.record-transpose-value');
+    if(output) output.textContent=formatTranspose(next);
+    const down=player&&player.querySelector('[data-role="transpose-down"]');
+    const up=player&&player.querySelector('[data-role="transpose-up"]');
+    if(down) down.disabled=next<=TRANSPOSE_MIN;
+    if(up) up.disabled=next>=TRANSPOSE_MAX;
+    if(changed) queueRecordingStateSave(row);
+    if(isActive){
+      /* 조옮김은 SoundTouch 경로에서만 된다. 없으면 그 경로로 옮긴다. */
+      if(isNativePlaybackMode() || !cloudStretchNode){
+        if(needsPitchProcessing(row)){
+          switchActivePlaybackToPitchPreserving(row,activePosition);
+          return;
+        }
+      }else{
+        applyTransposeToStretchNode(row);
+      }
+      updateCloudMediaSessionPosition(row,activePosition);
+      return;
+    }
+    if(commit) renderList();
+  }
+  function applyTransposeToStretchNode(row){
+    const pitch=cloudStretchNode&&cloudStretchNode.parameters&&
+      cloudStretchNode.parameters.get('pitch');
+    if(!pitch) return;
+    const value=transposeRatio(rowTranspose(row));
+    try{ pitch.setValueAtTime(value,cloudDecodedContext.currentTime); }
+    catch(error){ pitch.value=value; }
+  }
+  function formatTranspose(value){
+    const semitones=Math.round(Number(value)||0);
+    if(!semitones) return '0';
+    return `${semitones>0?'+':''}${semitones}`;
   }
   function bindPlaybackRateReset(slider,row){
     let pointerId=null;
@@ -2076,6 +2161,34 @@
     rateLabel.append(rateText,rateSlider,rateValue); tools.append(loopTools,rateLabel);
     /* 컨트롤 행은 재생 버튼 칸까지 넘어가 플레이어 전체 폭을 쓴다.
        그래야 A/B가 왼쪽 끝에 붙고 속도 슬라이더가 길어진다. */
+    /* 조옮김은 반음 단위라 슬라이더보다 스테퍼가 맞다. 새 줄을 만들면 플레이어가
+       높아지므로, 경과·전체 시간 사이의 빈 공간에 넣는다. */
+    const transposeGroup=document.createElement('div');
+    transposeGroup.className='record-transpose';
+    const transposeLabel=document.createElement('span');
+    transposeLabel.className='record-extra-label';
+    transposeLabel.textContent='조';
+    const transposeDown=document.createElement('button');
+    transposeDown.type='button';
+    transposeDown.className='record-player-tool';
+    transposeDown.dataset.role='transpose-down';
+    transposeDown.textContent='−';
+    transposeDown.setAttribute('aria-label',`${row.title} 반음 내리기`);
+    transposeDown.disabled=rowTranspose(row)<=TRANSPOSE_MIN;
+    transposeDown.addEventListener('click',()=>setTranspose(row,rowTranspose(row)-1,false));
+    const transposeValue=document.createElement('output');
+    transposeValue.className='record-transpose-value';
+    transposeValue.textContent=formatTranspose(rowTranspose(row));
+    const transposeUp=document.createElement('button');
+    transposeUp.type='button';
+    transposeUp.className='record-player-tool';
+    transposeUp.dataset.role='transpose-up';
+    transposeUp.textContent='+';
+    transposeUp.setAttribute('aria-label',`${row.title} 반음 올리기`);
+    transposeUp.disabled=rowTranspose(row)>=TRANSPOSE_MAX;
+    transposeUp.addEventListener('click',()=>setTranspose(row,rowTranspose(row)+1,false));
+    transposeGroup.append(transposeLabel,transposeDown,transposeValue,transposeUp);
+    times.insertBefore(transposeGroup,times.lastChild);
     detail.append(waveformWrap,times); player.append(play,detail,tools);
     requestAnimationFrame(()=>updatePlayerProgress(row.id,
       cloudPlayingId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0));
@@ -2145,6 +2258,34 @@
     if(expandedRecordingId===row.id) entry.appendChild(createExpandedPlayer(row));
     return entry;
   }
+  /* ── 연습 설정 저장 ── */
+  let stateSaveTimer=0;
+  function queueRecordingStateSave(row){
+    if(!row || !currentUser) return;
+    if(stateSaveTimer) clearTimeout(stateSaveTimer);
+    stateSaveTimer=setTimeout(()=>flushRecordingState(row),STATE_SAVE_DELAY);
+  }
+  async function flushRecordingState(row){
+    stateSaveTimer=0;
+    if(!row || !currentUser) return;
+    const region=loopRegionFor(row);
+    const rate=rowPlaybackRate(row);
+    const transpose=rowTranspose(row);
+    const loopA=region.a===null?null:Math.round(region.a*1000);
+    const loopB=region.b===null?null:Math.round(region.b*1000);
+    try{
+      await window.OliveCloud.saveRecordingState(row.id,{
+        rate,transpose,loopA,loopB,loopEnabled:region.enabled,
+      });
+      /* 다시 불러올 때까지 목록 행도 맞춰 둔다. */
+      row.playback_rate=rate;
+      row.transpose=transpose;
+      row.loop_a_ms=loopA;
+      row.loop_b_ms=loopB;
+      row.loop_enabled=region.enabled;
+    }catch(e){ /* 연습 설정 저장 실패는 재생을 막지 않는다. */ }
+  }
+
   /* ── 여러 항목 선택 ── */
   function renderSelectionBar(){
     if(!recordSelectBar) return;

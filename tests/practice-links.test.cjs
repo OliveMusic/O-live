@@ -11,6 +11,7 @@ const migration=fs.readFileSync('supabase/012_practice_links.sql','utf8');
 const edge=fs.readFileSync('supabase/functions/youtube-search/index.ts','utf8');
 const config=fs.readFileSync('supabase/config.toml','utf8');
 const migration13=fs.readFileSync('supabase/013_pinning_and_maintenance.sql','utf8');
+const migration14=fs.readFileSync('supabase/014_recording_practice_state.sql','utf8');
 
 /* ── 마크업 ── */
 /* 링크는 아이콘 버튼이다. 글자가 없으므로 aria-label이 반드시 있어야 한다. */
@@ -61,6 +62,28 @@ assert.match(migration13,/perform public\.cleanup_youtube_search_usage\(\)/);
 assert.match(cloud,/client\.rpc\('run_olive_maintenance'\)/);
 assert.match(cloud,/\n    runMaintenance\(\);/,'로그인 뒤 한 번 부른다');
 assert.match(migration13,/select 13::integer/);
+/* 녹음본의 연습 설정도 계정에 저장한다. 이전에는 메모리에만 있어 새로고침에 사라졌다. */
+assert.match(migration14,/add column if not exists playback_rate/);
+assert.match(migration14,/add column if not exists transpose/);
+assert.match(migration14,/add column if not exists loop_a_ms/);
+assert.match(migration14,/practice_recordings_transpose_check[\s\S]{0,140}between -12 and 12/);
+assert.match(migration14,/create or replace function public\.save_practice_recording_state/);
+assert.match(migration14,/select 14::integer/);
+assert.match(cloud,/async function saveRecordingState\(id,state\)/);
+assert.match(cloud,/playback_rate,transpose,loop_a_ms,loop_b_ms,loop_enabled/,'목록에서 함께 읽는다');
+assert.match(recorder,/function rowTranspose\(row\)/);
+assert.match(recorder,/function needsPitchProcessing\(row\)/);
+assert.match(recorder,/function transposeRatio\(semitones\)/);
+assert.match(recorder,/Math\.pow\(2,\(Number\(semitones\)\|\|0\)\/12\)/);
+/* 배속이 1이어도 조옮김이 있으면 SoundTouch 경로가 필요하다. */
+assert.match(recorder,/if\(needsPitchProcessing\(row\) && typeof AudioWorkletNode==='function'\)/);
+assert.doesNotMatch(recorder,/if\(rate!==1 && typeof AudioWorkletNode/);
+assert.match(recorder,/stretchPitch\.value=transposeRatio\(rowTranspose\(row\)\)/);
+assert.match(recorder,/async function flushRecordingState\(row\)/);
+assert.match(recorder,/queueRecordingStateSave\(row\)/);
+/* 클라우드에 저장된 구간을 초 단위로 되살린다. */
+assert.match(recorder,/function msOrNull\(value\)/);
+assert.match(recorder,/a:a===null\?null:a\/1000/);
 /* 트랙 슬라이더도 키보드로 조작할 수 있어야 한다. */
 assert.match(links,/track\.addEventListener\('keydown'/);
 assert.match(links,/aria-valuemin/);
@@ -181,7 +204,7 @@ assert.match(links,/player\.setPlaybackRate\(next\)/);
 }
 /* 컨트롤 행이 플레이어 전체 폭을 써서 A/B가 왼쪽 끝에 붙는다. */
 assert.match(index,/\.record-player-tools\{[^}]*grid-column:1 \/ -1/);
-assert.match(recorder,/player\.append\(play,detail,tools\)/);
+assert.match(recorder,/times\.insertBefore\(transposeGroup,times\.lastChild\)/);
 /* 손잡이를 두 번 누르면 원곡 속도로 돌아간다. */
 assert.match(links,/function bindPlaybackRateReset\(slider,row\)/);
 assert.match(links,/slider\.addEventListener\('dblclick',reset\)/);

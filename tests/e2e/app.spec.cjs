@@ -71,8 +71,20 @@ async function preparePage(page,{
           async getSession(){ return {data:{session:{user}},error:null}; },
         },
         async rpc(name,args){
-          if(name==='olive_schema_version') return {data:13,error:null};
+          if(name==='olive_schema_version') return {data:14,error:null};
           if(name==='run_olive_maintenance') return {data:true,error:null};
+          if(name==='save_practice_recording_state'){
+            const target=serverRows.find(item=>item.id===args.p_recording_id);
+            if(target){
+              target.playback_rate=args.p_playback_rate;
+              target.transpose=args.p_transpose;
+              target.loop_a_ms=args.p_loop_a_ms;
+              target.loop_b_ms=args.p_loop_b_ms;
+              target.loop_enabled=args.p_loop_enabled;
+              window.__savedRecordingState=args;
+            }
+            return {data:Boolean(target),error:null};
+          }
           if(name==='set_practice_recording_pinned'){
             const target=serverRows.find(item=>item.id===args.p_recording_id);
             if(target) target.pinned=args.p_pinned;
@@ -419,7 +431,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.59');
+  await expect(page.locator('#appVersion')).toHaveText('버전 1.3.60');
 }
 
 async function expandRecordList(page){
@@ -451,7 +463,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     const registration=await navigator.serviceWorker.ready;
     return registration.active ? registration.active.scriptURL : '';
   });
-  expect(workerUrl).toContain('service-worker.js?v=189');
+  expect(workerUrl).toContain('service-worker.js?v=190');
 });
 
 test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
@@ -468,7 +480,7 @@ test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한
   await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
   await expect(version).toHaveText('진단 기록 복사됨');
   const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:'1.3.59',build:189});
+  expect(payload.release).toEqual({version:'1.3.60',build:190});
   expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
 });
 
@@ -750,6 +762,41 @@ test('선택 모드로 녹음본과 YouTube를 한 번에 지운다',async({page
   await expect(page.locator('#recordSelectBar')).toBeHidden();
 });
 
+test('녹음본의 배속·구간·조옮김을 계정에서 되살리고 바뀌면 저장한다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    recordings:[{
+      id:'state-recording',title:'연습 설정 테스트',
+      object_path:'recording-browser-user/state-recording.m4a',
+      duration_ms:69000,byte_size:1000,mime_type:'audio/mp4',
+      waveform:Array.from({length:80},()=>40),playback_gain:1,
+      playback_rate:1.25,transpose:-2,loop_a_ms:5000,loop_b_ms:20000,loop_enabled:true,
+      recorded_at:'2026-09-06T09:00:00.000Z',created_at:'2026-09-06T09:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+  await page.locator('.record-row-open').click();
+
+  /* 새로고침해도 남아 있어야 한다. 예전에는 메모리에만 있어 사라졌다. */
+  await expect(page.locator('.record-rate-control input[type="range"]')).toHaveValue('1.25');
+  await expect(page.locator('.record-rate-value')).toHaveText('1.25×');
+  await expect(page.locator('.record-transpose-value')).toHaveText('-2');
+  await expect(page.locator('.record-player-tool.point').first()).toHaveClass(/active/);
+  await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
+
+  /* 조옮김을 바꾸면 계정에 저장한다. */
+  await page.locator('[data-role="transpose-up"]').click();
+  await expect(page.locator('.record-transpose-value')).toHaveText('-1');
+  await expect.poll(async()=>await page.evaluate(()=>window.__savedRecordingState?.p_transpose),{timeout:6000}).toBe(-1);
+  const saved=await page.evaluate(()=>window.__savedRecordingState);
+  expect(saved.p_playback_rate).toBeCloseTo(1.25,2);
+  expect(saved.p_loop_a_ms).toBe(5000);
+  expect(saved.p_loop_b_ms).toBe(20000);
+  expect(saved.p_loop_enabled).toBe(true);
+});
+
 test('고정한 항목이 최신 항목보다 위에 온다',async({page})=>{
   await preparePage(page,{
     cloudClient:'recordings',
@@ -867,7 +914,9 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   const waveformSvgBox=await page.locator('.record-waveform-svg.base').boundingBox();
   const playBox=await page.locator('.record-player-play').boundingBox();
   const playerBox=await page.locator('.record-player').boundingBox();
-  expect(playerBox.height).toBeLessThanOrEqual(134);
+  /* 조옮김 스테퍼가 시간 줄에 들어가면서 8px 늘었다. 버튼을 더 줄이면
+     누르기 어려워져 여기까지만 허용한다. */
+  expect(playerBox.height).toBeLessThanOrEqual(144);
   expect(box.height).toBeCloseTo(44,0);
   expect(waveformSvgBox.y-box.y).toBeCloseTo(2,0);
   expect((box.y+box.height)-(waveformSvgBox.y+waveformSvgBox.height)).toBeCloseTo(2,0);
@@ -944,7 +993,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=189',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=190',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-rate-control input[type="range"]').dblclick();
@@ -1124,7 +1173,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=189');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=190');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -1254,7 +1303,7 @@ test('Storage가 MP3 MIME을 거절하면 DB 업데이트 안내를 표시한다
     name:'Paper Hearts.mp3',mimeType:'audio/mpeg',buffer:Buffer.from('mp3 upload'),
   });
   await expect(page.locator('#recordMessage'))
-    .toHaveText('MP3 업로드를 위한 저장소 업데이트가 필요합니다 · DB-013');
+    .toHaveText('MP3 업로드를 위한 저장소 업데이트가 필요합니다 · DB-014');
 });
 
 test('보통보다 약한 녹음 입력도 음량 막대에 충분히 보인다',async({page})=>{
@@ -1958,8 +2007,8 @@ test('클라우드 스키마가 오래되면 저장 대신 구체적인 업데�
   await preparePage(page,{cloudClient:true});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   await expect(page.locator('#earCloudTitle')).toHaveText('클라우드 업데이트 필요');
-  await expect(page.locator('#earCloudStatus')).toContainText('DB-013');
+  await expect(page.locator('#earCloudStatus')).toContainText('DB-014');
   await page.locator('#earCloudAction').evaluate(element=>element.click());
   await page.locator('#cloudSyncNow').click();
-  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-013');
+  await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-014');
 });

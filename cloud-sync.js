@@ -503,7 +503,7 @@
   async function listRecordings(){
     await ensureRecordingAccess();
     const {data,error}=await client.from('practice_recordings')
-      .select('id,title,object_path,duration_ms,byte_size,mime_type,waveform,playback_gain,source_type,pinned,recorded_at,created_at')
+      .select('id,title,object_path,duration_ms,byte_size,mime_type,waveform,playback_gain,source_type,pinned,playback_rate,transpose,loop_a_ms,loop_b_ms,loop_enabled,recorded_at,created_at')
       .eq('status','ready')
       .order('recorded_at',{ascending:false})
       .limit(50);
@@ -881,6 +881,27 @@
       remaining:Number.isFinite(Number(data&&data.remaining))?Number(data.remaining):null,
     };
   }
+  /* 녹음본의 배속·A/B·조옮김을 계정에 저장한다. 지금까지는 메모리에만 있어
+     새로고침하면 사라졌다. 연습 링크와 같은 방식이다. */
+  async function saveRecordingState(id,state){
+    await ensureRecordingAccess();
+    const loopMs=value=>{
+      if(value===null || value===undefined || value==='') return null;
+      const number=Number(value);
+      return Number.isFinite(number)?Math.round(number):null;
+    };
+    const {data,error}=await client.rpc('save_practice_recording_state',{
+      p_recording_id:String(id||''),
+      p_playback_rate:Number(state&&state.rate)||1,
+      p_transpose:Math.round(Number(state&&state.transpose)||0),
+      p_loop_a_ms:loopMs(state&&state.loopA),
+      p_loop_b_ms:loopMs(state&&state.loopB),
+      p_loop_enabled:Boolean(state&&state.loopEnabled),
+    });
+    if(error) throw error;
+    if(!data) throw new Error('Recording was not found');
+    return true;
+  }
   /* 자주 쓰는 항목을 목록 위에 고정한다. */
   async function setRecordingPinned(id,pinned){
     await ensureRecordingAccess();
@@ -951,6 +972,7 @@
     savePracticeLinkState,
     deletePracticeLink,
     searchYouTube,
+    saveRecordingState,
     setRecordingPinned,
     setPracticeLinkPinned,
     deleteRecordings,

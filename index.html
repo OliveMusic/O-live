@@ -1977,6 +1977,15 @@
     grid-column:1 / -1; min-width:0; display:grid; grid-template-columns:auto minmax(0,1fr);
     align-items:center; gap:10px; margin-top:1px;
   }
+  /* 조옮김은 반음 단위라 슬라이더보다 스테퍼가 맞다. 경과·전체 시간 사이의
+     빈 공간에 넣어 플레이어 높이를 늘리지 않는다. */
+  .record-transpose{ display:flex; align-items:center; gap:1px; }
+  .record-extra-label{ margin-right:3px; color:var(--ink-3); font-size:.5625rem; }
+  .record-transpose .record-player-tool{ min-width:24px; height:22px; padding:0 5px; }
+  .record-transpose-value{
+    min-width:22px; text-align:center; color:var(--ink-2);
+    font:650 .5938rem/1 inherit; font-variant-numeric:tabular-nums;
+  }
   .record-loop-tools{
     min-width:0; height:32px; display:flex; align-items:center; gap:1px; padding:2px;
     border-radius:10px; background:var(--body-hi);
@@ -2703,22 +2712,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=189"></script>
+<script src="app-version.js?v=190"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=189"></script>
-<script src="js/audio-runtime.js?v=189"></script>
-<script src="js/core.js?v=189"></script>
-<script src="js/metronome.js?v=189"></script>
-<script src="js/tuner-engine.js?v=189"></script>
-<script src="js/tuner.js?v=189"></script>
-<script src="js/scales.js?v=189"></script>
-<script src="js/ear-trainer.js?v=189"></script>
-<script src="js/rhythm-trainer.js?v=189"></script>
-<script src="js/recording-cache.js?v=189"></script>
-<script src="js/recorder.js?v=189"></script>
-<script src="js/practice-links.js?v=189"></script>
-<script src="js/jam-session.js?v=189"></script>
-<script src="js/app-shell.js?v=189"></script>
+<script src="cloud-sync.js?v=190"></script>
+<script src="js/audio-runtime.js?v=190"></script>
+<script src="js/core.js?v=190"></script>
+<script src="js/metronome.js?v=190"></script>
+<script src="js/tuner-engine.js?v=190"></script>
+<script src="js/tuner.js?v=190"></script>
+<script src="js/scales.js?v=190"></script>
+<script src="js/ear-trainer.js?v=190"></script>
+<script src="js/rhythm-trainer.js?v=190"></script>
+<script src="js/recording-cache.js?v=190"></script>
+<script src="js/recorder.js?v=190"></script>
+<script src="js/practice-links.js?v=190"></script>
+<script src="js/jam-session.js?v=190"></script>
+<script src="js/app-shell.js?v=190"></script>
 </body>
 </html>

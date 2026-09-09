@@ -15,7 +15,7 @@ assert.ok(Number.isInteger(release.schemaVersion) && release.schemaVersion>0,'po
 const index=fs.readFileSync('index.html','utf8');
 const appShell=fs.readFileSync('js/app-shell.js','utf8');
 const worker=fs.readFileSync('service-worker.js','utf8');
-const schema=fs.readFileSync('supabase/013_pinning_and_maintenance.sql','utf8');
+const schema=fs.readFileSync('supabase/014_recording_practice_state.sql','utf8');
 
 assert.match(index,new RegExp(`<script src="app-version\\.js\\?v=${release.build}"><\\/script>`),'page loads current release metadata');
 assert.match(appShell,/service-worker\.js\?v=['"`]\+release\.build/,'worker registration uses release build');
