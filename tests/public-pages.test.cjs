@@ -230,20 +230,56 @@ assert.match(guide,/class="rate-control"/,'실제 슬라이더 재현');
 assert.match(guide,/class="row-olive"/,'실제 올리브 재현');
 /* 숨은 동작은 글로 나열하지 않고 앱의 그 부분을 확대해 직접 눌러 보게 한다. */
 assert.doesNotMatch(guide,/class="gesture"/,'제스처 목록은 확대 시연으로 대체됐다');
-for(const key of ['chord','wave','tap']){
-  assert.match(guide,new RegExp(`data-demo="${key}"`),`${key} 확대 시연이 있다`);
+/* 만져 보는 것도 설명과 같이 지금 보고 있는 화면 것만 나온다. */
+const demoScreens={
+  chord:['jam'],
+  tempo:['metronome','jam','trainer:rhythm'],
+  sens:['tuner'],
+  rhythm:['trainer:rhythm'],
+  wave:['trainer:record'],
+  loop:['trainer:record'],
+  rate:['trainer:record'],
+  favorite:['trainer:record'],
+};
+for(const [key,screens] of Object.entries(demoScreens)){
+  const found=guide.match(new RegExp(`data-demo="${key}" data-screen="([^"]+)"`));
+  assert.ok(found,`${key} 시연에 화면이 지정돼 있다`);
+  assert.deepEqual(found[1].split(' '),screens,`${key} 시연이 나오는 화면`);
 }
+/* 프레임의 탭이 바뀌면 설명과 시연을 함께 갈아 끼운다. */
+assert.match(guide,/const screened=\[\.\.\.document\.querySelectorAll\('\[data-screen\]'\)\]/);
+assert.match(guide,/el\.hidden=!match/,'그 화면 것만 남긴다');
+assert.match(guide,/\.demo\[hidden\], \.callout\[hidden\], \.demo-empty\[hidden\]\{ display:none; \}/,
+  '[hidden]이 .demo의 display에 지지 않는다');
+assert.match(guide,/class="demo-empty"/,'숨은 동작이 없는 화면도 말해 준다');
 assert.match(guide,/class="prog-bar"/,'실제 진행 카드 재현');
 assert.match(guide,/class="zoom-badge">확대</,'확대한 화면임을 밝힌다');
 /* 삭제 타이머는 앱과 같은 0.5초다. 코드 이름과 −/+는 앱처럼 그 타이머를 가로챈다. */
 assert.match(guide,/card\.classList\.remove\('holding'\);\s*card\.hidden=true;/);
 assert.match(guide,/\},500\);/,'길게 누르기 판정은 0.5초');
 assert.match(guide,/name\.addEventListener\('pointerdown',event=>event\.stopPropagation\(\)\)/);
-/* TAP 계산은 core.js의 bindTapTempo와 같아야 한다. */
-assert.match(guide,/taps=taps\.filter\(time=>now-time<3000\)/);
-assert.match(guide,/Math\.max\(30,Math\.min\(260,Math\.round\(60000\/average\)\)\)/);
+/* 템포 조작은 core.js의 bindTempoKeys·bindTapTempo·bindResetOnDouble과 같은 판정이어야 한다. */
+assert.match(guide,/taps=taps\.filter\(time=>now-time<3000\)/,'TAP은 3초 창');
+assert.match(guide,/\},450\);/,'길게 누르기 판정은 450ms');
+assert.match(guide,/setBpm\(bpm\+step\*10\)/,'꾹 누르면 10씩');
+assert.match(guide,/repeatTimer=setInterval\([\s\S]{0,220}?,150\)/,'10씩 반복은 150ms 간격');
+assert.match(guide,/if\(now-lastNumTap<400\)/,'숫자 두 번 탭은 400ms');
+assert.match(guide,/Math\.max\(30,Math\.min\(260,Math\.round\(value\)\)\)/,'30–260 BPM');
+/* 슬라이더 기본값은 화면마다 다르다. 앱 값과 같아야 한다. */
+for(const reset of ['50','5','0','1']){
+  assert.match(guide,new RegExp(`data-reset="${reset}"`),`기본값 ${reset} 슬라이더`);
+}
+/* 즐겨찾기는 올리브로 풀고 ••• 메뉴로 되돌린다. 나머지 항목은 눌리지 않는다. */
+assert.match(guide,/class="row-more"[^>]*aria-expanded="false"/);
+assert.match(guide,/class="row-sheet-item" type="button" data-act="pin"/);
+assert.match(guide,/<button class="row-sheet-item" type="button" disabled>이름 변경<\/button>/);
+assert.match(guide,/<button class="row-sheet-item danger" type="button" disabled>삭제<\/button>/);
+assert.match(guide,/pin\.textContent=on\?'즐겨찾기 해제':'즐겨찾기'/,'앱처럼 상태에 따라 글자가 바뀐다');
 /* 파형 막대는 recorder.js의 waveformPath와 같은 식으로 그린다. */
 assert.match(guide,/2\.25\+value\/100\*16\.75/);
+/* 잠금화면 10초 버튼은 iOS와 같은 모양이다. 원을 그리고 좌우로 뒤집어 쓴다. */
+assert.match(guide,/\.mock-skip\.fwd svg\{ transform:scaleX\(-1\); \}/);
+assert.match(guide,/A8\.6 8\.6 0 1 1/,'위가 트인 원');
 /* 두 번 탭 판정은 앱과 같은 값이어야 헷갈리지 않는다. */
 assert.match(guide,/now-lastTapAt<340 && Math\.abs\(event\.clientX-lastTapX\)<28/);
 assert.match(guide,/BPM을 10씩/);
