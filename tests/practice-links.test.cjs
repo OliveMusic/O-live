@@ -126,6 +126,19 @@ assert.match(recorder,/function collapsePracticeLink\(\)/);
   const body=recorder.match(/function toggleRowExpanded\(row\)\{[\s\S]*?\n  \}/)[0];
   assert.match(body,/collapsePracticeLink\(\)/,'녹음본을 펼치면 링크를 접는다');
 }
+/* 배속은 녹음본과 같은 디자인이되 YouTube가 지원하는 단계에만 멈춘다. */
+assert.match(links,/const DEFAULT_RATES=\[0\.25,0\.5,0\.75,1,1\.25,1\.5,1\.75,2\]/);
+assert.match(links,/getAvailablePlaybackRates\(\)/,'실제 지원 단계를 받아 쓴다');
+assert.match(links,/function createRateControl\(row\)/);
+assert.match(links,/label\.className='record-rate-control'/,'녹음본과 같은 클래스');
+assert.match(links,/output\.className='record-rate-value'/);
+assert.match(links,/slider\.step='1'/,'단계 인덱스를 다룬다');
+assert.match(links,/player\.setPlaybackRate\(next\)/);
+/* 손잡이를 두 번 누르면 원곡 속도로 돌아간다. */
+assert.match(links,/function bindPlaybackRateReset\(slider,row\)/);
+assert.match(links,/slider\.addEventListener\('dblclick',reset\)/);
+assert.match(links,/setPlaybackRate\(row,1,true\)/);
+
 /* 파형이 없으므로 시간 눈금과 숫자 표시로 위치 감각을 준다. */
 assert.match(links,/function tickIntervalMs\(duration\)/);
 assert.match(links,/function renderTicks\(row\)/);
