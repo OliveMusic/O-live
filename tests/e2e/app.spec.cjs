@@ -490,22 +490,15 @@ test('도움말 링크가 나머지 정보 링크 위 줄 가운데에 놓인다
   expect(Math.abs(helpCenter-footerCenter)).toBeLessThanOrEqual(2);
 });
 
-test('버전을 길게 누르면 기기 내 오디오 진단 기록을 복사한다',async({page})=>{
+test('버전은 눌리지 않는 안내 글이고 진단 기록을 기기에 남기지 않는다',async({page})=>{
   await preparePage(page);
-  await page.evaluate(()=>{
-    Object.defineProperty(navigator,'clipboard',{
-      configurable:true,
-      value:{writeText:async text=>{ window.__testCopiedDiagnostics=text; }},
-    });
-  });
   const version=page.locator('#appVersion');
-  await version.dispatchEvent('pointerdown',{clientX:10,clientY:10});
-  await page.waitForTimeout(720);
-  await version.dispatchEvent('pointerup',{clientX:10,clientY:10});
-  await expect(version).toHaveText('진단 기록 복사됨');
-  const payload=await page.evaluate(()=>JSON.parse(window.__testCopiedDiagnostics));
-  expect(payload.release).toEqual({version:RELEASE.version,build:RELEASE.build});
-  expect(payload.entries.some(entry=>entry.event==='app:ready')).toBeTruthy();
+  await expect(version).toHaveJSProperty('tagName','P');
+  /* 추적은 메모리에만 있다. 새로 열면 처음부터 다시 쌓인다. */
+  expect(await page.evaluate(()=>localStorage.getItem('olive-audio-diagnostics-v1'))).toBeNull();
+  expect(await page.evaluate(()=>typeof window.OliveAudioDiagnostics.exportText)).toBe('undefined');
+  expect(await page.evaluate(()=>window.OliveAudioDiagnostics.read()
+    .some(entry=>entry.event==='app:ready'))).toBeTruthy();
 });
 
 test('트랙 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 유지한다',async({page})=>{

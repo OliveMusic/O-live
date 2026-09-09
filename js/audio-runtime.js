@@ -21,18 +21,13 @@ let __backgroundMediaActionMode = '';
 let __audioSessionMode = '';
 let __externalMediaSessionOwner = '';
 
-/* 실제 iPhone 잠금 화면의 원격 명령은 데스크톱 모의 테스트로 재현할 수 없다.
-   오디오나 계정 정보 없이 명령 도착 여부와 엔진 상태만 기기 안에 짧게 남겨,
-   화면을 연 뒤 원인을 구분할 수 있게 한다. */
-const AUDIO_DIAGNOSTICS_KEY='olive-audio-diagnostics-v1';
+/* 잠금 화면의 원격 명령이 실제로 도착했는지, 엔진이 어떤 순서로 깨어났는지는
+   화면만 봐서는 알 수 없다. 그 순서를 메모리에만 짧게 남겨 E2E가 확인한다.
+   사용자에게 보여 주거나 기기에 저장하지 않는다. 오디오나 계정 정보도 담지 않는다.
+   길게 눌러 복사하던 UI는 걷어냈다. 다시 필요해지면 그때 얹는다. */
 const AUDIO_DIAGNOSTICS_LIMIT=100;
-function readAudioDiagnostics(){
-  try{
-    if(typeof localStorage==='undefined') return [];
-    const stored=JSON.parse(localStorage.getItem(AUDIO_DIAGNOSTICS_KEY)||'[]');
-    return Array.isArray(stored) ? stored : [];
-  }catch(e){ return []; }
-}
+let audioDiagnostics=[];
+function readAudioDiagnostics(){ return audioDiagnostics.slice(); }
 function currentAudioDiagnosticState(){
   let transport=null, tempo=null;
   try{ transport=activeBackgroundTransport(); }catch(e){}
@@ -64,34 +59,23 @@ function currentAudioDiagnosticState(){
 }
 function recordAudioDiagnostic(event,details={}){
   try{
-    if(typeof localStorage==='undefined') return;
-    const entries=readAudioDiagnostics();
-    entries.push(Object.assign({
+    audioDiagnostics.push(Object.assign({
       at:new Date().toISOString(),
       event:String(event||'unknown'),
     },currentAudioDiagnosticState(),details));
-    localStorage.setItem(AUDIO_DIAGNOSTICS_KEY,JSON.stringify(entries.slice(-AUDIO_DIAGNOSTICS_LIMIT)));
+    if(audioDiagnostics.length>AUDIO_DIAGNOSTICS_LIMIT){
+      audioDiagnostics=audioDiagnostics.slice(-AUDIO_DIAGNOSTICS_LIMIT);
+    }
   }catch(e){}
 }
-function clearAudioDiagnostics(){
-  try{ if(typeof localStorage!=='undefined') localStorage.removeItem(AUDIO_DIAGNOSTICS_KEY); }catch(e){}
-}
-function exportAudioDiagnostics(){
-  const release=window.OLIVE_RELEASE||{version:'unknown',build:'unknown'};
-  return JSON.stringify({
-    format:'olive-audio-diagnostics-v1',
-    release:{version:release.version,build:release.build},
-    device:{
-      userAgent:typeof navigator==='undefined' ? '' : navigator.userAgent,
-      standalone:typeof navigator!=='undefined' && Boolean(navigator.standalone),
-    },
-    entries:readAudioDiagnostics(),
-  },null,2);
-}
+function clearAudioDiagnostics(){ audioDiagnostics=[]; }
+/* 예전 버전이 기기에 남긴 기록을 한 번 지운다. 더는 저장하지 않는다. */
+try{
+  if(typeof localStorage!=='undefined') localStorage.removeItem('olive-audio-diagnostics-v1');
+}catch(e){}
 window.OliveAudioDiagnostics=Object.freeze({
   read:readAudioDiagnostics,
   clear:clearAudioDiagnostics,
-  exportText:exportAudioDiagnostics,
   mark:recordAudioDiagnostic,
 });
 

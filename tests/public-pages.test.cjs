@@ -54,11 +54,14 @@ assert.match(worker,new RegExp(`importScripts\\('\\.\\/app-version\\.js\\?v=${re
 assert.match(worker,/const VERSION='v'\+RELEASE\.build/);
 assert.match(worker,new RegExp(`'\\.\\/cloud-sync\\.js\\?v=${release.build}'`));
 assert.match(index,new RegExp(`js/audio-runtime\\.js\\?v=${release.build}`));
-assert.match(index,/<button class="app-version" id="appVersion" type="button"><\/button>/);
-assert.match(index,/const versionText='버전 '\+release\.version/);
-assert.match(index,/길게 눌러 오디오 진단 기록 복사/);
-assert.match(index,/window\.OliveAudioDiagnostics\.exportText\(\)/);
-assert.match(index,/olive-audio-diagnostics-v1/);
+/* 버전은 이제 아무 동작도 없다. 누를 수 있게 보이면 안 된다. */
+assert.match(index,/<p class="app-version" id="appVersion"><\/p>/);
+assert.match(index,/appVersion\.textContent='버전 '\+release\.version/);
+assert.doesNotMatch(index,/진단 기록 복사/,'진단 복사 UI는 걷어냈다');
+assert.doesNotMatch(index,/exportText/,'내보내기 경로도 남기지 않는다');
+/* 추적은 메모리에만 남고 기기에 저장하지 않는다. 예전 기록은 한 번 지운다. */
+assert.doesNotMatch(index,/localStorage\.setItem\('olive-audio-diagnostics-v1'/);
+assert.match(index,/localStorage\.removeItem\('olive-audio-diagnostics-v1'\)/);
 assert.match(index,/media-action:seekforward/);
 assert.match(index,/tempo:applied/);
 assert.doesNotMatch(index,new RegExp(`빌드 ${release.build}`));
