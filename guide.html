@@ -482,9 +482,11 @@
         {screen:null, target:'.tab-btn[data-tab="scales"]', title:'스케일로 갑니다',
          body:'고른 스케일을 지판과 건반에 함께 보여 줍니다.', hint:'여기를 누르세요'},
         {screen:'scales', target:'#scaleKey', title:'루트음 고르기',
-         body:'여기서 고른 음이 스케일의 시작점이 됩니다.', hint:'하나 골라 보세요'},
+         body:'여기서 고른 음이 스케일의 시작점이 됩니다.', hint:'목록을 열어 다른 음을 골라 보세요',
+         memo:doc=>ddValue(doc,'#scaleKey'), check:(doc,memo)=>ddValue(doc,'#scaleKey')!==memo},
         {screen:'scales', target:'#scaleType', title:'스케일 고르기',
-         body:'메이저·마이너부터 모드와 펜타토닉까지 있습니다.', hint:'하나 골라 보세요'},
+         body:'메이저·마이너부터 모드와 펜타토닉까지 있습니다.', hint:'목록을 열어 다른 스케일을 골라 보세요',
+         memo:doc=>ddValue(doc,'#scaleType'), check:(doc,memo)=>ddValue(doc,'#scaleType')!==memo},
         {screen:'scales', target:'#fretboard', title:'진한 색이 루트음',
          body:'회색은 나머지 구성음이고, 건반의 숫자는 루트로부터의 <b>도수</b>입니다.', advance:'next'},
         {screen:'scales', target:'#fretZoom', title:'확대해서 보기',
@@ -649,6 +651,12 @@
     if(typeof target==='function') return target(doc)||null;
     return doc.querySelector(target);
   }
+  /* 드롭다운은 눌러도 목록만 열린다. 값이 실제로 바뀌었는지 보고 넘어가야
+     목록이 열린 채로 다음 단계로 밀려가지 않는다. 지금 값은 버튼에 적혀 있다. */
+  function ddValue(doc,selector){
+    const main=doc&&doc.querySelector(selector+' .dd-btn .dd-main');
+    return main?main.textContent.trim():'';
+  }
   /* 프레임이 다시 뜨는 사이에는 문서가 바뀐다. 붙잡지 말고 그때그때 묻는다. */
   function readyDoc(){
     const doc=frameDoc();
@@ -680,10 +688,25 @@
 
   /* ── 스포트라이트 ── */
   let tracked=null, trackTimer=0;   /* tracked는 요소가 아니라 '찾는 법'이다 */
+  /* 드롭다운 목록은 자리를 차지하지 않고 바깥으로 튀어나온다. 부모 상자만 뚫으면
+     목록이 어두운 쪽에 남아 고를 수가 없다. 열려 있으면 함께 감싼다. */
+  function holeBox(el){
+    let box=el.getBoundingClientRect();
+    const menu=el.querySelector('.dd-menu:not([hidden])');
+    if(menu){
+      const m=menu.getBoundingClientRect();
+      if(m.width>0 && m.height>0){
+        const left=Math.min(box.left,m.left), top=Math.min(box.top,m.top);
+        const right=Math.max(box.right,m.right), bottom=Math.max(box.bottom,m.bottom);
+        box={left,top,right,bottom,width:right-left,height:bottom-top};
+      }
+    }
+    return box;
+  }
   function stageRect(el){
     const frameBox=frame.getBoundingClientRect();
     const stageBox=stage.getBoundingClientRect();
-    const box=el.getBoundingClientRect();
+    const box=holeBox(el);
     return {
       left:frameBox.left-stageBox.left+box.left,
       top:frameBox.top-stageBox.top+box.top,
@@ -723,16 +746,29 @@
     try{ el=resolveTarget(doc,tracked); }catch(e){}
     if(el && el.isConnected) paint(el);
   }
+  let nudge=null, nudgeDoc=null;
+  function dropNudge(){
+    if(nudge && nudgeDoc){ try{ nudgeDoc.removeEventListener('pointerdown',nudge,true); }catch(e){} }
+    nudge=null; nudgeDoc=null;
+  }
   function track(target){
     tracked=target;
     repaint();
     clearInterval(trackTimer);
-    trackTimer=setInterval(repaint,300);
+    trackTimer=setInterval(repaint,280);
+    /* 목록이 열리고 닫히는 순간은 다음 주기를 기다리지 않고 바로 따라간다. */
+    dropNudge();
+    nudgeDoc=frameDoc();
+    if(nudgeDoc){
+      nudge=()=>{ setTimeout(repaint,60); setTimeout(repaint,260); };
+      nudgeDoc.addEventListener('pointerdown',nudge,true);
+    }
   }
   function untrack(){
     tracked=null;
     clearInterval(trackTimer);
     trackTimer=0;
+    dropNudge();
     mask.hidden=true;
     coach.hidden=true;
   }

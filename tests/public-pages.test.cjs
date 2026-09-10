@@ -269,6 +269,13 @@ for(const target of new Set(targets)){
   if(cls) assert.ok(appSource.includes(cls[1]),`앱에 없는 대상: ${target}`);
 }
 
+/* 드롭다운은 눌러도 목록만 열린다. 값이 바뀌었는지 보고 넘어가야 목록이 열린 채로
+   다음 단계로 밀려가지 않는다. 열린 목록은 부모 상자 밖으로 나가므로 구멍도 넓혀야 한다. */
+assert.match(guide,/function ddValue\(doc,selector\)/);
+assert.match(guide,/memo:doc=>ddValue\(doc,'#scaleKey'\), check:\(doc,memo\)=>ddValue\(doc,'#scaleKey'\)!==memo/);
+assert.match(guide,/memo:doc=>ddValue\(doc,'#scaleType'\), check:\(doc,memo\)=>ddValue\(doc,'#scaleType'\)!==memo/);
+assert.match(guide,/el\.querySelector\('\.dd-menu:not\(\[hidden\]\)'\)/,'열린 목록까지 뚫는다');
+
 /* 목록에는 녹음본과 링크가 섞여 있고 예시는 이름까지 같다. 구조로 갈라야 한다. */
 assert.match(guide,/const prefix=kind==='link'\?'link-player-':'record-player-'/);
 
