@@ -33,6 +33,16 @@ for(const [label,html] of Object.entries({index,about,privacy,terms,guide})){
   assert.match(html,/og:image/,`${label}: social preview image`);
 }
 
+/* 정보 페이지에서 앱으로 돌아가는 링크는 시작 화면을 한 번 더 띄운다. */
+for(const [label,text] of [['about',about],['privacy',privacy],['terms',terms],['guide',guide]]){
+  assert.doesNotMatch(text,/href="index\.html"/,`${label}: 앱 링크에 #splash가 붙어야 한다`);
+  assert.match(text,/href="index\.html#splash"/,`${label}: 앱 링크`);
+}
+assert.match(indexHtml,/const reopened=location\.hash==='#splash'/);
+assert.match(indexHtml,/skip=!reopened && state==='shown'/);
+assert.match(indexHtml,/history\.replaceState\(null,'',location\.pathname\+location\.search\)/,
+  '해시는 주소창에 남기지 않는다');
+
 for(const href of ['about.html','privacy.html','terms.html','guide.html']){
   assert.match(index,new RegExp(`href="${href}"`),`index links ${href}`);
   assert.match(worker,new RegExp(`'\\./${href}'`),`service worker caches ${href}`);

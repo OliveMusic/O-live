@@ -32,16 +32,24 @@
 <link rel="manifest" href="manifest.json">
 <script>
 /* 한 번 시작된 앱 세션에서는 화면 이동·OAuth 복귀·새로고침 때마다
-   시작 화면을 반복하지 않는다. 업데이트로 즉시 재시작되면 처음 시작 시각은 유지한다. */
+   시작 화면을 반복하지 않는다. 업데이트로 즉시 재시작되면 처음 시작 시각은 유지한다.
+   예외는 소개·도움말 같은 정보 페이지의 '앱 열기'다. 거기서 돌아올 때는 앱을 다시
+   여는 셈이므로 #splash를 달아 보내고 여기서 한 번 더 보여 준다.
+   OAuth 복귀는 해시에 토큰이 실리므로 이 조건에 걸리지 않는다. */
 (function(){
   const stateKey='olive-startup-state-v2';
   const timeKey='olive-startup-time-v2';
   let skip=false;
   let startedAt=Date.now();
+  const reopened=location.hash==='#splash';
+  /* 주소창과 뒤로가기에 남지 않게 곧바로 지운다. */
+  if(reopened){
+    try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+  }
   try{
     const state=sessionStorage.getItem(stateKey);
     const savedAt=Number(sessionStorage.getItem(timeKey))||0;
-    skip=state==='shown';
+    skip=!reopened && state==='shown';
     if(!skip){
       if(state==='showing' && Date.now()-savedAt<10000) startedAt=savedAt;
       else sessionStorage.setItem(timeKey,String(startedAt));
@@ -2731,22 +2739,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=209"></script>
+<script src="app-version.js?v=210"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=209"></script>
-<script src="js/audio-runtime.js?v=209"></script>
-<script src="js/core.js?v=209"></script>
-<script src="js/metronome.js?v=209"></script>
-<script src="js/tuner-engine.js?v=209"></script>
-<script src="js/tuner.js?v=209"></script>
-<script src="js/scales.js?v=209"></script>
-<script src="js/ear-trainer.js?v=209"></script>
-<script src="js/rhythm-trainer.js?v=209"></script>
-<script src="js/recording-cache.js?v=209"></script>
-<script src="js/recorder.js?v=209"></script>
-<script src="js/practice-links.js?v=209"></script>
-<script src="js/jam-session.js?v=209"></script>
-<script src="js/app-shell.js?v=209"></script>
+<script src="cloud-sync.js?v=210"></script>
+<script src="js/audio-runtime.js?v=210"></script>
+<script src="js/core.js?v=210"></script>
+<script src="js/metronome.js?v=210"></script>
+<script src="js/tuner-engine.js?v=210"></script>
+<script src="js/tuner.js?v=210"></script>
+<script src="js/scales.js?v=210"></script>
+<script src="js/ear-trainer.js?v=210"></script>
+<script src="js/rhythm-trainer.js?v=210"></script>
+<script src="js/recording-cache.js?v=210"></script>
+<script src="js/recorder.js?v=210"></script>
+<script src="js/practice-links.js?v=210"></script>
+<script src="js/jam-session.js?v=210"></script>
+<script src="js/app-shell.js?v=210"></script>
 </body>
 </html>

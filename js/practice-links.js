@@ -258,6 +258,8 @@
     if(!row) return;
     let position=0;
     try{ position=player.getCurrentTime()*1000; }catch(e){ return; }
+    /* 길이는 재생이 시작된 뒤에야 알려지는 경우가 있다. 그때 반복 버튼을 되살린다. */
+    if(syncDuration(row,playerDurationMs(row))) refreshLoopUi(row);
     const active=activeLoopFor(row);
     if(active && position>=active.b){
       try{ player.seekTo(active.a/1000,true); }catch(e){}
@@ -341,13 +343,7 @@
           playerReady=true;
           const start=Number(row.last_position_ms)||0;
           if(start>1000){ try{ player.seekTo(start/1000,true); }catch(e){} }
-          const duration=Math.round((player.getDuration()||0)*1000);
-          if(duration>0 && duration!==Number(row.duration_ms)){
-            row.duration_ms=duration;
-            const total=list.querySelector(`#link-player-${row.id} .link-total`);
-            if(total) total.textContent=formatDuration(duration);
-            queueStateSave(row);
-          }
+          syncDuration(row,playerDurationMs(row));
           /* 길이를 알고 나서야 A/B 구간을 올바른 비율로 그릴 수 있다. */
           refreshLoopUi(row);
           renderTicks(row);
@@ -453,8 +449,27 @@
     if(persist) queueStateSave(row);
     scheduleLoopReturn(row);
   }
+  function playerDurationMs(row){
+    if(!player || !playerReady || !row || row.id!==expandedId) return 0;
+    try{ return Math.round((player.getDuration()||0)*1000); }catch(e){ return 0; }
+  }
+  /* onReady 시점의 getDuration()은 아직 0을 주는 일이 잦다. 그때 저장된 0이 그대로 남으면
+     A/B 없는 전체 반복이 켜지지 않는다(길이를 몰라 되돌 지점이 없다). A/B는 제 값을
+     가지고 있으니 그쪽만 되고 전체 반복만 안 되는 것처럼 보인다.
+     그래서 저장값보다 플레이어가 아는 길이를 먼저 쓴다. */
   function rowDurationMs(row){
+    const live=playerDurationMs(row);
+    if(live>0) return live;
     return Math.max(0,Number(row&&row.duration_ms)||0);
+  }
+  /* 길이를 알게 되면 화면과 클라우드에 반영한다. onReady와 틱이 같이 쓴다. */
+  function syncDuration(row,duration){
+    if(!row || !(duration>0) || duration===Number(row.duration_ms)) return false;
+    row.duration_ms=duration;
+    const total=list.querySelector(`#link-player-${row.id} .link-total`);
+    if(total) total.textContent=formatDuration(duration);
+    queueStateSave(row);
+    return true;
   }
   /* A/B가 있으면 그 구간, 없으면 처음부터 끝까지를 반복한다.
      녹음본의 activeLoopFor와 같은 규칙이다. */

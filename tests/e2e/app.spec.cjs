@@ -32,7 +32,7 @@ async function preparePage(page,{
     if(stubYouTube){
       const players=[];
       const PlayerState={UNSTARTED:-1,ENDED:0,PLAYING:1,PAUSED:2,BUFFERING:3,CUED:5};
-      window.__testYouTube={players,PlayerState};
+      window.__testYouTube={players,PlayerState,duration:200};
       window.YT={
         PlayerState,
         Player:function(mount,options){
@@ -43,7 +43,7 @@ async function preparePage(page,{
           const events=(options&&options.events)||{};
           const api={
             pauseCalls:0,playCalls:0,rate:1,time:0,state:PlayerState.UNSTARTED,
-            getDuration(){ return 200; },
+            getDuration(){ return window.__testYouTube.duration; },
             getCurrentTime(){ return this.time; },
             seekTo(seconds){ this.time=Number(seconds)||0; },
             setPlaybackRate(value){ this.rate=Number(value)||1; },
@@ -977,6 +977,100 @@ test('YouTube 재생도 다른 소리와 같은 판에서 관리된다',async({p
   await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].pauseCalls)).toBe(1);
   await expect(page.locator('.tab-btn[data-tab="trainer"]')).not.toHaveClass(/sounding/);
   await expect.poll(()=>page.evaluate(()=>navigator.audioSession.type)).toBe('ambient');
+});
+
+/* 저장할 때 길이를 알아내지 못하면 duration_ms가 0으로 남는다. onReady의
+   getDuration()도 아직 0을 주는 일이 잦다. 그러면 A/B 반복은 되는데
+   전체 반복만 켜지지 않는다. 되돌 지점을 길이에서 얻기 때문이다. */
+test('길이를 늦게 알게 된 YouTube도 전체 반복을 켤 수 있다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    youtube:true,
+    practiceLinks:[{
+      id:'yt-unknown',provider:'youtube',video_id:'dQw4w9WgXcQ',
+      title:'길이 미상',duration_ms:0,last_position_ms:0,
+      loop_a_ms:null,loop_b_ms:null,loop_enabled:false,playback_rate:1,
+      created_at:'2026-09-08T14:00:00.000Z',
+    }],
+  });
+  /* onReady까지는 길이를 모른다. */
+  await page.evaluate(()=>{ window.__testYouTube.duration=0; });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+  await page.locator('.record-entry',{hasText:'길이 미상'}).locator('.record-row-open').click();
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players.length)).toBe(1);
+
+  const repeat=page.locator('.link-player [data-role="repeat"]');
+  await expect(repeat).toBeDisabled();
+
+  /* 재생이 시작되면 플레이어가 길이를 알려 준다. 그때 되살아나야 한다. */
+  await page.evaluate(()=>{
+    window.__testYouTube.duration=12;
+    window.__testYouTube.players[0].playVideo();
+  });
+  await expect(repeat).toBeEnabled();
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('aria-pressed','true');
+
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=11.9; });
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].time),{timeout:4000}).toBe(0);
+});
+
+/* 정보 페이지에서 '앱 열기'로 돌아오는 것은 앱을 다시 여는 것에 가깝다.
+   같은 세션이라도 시작 화면을 한 번 더 보여 준다. */
+test('정보 페이지에서 앱 열기로 돌아오면 시작 화면을 다시 보여 준다',async({page})=>{
+  await preparePage(page);
+  const splash=page.locator('#startupSplash');
+  /* 같은 세션에서 새로고침만 하면 다시 뜨지 않는다. */
+  await expect(splash).toBeHidden();
+
+  await page.goto('/about.html',{waitUntil:'domcontentloaded'});
+  await page.locator('.back-link').click();
+  await expect(splash).toBeVisible();
+  /* 주소창과 뒤로가기에 #splash가 남으면 안 된다. */
+  expect(new URL(page.url()).hash).toBe('');
+  await expect(splash).toBeHidden({timeout:6000});
+});
+
+test('YouTube도 A/B 없이 반복을 켜면 처음부터 끝까지 돈다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    youtube:true,
+    practiceLinks:[{
+      id:'yt-whole',provider:'youtube',video_id:'dQw4w9WgXcQ',
+      title:'전체 반복 재생',duration_ms:12000,last_position_ms:0,
+      loop_a_ms:null,loop_b_ms:null,loop_enabled:false,playback_rate:1,
+      created_at:'2026-09-08T14:00:00.000Z',
+    }],
+  });
+  await page.evaluate(()=>{ window.__testYouTube.duration=12; });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+  await page.locator('.record-entry',{hasText:'전체 반복 재생'}).locator('.record-row-open').click();
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players.length)).toBe(1);
+
+  await page.evaluate(()=>window.__testYouTube.players[0].playVideo());
+  const repeat=page.locator('.link-player [data-role="repeat"]');
+  await repeat.click();
+  await expect(repeat).toHaveAttribute('aria-pressed','true');
+
+  /* 끝에 다다르면 ENDED를 기다리지 않고 틱이 먼저 되돌린다. */
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=11.9; });
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].time),{timeout:4000}).toBe(0);
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=0; });
+
+  /* 끝까지 재생되면 처음으로 돌아가 이어서 돈다. A/B가 없어도 마찬가지다. */
+  const playsBefore=await page.evaluate(()=>window.__testYouTube.players[0].playCalls);
+  await page.evaluate(()=>{
+    const player=window.__testYouTube.players[0];
+    player.time=12;
+    player.fire(window.__testYouTube.PlayerState.ENDED);
+  });
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].time)).toBe(0);
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].playCalls))
+    .toBeGreaterThan(playsBefore);
 });
 
 test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이 나타난다',async({page})=>{
