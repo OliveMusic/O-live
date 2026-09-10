@@ -875,8 +875,8 @@
   async function searchYouTube(query){
     if(guideMode){
       return {results:[{
-        videoId:'pcowzkuulqE',title:'[Official Audio] 송수미 (Sumi Song) - 밤바람 (Night Breeze)',
-        channelTitle:'송수미',thumbnail:'https://i.ytimg.com/vi/pcowzkuulqE/mqdefault.jpg',
+        videoId:'edScGrfl50M',title:'C Major Scale',
+        channelTitle:'Music Rudiments Sounds',thumbnail:'https://i.ytimg.com/vi/edScGrfl50M/mqdefault.jpg',
       }],remaining:null};
     }
     await ensureRecordingAccess();
@@ -1002,8 +1002,8 @@
   }
   function guideLinks(){
     return [{
-      id:'guide-link-1',provider:'youtube',video_id:'pcowzkuulqE',
-      title:'송수미 - 밤바람',duration_ms:204000,last_position_ms:0,
+      id:'guide-link-1',provider:'youtube',video_id:'edScGrfl50M',
+      title:'C Major Scale',duration_ms:12000,last_position_ms:0,
       loop_a_ms:null,loop_b_ms:null,loop_enabled:false,playback_rate:1,pinned:true,
       created_at:new Date(Date.now()-864e5).toISOString(),
     }];

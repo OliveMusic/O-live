@@ -871,6 +871,17 @@ function hasHiddenSafeTransportPlaying(){
     catch(e){ return false; }
   });
 }
+/* 잠금화면까지 가지는 않지만 무음 스위치에 묻히면 안 되는 재생이 있다.
+   YouTube 연습 링크가 그렇다. 화면이 숨으면 함께 멈추되, 소리가 나는 동안은
+   세션을 playback으로 올려 둔다. ambient로 두면 iPhone 무음 모드에서 묵음이 된다. */
+function hasPlaybackSessionTransportPlaying(){
+  return __transports.some(transport=>{
+    try{
+      return Boolean((transportKeepsWhenHidden(transport) || transport.playbackSession)
+        && transport.isPlaying());
+    }catch(e){ return false; }
+  });
+}
 function stopBackgroundTransports(){
   __transports.forEach(transport=>{
     try{ if(transport.background && transport.isPlaying()) transport.stop(); }catch(e){}
@@ -901,6 +912,9 @@ function setTabSounding(tab,on,source){
   keepAwake(anySounding());
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
   const hiddenSafe=hasHiddenSafeTransportPlaying();
+  /* 세션 종류는 '지금 무엇이 울리는가'로 정한다. 앞 기능이 남기고 간 값을 물려받으면
+     청음을 하다 트랙으로 넘어갔을 때 ambient가 남아 YouTube가 묵음이 된다. */
+  const wantsPlayback=hasPlaybackSessionTransportPlaying();
   if(hasBackgroundTransportPlaying()){
     if(!recording){
       setAudioSession('playback');
@@ -910,7 +924,7 @@ function setTabSounding(tab,on,source){
   }else{
     stopBackgroundMedia();
     if(!recording){
-      const mode=hiddenSafe?'playback':'ambient';
+      const mode=wantsPlayback?'playback':'ambient';
       setAudioSession(mode);
       if(audioCtx && audioCtx.state!=='closed') __ctxMode=mode;
     }

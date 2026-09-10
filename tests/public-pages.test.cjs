@@ -19,6 +19,7 @@ const tuner=read('js/tuner.js');
 const rhythm=read('js/rhythm-trainer.js');
 const earTrainer=read('js/ear-trainer.js');
 const recorder=read('js/recorder.js');
+const practiceLinks=read('js/practice-links.js');
 const worker=read('service-worker.js');
 const manifest=JSON.parse(read('manifest.json'));
 const sitemap=read('sitemap.xml');
@@ -101,7 +102,13 @@ assert.match(index,/@media \(prefers-reduced-motion:reduce\)\{[\s\S]*?\.startup-
 
 assert.match(index,/function ensureCtx\(mode='ambient', forceFresh=false\)/);
 assert.match(index,/if\(__audioSessionMode===mode\) return/);
-assert.match(index,/const mode=hiddenSafe\?'playback':'ambient'/);
+/* 세션 종류는 지금 울리는 것이 정한다. 앞 기능이 남긴 값을 물려받으면
+   청음을 하다 트랙으로 넘어갔을 때 ambient가 남아 YouTube가 묵음이 된다. */
+assert.match(index,/const mode=wantsPlayback\?'playback':'ambient'/);
+assert.match(index,/transportKeepsWhenHidden\(transport\) \|\| transport\.playbackSession/);
+/* 소리를 내는 기능은 모두 운반자로 등록해야 튜너 진입과 화면 숨김이 닿는다. */
+assert.match(practiceLinks,/registerTransport\(\{isPlaying,stop:stopPlayback,playbackSession:true\}\)/);
+assert.match(practiceLinks,/if\(sounding===next\) return;/,'상태가 바뀔 때만 알린다');
 assert.match(index,/hasBackgroundTransportPlaying\(\) \|\| hasHiddenSafeTransportPlaying\(\)/);
 assert.match(index,/await withTimeout\(resumeCtx\(ctx\),1400\)/);
 assert.match(index,/const latencyHint='interactive'/);
@@ -244,8 +251,7 @@ assert.match(cloud,/const guideMode=\/\[\?&\]guide=1/);
 assert.match(cloud,/if\(guideMode\) return guideRecordings\(\)/);
 assert.match(cloud,/if\(guideMode\) return guideLinks\(\)/);
 assert.match(cloud,/title:'C Major Scale'/);
-assert.match(cloud,/title:'송수미 - 밤바람'/);
-assert.match(cloud,/video_id:'pcowzkuulqE'/);
+assert.match(cloud,/video_id:'edScGrfl50M'/);
 /* 예시 녹음은 C4에서 시작하는 장음계다. 제목과 어긋나면 안 된다. */
 assert.match(cloud,/const steps=\[0,2,4,5,7,9,11,12\]/);
 assert.match(cloud,/261\.63\*Math\.pow\(2,semitone\/12\)/);

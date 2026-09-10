@@ -281,14 +281,35 @@
       try{ player.destroy(); }catch(e){}
       player=null;
     }
+    /* 플레이어를 없애면 상태 변화가 오지 않는다. 여기서 직접 내려 준다. */
+    markSounding(false);
+  }
+  /* 소리가 나는 동안을 앱 전체에 알린다. 이걸 빼면 튜너로 들어가도 멈추지 않고,
+     오디오 세션이 앞 기능이 남긴 ambient로 남아 무음 모드에서 묵음이 된다.
+     setTabSounding은 멈출 때 컨텍스트까지 정리하므로, 상태가 실제로 바뀔 때만 부른다.
+     플레이어를 만든 적도 없는데 부르면 메트로놈의 잠금화면 핸들러까지 걷어낸다. */
+  let sounding=false;
+  function markSounding(on){
+    const next=Boolean(on);
+    if(sounding===next) return;
+    sounding=next;
+    if(typeof setTabSounding==='function') setTabSounding('trainer',next,'youtube');
   }
   function stopPlayback(){
     if(!player || !playerReady) return;
     try{ player.pauseVideo(); }catch(e){}
     playing=false;
     stopTicker();
+    markSounding(false);
   }
   function isPlaying(){ return Boolean(playing); }
+
+  /* 메트로놈·잼·녹음과 같은 판에 올린다. background도 keepWhenHidden도 주지 않는다.
+     그래야 튜너로 들어갈 때(stopAllTransports)와 화면이 숨을 때
+     (stopHiddenUnsafeTransports) 함께 멈춘다. YouTube는 잠금화면에서 재생하지 않는다. */
+  if(typeof registerTransport==='function'){
+    registerTransport({isPlaying,stop:stopPlayback,playbackSession:true});
+  }
 
   async function mountPlayer(row,host){
     try{ await loadApi(); }
@@ -353,6 +374,7 @@
             if(window.OliveRecorder && typeof window.OliveRecorder.stopPlayback==='function'){
               window.OliveRecorder.stopPlayback();
             }
+            markSounding(true);
             startTicker();
           }else{
             playing=false;
@@ -362,10 +384,12 @@
                  반복이 켜져 있으면 여기서 되돌린다. */
               const active=activeLoopFor(row);
               if(active){
+                /* 소리가 그대로 이어지므로 sounding을 내리지 않는다. */
                 try{ player.seekTo(active.a/1000,true); player.playVideo(); }catch(e){}
                 return;
               }
             }
+            markSounding(false);
             if(event.data===YT.PlayerState.PAUSED || event.data===YT.PlayerState.ENDED){
               queueStateSave(row);
             }

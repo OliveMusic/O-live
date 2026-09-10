@@ -12,7 +12,7 @@ const pageErrors=new WeakMap();
 
 async function preparePage(page,{
   cloudClient=false,preferences=null,microphone='native',recordings=[],practiceLinks=[],cloudUploadError='',
-  mediaActionFailOnce='',recordingListFailOnce=false,
+  mediaActionFailOnce='',recordingListFailOnce=false,youtube=false,
 }={}){
   const errors=[];
   pageErrors.set(page,errors);
@@ -24,9 +24,43 @@ async function preparePage(page,{
   }));
   await page.addInitScript(({
     withCloud,storedPreferences,micMode,recordingRows,practiceRows,recordingUploadError,failMediaActionOnce,
-    failRecordingListOnce,
+    failRecordingListOnce,stubYouTube,
   })=>{
     sessionStorage.setItem('olive-startup-state-v2','shown');
+    /* YouTube IFrame API를 대신한다. loadApi는 window.YT가 이미 있으면 그대로 쓴다.
+       실제 재생 대신 상태 변화를 직접 일으켜 앱이 어떻게 반응하는지 본다. */
+    if(stubYouTube){
+      const players=[];
+      const PlayerState={UNSTARTED:-1,ENDED:0,PLAYING:1,PAUSED:2,BUFFERING:3,CUED:5};
+      window.__testYouTube={players,PlayerState};
+      window.YT={
+        PlayerState,
+        Player:function(mount,options){
+          const node=typeof mount==='string'?document.getElementById(mount):mount;
+          const frame=document.createElement('iframe');
+          frame.title='youtube-stub';
+          if(node && node.parentNode) node.parentNode.replaceChild(frame,node);
+          const events=(options&&options.events)||{};
+          const api={
+            pauseCalls:0,playCalls:0,rate:1,time:0,state:PlayerState.UNSTARTED,
+            getDuration(){ return 200; },
+            getCurrentTime(){ return this.time; },
+            seekTo(seconds){ this.time=Number(seconds)||0; },
+            setPlaybackRate(value){ this.rate=Number(value)||1; },
+            destroy(){ frame.remove(); },
+            fire(state){
+              this.state=state;
+              if(typeof events.onStateChange==='function') events.onStateChange({data:state,target:this});
+            },
+            playVideo(){ this.playCalls++; this.fire(PlayerState.PLAYING); },
+            pauseVideo(){ this.pauseCalls++; this.fire(PlayerState.PAUSED); },
+          };
+          players.push(api);
+          setTimeout(()=>{ if(typeof events.onReady==='function') events.onReady({target:api}); },0);
+          return api;
+        },
+      };
+    }
     const audioSession={type:'auto'};
     try{ Object.defineProperty(navigator,'audioSession',{configurable:true,value:audioSession}); }
     catch(error){}
@@ -436,6 +470,7 @@ async function preparePage(page,{
     withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,
     recordingRows:recordings,practiceRows:practiceLinks,recordingUploadError:cloudUploadError,
     failMediaActionOnce:mediaActionFailOnce,failRecordingListOnce:recordingListFailOnce,
+    stubYouTube:youtube,
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
@@ -910,6 +945,38 @@ test('A/B 없이 반복을 켜면 처음부터 끝까지 반복한다',async({pa
   await expect(repeat).toHaveClass(/active/);
   /* 전체 반복이므로 A/B 마커는 여전히 없다. */
   await expect(page.locator('.link-track.has-loop-start')).toHaveCount(0);
+});
+
+/* YouTube 플레이어는 오디오 런타임에 등록돼 있지 않아 두 가지가 어긋났다.
+   (1) 앞 기능이 남긴 ambient 세션을 물려받아 무음 모드에서 묵음이 됐다.
+   (2) 튜너로 들어가도 멈추지 않았다. 저장 녹음은 멈춘다. */
+test('YouTube 재생도 다른 소리와 같은 판에서 관리된다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    youtube:true,
+    practiceLinks:[{
+      id:'yt-transport',provider:'youtube',video_id:'dQw4w9WgXcQ',
+      title:'연동 테스트',duration_ms:200000,last_position_ms:0,
+      loop_a_ms:null,loop_b_ms:null,loop_enabled:false,playback_rate:1,
+      created_at:'2026-09-08T14:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+  await page.locator('.record-entry',{hasText:'연동 테스트'}).locator('.record-row-open').click();
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players.length)).toBe(1);
+
+  await page.evaluate(()=>window.__testYouTube.players[0].playVideo());
+  /* 재생하는 동안은 스스로 playback 세션을 잡는다. ambient면 무음 스위치에 묻힌다. */
+  await expect.poll(()=>page.evaluate(()=>navigator.audioSession.type)).toBe('playback');
+  await expect(page.locator('.tab-btn[data-tab="trainer"]')).toHaveClass(/sounding/);
+
+  /* 튜너로 들어가면 마이크를 방해하지 않도록 모든 소리가 멈춘다. */
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].pauseCalls)).toBe(1);
+  await expect(page.locator('.tab-btn[data-tab="trainer"]')).not.toHaveClass(/sounding/);
+  await expect.poll(()=>page.evaluate(()=>navigator.audioSession.type)).toBe('ambient');
 });
 
 test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이 나타난다',async({page})=>{
