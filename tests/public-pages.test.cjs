@@ -20,6 +20,7 @@ const rhythm=read('js/rhythm-trainer.js');
 const earTrainer=read('js/ear-trainer.js');
 const recorder=read('js/recorder.js');
 const practiceLinks=read('js/practice-links.js');
+const jam=read('js/jam-session.js');
 const worker=read('service-worker.js');
 const manifest=JSON.parse(read('manifest.json'));
 const sitemap=read('sitemap.xml');
@@ -39,7 +40,6 @@ for(const [label,text] of [['about',about],['privacy',privacy],['terms',terms],[
   assert.match(text,/href="index\.html#splash"/,`${label}: 앱 링크`);
 }
 assert.match(indexHtml,/const reopened=location\.hash==='#splash'/);
-assert.match(indexHtml,/skip=!reopened && state==='shown'/);
 assert.match(indexHtml,/history\.replaceState\(null,'',location\.pathname\+location\.search\)/,
   '해시는 주소창에 남기지 않는다');
 
@@ -216,46 +216,61 @@ assert.match(index,/recordAnswer\(key,correct,mode\)/);
 
 console.log('public pages tests passed');
 
-/* 도움말 문서가 실제 동작과 어긋나면 없느니만 못하다. 숨은 동작 설명을 고정한다. */
-assert.match(guide,/손잡이를 두 번 탭/,'슬라이더 초기화 안내');
-assert.match(guide,/길게 누르면 삭제/,'잼 코드 삭제 안내');
-assert.match(guide,/올리브를 눌러 해제/,'즐겨찾기 해제 안내');
-assert.match(guide,/A·B 없이 반복만 켜면\s*<strong>처음부터 끝까지<\/strong>/);
-/* 도움말은 짧게 유지한다. 차례도, 기능별 설명 나열도 두지 않는다. */
+/* 도움말은 문서가 아니라 앱이다. 진짜 앱을 띄우고 그 위에 눌러야 할 곳만 밝힌다. */
 assert.match(guide,/<title>도움말<\/title>/);
-assert.doesNotMatch(guide,/guide-toc/,'차례는 없앴다');
-for(const id of ['metronome','tuner','scales','trainer','jam']){
-  assert.doesNotMatch(guide,new RegExp(`<section class="section" id="${id}"`),
-    `${id} 기능 설명 섹션은 앱 둘러보기로 대신한다`);
+assert.match(guide,/<h1>도움말<\/h1>/);
+assert.doesNotMatch(guide,/사용법/);
+assert.match(guide,/frame\.setAttribute\('src','index\.html\?guide=1'\)/,'투어는 진짜 앱을 띄운다');
+/* 앱이 iframe 안에서 열려야 하므로 frame-ancestors로 막으면 안 된다. */
+assert.doesNotMatch(indexHtml,/frame-ancestors/);
+/* 미리보기 프레임은 시작 화면을 건너뛴다. 진짜 첫 실행의 시작 화면을 뺏으면 안 된다. */
+assert.match(indexHtml,/const preview=\/\[\?&\]guide=1/);
+assert.match(indexHtml,/skip=preview \|\| \(!reopened && state==='shown'\)/);
+
+/* 챕터를 골라서 배우고, 전체 둘러보기도 있다. */
+for(const key of ['metronome','tuner','scales','ear','rhythm','record','jam']){
+  assert.match(guide,new RegExp(`key:'${key}'`),`${key} 챕터`);
 }
-assert.deepEqual(
-  [...guide.matchAll(/<section class="section"(?: id="([^"]*)")?/g)].map(m=>m[1]||''),
-  ['start','tour','gestures','lockscreen','lockstop',''],
-  '남는 섹션은 여섯 개');
-/* 잠금화면은 그 기능이 있는 화면에서만 나온다. */
-assert.match(guide,/id="lockscreen"[\s\S]{0,80}?data-screen="metronome jam trainer:record"/);
-/* 되는 것만 말하면 안 된다. 안 되는 것을 따로 강조한다.
-   audio-runtime.js의 transport 등록이 근거다 — background 또는 keepWhenHidden이 없으면
-   화면이 숨을 때 stopHiddenUnsafeTransports()가 세운다. */
-assert.match(guide,/id="lockstop"[\s\S]{0,100}?data-screen="tuner trainer:ear trainer:rhythm"/);
-assert.match(guide,/<div class="lock-warn" data-screen="trainer:record" hidden>/);
-assert.match(guide,/직접 잠그면 녹음이 끊길 수 있습니다/,'녹음 중 잠금 경고');
-assert.match(tuner,/registerTransport\(\{ isPlaying:\(\)=>listening \|\| micStarting/,
-  '튜너 운반자에는 background도 keepWhenHidden도 없다');
-assert.doesNotMatch(rhythm,/keepWhenHidden/,'리듬은 잠금화면으로 이어지지 않는다');
-assert.doesNotMatch(earTrainer,/keepWhenHidden/,'청음도 이어지지 않는다');
-assert.match(recorder,/keepWhenHidden:true/,'녹음과 저장 녹음 재생은 유지된다');
-/* 꾹 누르는 버튼에서 글자가 잡히면 안 된다. */
-assert.match(guide,/\.tap-key\{[\s\S]{0,220}?user-select:none/);
-assert.match(guide,/\.tap-bpm \.num\{[\s\S]{0,260}?user-select:none/);
-/* 도움말은 글이 아니라 앱과 같은 컨트롤을 직접 눌러 보게 한다. */
-/* 도움말은 화면을 다시 만들지 않고 앱을 그대로 띄운다. 그래야 설명이 낡지 않는다. */
-assert.match(guide,/<iframe class="tour-frame" id="tourFrame" src="index\.html\?guide=1"/);
-/* 설명은 화면별로 좁힌다. 메트로놈을 보는데 트랙 재생기 얘기가 나오면 안 된다. */
-for(const key of ['metronome','tuner','scales','jam','trainer:ear','trainer:rhythm','trainer:record']){
-  assert.match(guide,new RegExp(`data-notes="${key}"`),`${key} 설명이 있다`);
+assert.match(guide,/data-chapter="all"/,'전체 둘러보기');
+
+/* 덮개는 네 조각이고 가운데 구멍에는 아무 요소도 없다. 그래야 터치가 앱에 닿는다.
+   한 장으로 덮으면 하이라이트를 눌러도 앱이 받지 못한다. */
+for(const part of ['top','right','bottom','left']){
+  assert.match(guide,new RegExp(`data-part="${part}"`),`덮개 ${part}`);
 }
-assert.match(guide,/#trainerSeg \.seg-btn\.active/,'트레이너는 세그먼트까지 본다');
+assert.match(guide,/\.mask-part\{[\s\S]{0,120}?position:absolute; background:rgba/);
+assert.match(guide,/\.halo\{[\s\S]{0,80}?pointer-events:none/,'테두리는 터치를 가로채지 않는다');
+
+/* 앱이 목록을 다시 그리면 붙잡아 둔 요소가 떨어져 나가 구멍이 얼어붙는다.
+   요소가 아니라 찾는 법을 들고 매번 다시 찾아야 한다. */
+assert.match(guide,/function repaint\(\)\{[\s\S]{0,240}?resolveTarget\(doc,tracked\)/);
+/* 대상을 기다리는 사이 사용자가 건너뛰면 그 기다림은 버려야 한다. */
+assert.match(guide,/const mine=\+\+token;/);
+assert.match(guide,/if\(!running \|\| mine!==token\) return;/);
+
+/* 가리키는 곳이 앱에 실제로 있어야 한다. 앱에서 id를 바꾸면 여기서 먼저 걸린다. */
+const appSource=indexHtml+'\n'+recorder+'\n'+practiceLinks;
+const targets=[...guide.matchAll(/target:'([^']+)'/g)].map(match=>match[1]);
+assert.ok(targets.length>=30,'단계마다 가리키는 곳이 있다');
+for(const target of new Set(targets)){
+  const id=/^#([A-Za-z0-9_-]+)$/.exec(target);
+  if(id){ assert.ok(appSource.includes(`id="${id[1]}"`),`앱에 없는 대상: ${target}`); continue; }
+  const cls=/^\.([a-z0-9-]+)/.exec(target);
+  if(cls) assert.ok(appSource.includes(cls[1]),`앱에 없는 대상: ${target}`);
+}
+
+/* 목록에는 녹음본과 링크가 섞여 있고 예시는 이름까지 같다. 구조로 갈라야 한다. */
+assert.match(guide,/const prefix=kind==='link'\?'link-player-':'record-player-'/);
+
+/* 코드 팔레트는 몸통이 미리 듣기이고 +가 담기다. 예전 설명이 이 둘을 섞어 놓았다. */
+assert.match(guide,/코드 몸통을 누르면 <b>소리만<\/b>/);
+assert.doesNotMatch(guide,/누르면 미리 들려주고 진행에 더해집니다/);
+assert.match(jam,/cc-add[\s\S]{0,240}?addChord\(deg\)/,'실제로 +가 진행에 담는다');
+
+/* 투어를 벗어날 때 소리를 남기지 않는다. */
+assert.match(guide,/function quiet\(\)/);
+assert.match(guide,/if\(metro && metro\.classList\.contains\('running'\)\) metro\.click\(\)/);
+
 /* 시연 모드는 도움말이 띄울 때만 켜지고 저장하지 않는다. */
 assert.match(cloud,/const guideMode=\/\[\?&\]guide=1/);
 assert.match(cloud,/if\(guideMode\) return guideRecordings\(\)/);
@@ -265,103 +280,27 @@ assert.match(cloud,/video_id:'edScGrfl50M'/);
 /* 예시 녹음은 C4에서 시작하는 장음계다. 제목과 어긋나면 안 된다. */
 assert.match(cloud,/const steps=\[0,2,4,5,7,9,11,12\]/);
 assert.match(cloud,/261\.63\*Math\.pow\(2,semitone\/12\)/);
-/* 잠금화면은 iPhone과 Apple Watch 목업으로 보여 준다. */
-assert.match(guide,/class="mock mock-phone"/);
-assert.match(guide,/class="mock mock-watch"/);
-/* 목업의 올리브도 앱과 같이 씨구멍이 있어야 한다. 자리는 한 곳에서만 정한다 —
-   앱의 .record-row-olive와 같은 가로 70%, 지름 29%다. */
-assert.match(guide,/\.mock-olive::after\{[\s\S]{0,200}?left:70%; top:50%/);
-assert.match(guide,/width:calc\(var\(--olive-w\) \* \.294\)/);
-assert.equal((guide.match(/class="mock-olive"/g)||[]).length,2,'iPhone과 Apple Watch가 같은 올리브를 쓴다');
-assert.doesNotMatch(guide,/\.mock-np-art::before/,'올리브를 부모에 픽셀로 붙이지 않는다');
-/* 소리가 안 나는 첫 번째 이유는 무음 모드다. */
-assert.match(guide,/무음 모드부터 꺼 보세요/);
-assert.match(guide,/메트로놈 · 90 BPM/,'실제 잠금화면 표시와 같은 문구');
-assert.match(guide,/\.tab-btn\.active/,'프레임의 현재 탭을 읽는다');
-assert.match(guide,/new MutationObserver/,'탭이 바뀌면 설명도 바뀐다');
-/* 앱이 iframe 안에서 열려야 하므로 frame-ancestors로 막으면 안 된다. */
-assert.doesNotMatch(indexHtml,/frame-ancestors/);
-assert.match(guide,/data-demo="rate"/);
-assert.match(guide,/data-demo="loop"/);
-assert.match(guide,/data-demo="favorite"/);
-assert.match(guide,/class="rate-control"/,'실제 슬라이더 재현');
-assert.match(guide,/class="row-olive"/,'실제 올리브 재현');
-/* 숨은 동작은 글로 나열하지 않고 앱의 그 부분을 확대해 직접 눌러 보게 한다. */
-assert.doesNotMatch(guide,/class="gesture"/,'제스처 목록은 확대 시연으로 대체됐다');
-/* 만져 보는 것도 설명과 같이 지금 보고 있는 화면 것만 나온다. */
-const demoScreens={
-  chord:['jam'],
-  tempo:['metronome','jam','trainer:rhythm'],
-  sens:['tuner'],
-  rhythm:['trainer:rhythm'],
-  wave:['trainer:record'],
-  loop:['trainer:record'],
-  rate:['trainer:record'],
-  favorite:['trainer:record'],
-};
-for(const [key,screens] of Object.entries(demoScreens)){
-  const found=guide.match(new RegExp(`data-demo="${key}" data-screen="([^"]+)"`));
-  assert.ok(found,`${key} 시연에 화면이 지정돼 있다`);
-  assert.deepEqual(found[1].split(' '),screens,`${key} 시연이 나오는 화면`);
-}
-/* 프레임의 탭이 바뀌면 설명과 시연을 함께 갈아 끼운다. */
-assert.match(guide,/const screened=\[\.\.\.document\.querySelectorAll\('\[data-screen\]'\)\]/);
-assert.match(guide,/el\.hidden=!match/,'그 화면 것만 남긴다');
-assert.match(guide,/\.demo\[hidden\], \.callout\[hidden\], \.demo-empty\[hidden\], \.section\[hidden\]\{ display:none; \}/,
-  '[hidden]이 .demo와 .section의 display에 지지 않는다');
-assert.match(guide,/class="demo-empty"/,'숨은 동작이 없는 화면도 말해 준다');
-assert.match(guide,/class="prog-bar"/,'실제 진행 카드 재현');
-assert.match(guide,/class="zoom-badge">확대</,'확대한 화면임을 밝힌다');
-/* 삭제 타이머는 앱과 같은 0.5초다. 코드 이름과 −/+는 앱처럼 그 타이머를 가로챈다. */
-assert.match(guide,/card\.classList\.remove\('holding'\);\s*card\.hidden=true;/);
-assert.match(guide,/\},500\);/,'길게 누르기 판정은 0.5초');
-assert.match(guide,/name\.addEventListener\('pointerdown',event=>event\.stopPropagation\(\)\)/);
-/* 템포 조작은 core.js의 bindTempoKeys·bindTapTempo·bindResetOnDouble과 같은 판정이어야 한다. */
-assert.match(guide,/taps=taps\.filter\(time=>now-time<3000\)/,'TAP은 3초 창');
-assert.match(guide,/\},450\);/,'길게 누르기 판정은 450ms');
-assert.match(guide,/setBpm\(bpm\+step\*10\)/,'꾹 누르면 10씩');
-assert.match(guide,/repeatTimer=setInterval\([\s\S]{0,220}?,150\)/,'10씩 반복은 150ms 간격');
-assert.match(guide,/if\(now-lastNumTap<400\)/,'숫자 두 번 탭은 400ms');
-assert.match(guide,/Math\.max\(30,Math\.min\(260,Math\.round\(value\)\)\)/,'30–260 BPM');
-/* 슬라이더 기본값은 화면마다 다르다. 앱 값과 같아야 한다. */
-for(const reset of ['50','5','0','1']){
-  assert.match(guide,new RegExp(`data-reset="${reset}"`),`기본값 ${reset} 슬라이더`);
-}
-/* 즐겨찾기는 올리브로 풀고 ••• 메뉴로 되돌린다. 나머지 항목은 눌리지 않는다. */
-assert.match(guide,/class="row-more"[^>]*aria-expanded="false"/);
-assert.match(guide,/class="row-sheet-item" type="button" data-act="pin"/);
-assert.match(guide,/<button class="row-sheet-item" type="button" disabled>이름 변경<\/button>/);
-assert.match(guide,/<button class="row-sheet-item danger" type="button" disabled>삭제<\/button>/);
-assert.match(guide,/pin\.textContent=on\?'즐겨찾기 해제':'즐겨찾기'/,'앱처럼 상태에 따라 글자가 바뀐다');
-/* 파형 막대는 recorder.js의 waveformPath와 같은 식으로 그린다. */
-assert.match(guide,/2\.25\+value\/100\*16\.75/);
+
+/* 눌러서 가르칠 수 없는 것은 마지막 카드로 남긴다. */
+assert.match(guide,/무음 모드를 꺼 보세요/);
+assert.match(guide,/직접 잠그면 끊길 수 있습니다/);
+assert.match(guide,/잠금화면에서 재생되지 않습니다/,'YouTube 잠금화면 제약');
+assert.match(guide,/저장하기 전에는 서버로 나가지 않습니다/);
 /* 잠금화면 10초 버튼은 iOS와 같은 모양이다. 원을 그리고 좌우로 뒤집어 쓴다. */
 assert.match(guide,/\.mock-skip\.fwd svg\{ transform:scaleX\(-1\); \}/);
-assert.match(guide,/\.lock-btn\.fwd svg\{ transform:scaleX\(-1\); \}/);
-/* 목업과 '같은 버튼, 다른 뜻'이 같은 그림을 쓴다. 하나만 고치면 어긋난다. */
-assert.equal((guide.match(/M13\.66 4\.17A8 8 0 1 1 8\.75 4\.69/g)||[]).length,8,
-  'iPhone 2 + Watch 2 + 비교표 4, 여덟 개가 같은 경로다');
-/* 화살촉 밑변이 호의 둥근 끝을 덮어야 한다. 밀어낸 거리가 선 두께의 절반보다 작으면
-   끝이 삐져나와 반쪽짜리 화살표로 보인다. */
-assert.match(guide,/stroke-width="2\.2"/,'선 두께 2.2');
+assert.equal((guide.match(/M13\.66 4\.17A8 8 0 1 1 8\.75 4\.69/g)||[]).length,4,
+  'iPhone 2 + Watch 2, 넷이 같은 경로다');
 assert.match(guide,/M9\.94 3\.38 15\.18 1\.84 14\.1 6\.92Z/,'화살촉');
 /* 숫자는 잉크 무게중심이 오른쪽으로 쏠려 있어 광학적으로 왼쪽으로 민다. */
-assert.equal((guide.match(/transform:translateX\(-\.04em\)/g)||[]).length,2,
-  '목업과 비교표의 숫자 모두 같은 만큼 민다');
-assert.doesNotMatch(guide,/<span class="lock-btn" aria-hidden="true">10<\/span>/,
-  '동그라미에 숫자만 넣지 않는다');
-/* 제목이 제목으로 보여야 한다. info.css의 눈썹 라벨 크기를 도움말에서 덮는다. */
-assert.match(guide,/\.section > h2\{[\s\S]{0,160}?font-size:1\.375rem/);
-/* 두 번 탭 판정은 앱과 같은 값이어야 헷갈리지 않는다. */
-assert.match(guide,/now-lastTapAt<340 && Math\.abs\(event\.clientX-lastTapX\)<28/);
-assert.match(guide,/BPM을 10씩/);
-assert.match(guide,/10초씩 이동/);
-assert.match(guide,/잠금화면에서 <b>재생되지 않습니다\.<\/b>/,'YouTube 잠금화면 제약');
+assert.match(guide,/transform:translateX\(-\.04em\)/);
+/* 목업의 올리브도 앱과 같은 비율로 씨구멍을 둔다. */
+assert.match(guide,/\.mock-olive::after\{[\s\S]{0,200}?left:70%; top:50%/);
+assert.match(guide,/width:calc\(var\(--olive-w\) \* \.294\)/);
+assert.equal((guide.match(/class="mock-olive"/g)||[]).length,2);
+
 assert.match(worker,/'\.\/guide\.html'/,'오프라인에서도 열린다');
 assert.match(sitemap,/guide\.html/);
 /* 앱에서는 도움말이 나머지 링크 위 줄에 홀로 가운데 온다. */
 assert.match(indexHtml,/<a class="app-help" href="guide\.html">도움말<\/a>/);
 assert.match(indexHtml,/\.app-footer \.app-help\{ flex:0 0 100%; justify-content:center; \}/);
-assert.match(guide,/<h1>도움말<\/h1>/);
-assert.doesNotMatch(guide,/사용법/);
 console.log('guide page checks passed');
