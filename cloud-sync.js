@@ -924,7 +924,7 @@
   }
   /* 자주 쓰는 항목을 목록 위에 고정한다. */
   async function setRecordingPinned(id,pinned){
-    if(guideMode) return true;
+    if(guideMode){ guidePin(guideState().recordings,id,pinned); return true; }
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('set_practice_recording_pinned',{
       p_recording_id:String(id||''),p_pinned:Boolean(pinned),
@@ -934,7 +934,7 @@
     return true;
   }
   async function setPracticeLinkPinned(id,pinned){
-    if(guideMode) return true;
+    if(guideMode){ guidePin(guideState().links,id,pinned); return true; }
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('set_practice_link_pinned',{
       p_link_id:String(id||''),p_pinned:Boolean(pinned),
@@ -988,7 +988,21 @@
     d.setDate(d.getDate()-offset);
     return d.toISOString().slice(0,10);
   }
-  function guideRecordings(){
+  /* 시연이라도 눌러 본 것이 그대로여야 한다. 고정 상태를 메모리에 들고 있다가
+     목록을 다시 부를 때 그대로 돌려준다. 그러지 않으면 즐겨찾기가 눌리지 않는다. */
+  let guideRows=null;
+  function guideState(){
+    if(!guideRows) guideRows={recordings:makeGuideRecordings(),links:makeGuideLinks()};
+    return guideRows;
+  }
+  function guidePin(list,id,pinned){
+    const row=(list||[]).find(item=>item&&item.id===String(id||''));
+    if(row) row.pinned=Boolean(pinned);
+    return Boolean(row);
+  }
+  function guideRecordings(){ return guideState().recordings.map(row=>Object.assign({},row)); }
+  function guideLinks(){ return guideState().links.map(row=>Object.assign({},row)); }
+  function makeGuideRecordings(){
     return [{
       id:'guide-recording-1',title:'C Major Scale',
       object_path:'guide/scale.wav',duration_ms:8000,byte_size:352844,
@@ -1000,7 +1014,7 @@
       created_at:new Date(Date.now()-36e5).toISOString(),
     }];
   }
-  function guideLinks(){
+  function makeGuideLinks(){
     return [{
       id:'guide-link-1',provider:'youtube',video_id:'edScGrfl50M',
       title:'C Major Scale',duration_ms:12000,last_position_ms:0,

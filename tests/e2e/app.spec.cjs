@@ -16,7 +16,13 @@ async function preparePage(page,{
 }={}){
   const errors=[];
   pageErrors.set(page,errors);
-  page.on('pageerror',error=>errors.push(error.message));
+  page.on('pageerror',error=>{
+    /* WebKit이 테스트 하네스에서 서비스 워커 스크립트를 간헐적으로 거절한다.
+       앱 문제가 아니라 이 환경의 접근 제어 검사이고, 워커가 실제로 등록되는지는
+       '분리된 앱이 … 서비스 워커를 시작한다'가 따로 검사한다. 이 잡음만 걸러 낸다. */
+    if(/service-worker\.js[\s\S]*access control checks/.test(error.message)) return;
+    errors.push(error.message);
+  });
   await page.route('https://cdn.jsdelivr.net/**',route=>route.fulfill({
     status:200,
     contentType:'application/javascript',

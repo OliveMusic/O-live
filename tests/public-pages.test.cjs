@@ -276,6 +276,26 @@ assert.match(guide,/memo:doc=>ddValue\(doc,'#scaleKey'\), check:\(doc,memo\)=>dd
 assert.match(guide,/memo:doc=>ddValue\(doc,'#scaleType'\), check:\(doc,memo\)=>ddValue\(doc,'#scaleType'\)!==memo/);
 assert.match(guide,/el\.querySelector\('\.dd-menu:not\(\[hidden\]\)'\)/,'열린 목록까지 뚫는다');
 
+/* 녹음을 켜 둔 채 다음 단계로 가면 도움말 내내 녹음이 돈다. 그 단계를 떠나면 멈춘다. */
+assert.match(guide,/function stopRecordingIn\(doc\)/);
+assert.match(guide,/if\(!step\.recording\) stopRecordingIn\(doc\)/);
+assert.match(guide,/target:'#recordToggle', recording:true/);
+/* 파형만 뚫으면 재생을 시작할 수 없다. 왼쪽 올리브 버튼과 한 짝으로 묶는다. */
+assert.match(guide,/target:'\.record-waveform', also:'\.record-player-play'/);
+assert.match(guide,/function holeBox\(el,also\)/);
+/* 링크를 담는 화면도 설명한다. 누르고 아무 말 없이 지나가면 안 된다. */
+assert.match(guide,/target:'#linkPanel'/);
+assert.match(guide,/검색하거나 주소를 붙여넣기/);
+/* 시연이라도 즐겨찾기가 눌린 대로 남아야 한다. 다시 부를 때 상태를 들고 있는다. */
+assert.match(cloud,/function guidePin\(list,id,pinned\)/);
+assert.match(cloud,/if\(guideMode\)\{ guidePin\(guideState\(\)\.links,id,pinned\); return true; \}/);
+assert.match(cloud,/if\(guideMode\)\{ guidePin\(guideState\(\)\.recordings,id,pinned\); return true; \}/);
+/* 소리를 켜자마자 끄면 팍 꺼진다. 몇 초 들려주고 서서히 어두워지며 넘긴다. */
+assert.match(guide,/linger:3200/);
+assert.match(guide,/setTimeout\(advance,step\.linger\|\|0\)/);
+assert.match(guide,/#tour\.leaving\{ opacity:0; pointer-events:none; \}/);
+assert.match(guide,/function leaveTour\(then\)/);
+
 /* 목록에는 녹음본과 링크가 섞여 있고 예시는 이름까지 같다. 구조로 갈라야 한다. */
 assert.match(guide,/const prefix=kind==='link'\?'link-player-':'record-player-'/);
 

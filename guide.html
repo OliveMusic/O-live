@@ -35,6 +35,10 @@
   }
   .screen{ flex:1; min-height:0; display:flex; flex-direction:column; }
   .screen[hidden]{ display:none; }
+  /* 투어를 마칠 때 뚝 끊지 않고 서서히 어두워지며 넘긴다. */
+  #tour{ transition:opacity .45s var(--ease-out,ease); }
+  #tour.leaving{ opacity:0; pointer-events:none; }
+  @media (prefers-reduced-motion:reduce){ #tour{ transition:none; } }
 
   /* ── 챕터 고르기 ── */
   .sheet{
@@ -541,7 +545,7 @@
         {screen:'trainer', target:'#trainerSeg', title:'트랙을 고릅니다',
          body:'녹음한 것, 올린 파일, YouTube 링크가 <b>한 목록</b>에 모입니다.', hint:'트랙을 누르세요',
          check:doc=>seg(doc)==='record'},
-        {screen:'trainer:record', target:'#recordToggle', title:'녹음하기',
+        {screen:'trainer:record', target:'#recordToggle', recording:true, title:'녹음하기',
          body:'최대 5분. 메트로놈이나 잼을 켜 둔 채로 녹음할 수 있습니다. 녹음 중에는 화면을 <b>직접 잠그지 마세요.</b>',
          advance:'next'},
         {screen:'trainer:record', target:'#recordListCard', title:'목록 펼치기',
@@ -552,9 +556,9 @@
          before:openList, title:'행을 누르면 재생기', body:'<b>한 번에 하나만</b> 펼쳐집니다. 다른 행을 누르면 이쪽이 접힙니다.',
          hint:'녹음본 행을 누르세요',
          check:doc=>Boolean(doc.querySelector('.record-waveform'))},
-        {screen:'trainer:record', target:'.record-waveform', before:openPlayer,
-         title:'파형을 탭하거나 끌기', body:'원하는 자리부터 다시 재생됩니다. 지나온 구간은 올리브색으로 칠해집니다.',
-         hint:'파형을 눌러 보세요'},
+        {screen:'trainer:record', target:'.record-waveform', also:'.record-player-play', before:openPlayer,
+         title:'재생과 위치 옮기기', body:'왼쪽 <b>올리브를 누르면 재생</b>되고, 파형을 탭하거나 끌면 그 자리부터 이어집니다. 지나온 구간은 올리브색으로 칠해집니다.',
+         hint:'올리브를 눌러 들어 보세요'},
         {screen:'trainer:record', target:'.record-loop-tools', before:openPlayer,
          title:'A · B 구간 반복', body:'A와 B를 찍으면 <b>바로 그 구간을 반복</b>합니다. A·B 없이 순환 화살표만 켜면 처음부터 끝까지 돕니다. X는 A·B를 지웁니다.',
          advance:'next'},
@@ -567,7 +571,23 @@
         {screen:'trainer:record', target:'#recordLink', before:openList,
          title:'YouTube 링크 더하기', body:'노래 제목이나 가수를 <b>검색</b>해서 고르거나 주소를 붙여 넣습니다. 백킹 트랙을 A/B로 반복하며 연습할 수 있습니다.',
          hint:'눌러 보세요'},
-        {screen:'trainer:record', target:'#recordSelect', before:openList,
+        {screen:'trainer:record', target:'#linkPanel', advance:'next',
+         before:doc=>{
+           openList(doc);
+           const panel=doc.querySelector('#linkPanel');
+           const button=doc.querySelector('#recordLink');
+           if(panel && panel.hidden && button) button.click();
+         },
+         title:'검색하거나 주소를 붙여넣기',
+         body:'<b>검색</b>은 노래 제목이나 가수로 찾아 고르고, <b>URL</b>은 주소를 그대로 붙여넣습니다. 담은 링크도 A/B 반복과 배속을 그대로 씁니다.'},
+        {screen:'trainer:record', target:'#recordSelect',
+         before:doc=>{
+           openList(doc);
+           /* 링크 패널이 열린 채면 목록을 가린다. 닫고 넘어간다. */
+           const panel=doc.querySelector('#linkPanel');
+           const button=doc.querySelector('#recordLink');
+           if(panel && !panel.hidden && button) button.click();
+         },
          title:'여러 개 한 번에', body:'체크 아이콘을 누르면 각 행에 체크박스가 생겨 <b>골라서 한 번에</b> 지웁니다.',
          advance:'next'},
       ],
@@ -595,7 +615,8 @@
          body:'8비트, 기본 락, 포크 스트럼, 셔플, 보사노바, 레게, 왈츠가 있습니다.', hint:'하나 골라 보세요'},
         {screen:'jam', target:'#jamStart', title:'시작',
          body:'잼도 화면을 잠가도 계속 울리고, 잠금화면에서 BPM을 ±10 바꿉니다. 다시 누르면 멈춥니다.',
-         hint:'눌러서 들어 보세요', check:doc=>doc.querySelector('#jamStart').classList.contains('on')},
+         hint:'눌러서 들어 보세요', linger:3200,
+         check:doc=>doc.querySelector('#jamStart').classList.contains('on')},
       ],
     },
   ];
@@ -633,6 +654,25 @@
     if(!el || el.value===value) return;
     el.value=value;
     el.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
+  }
+  /* 녹음을 켜 둔 채 다음 단계로 가면 도움말 내내 녹음이 돈다. 그 단계를 떠나면 멈춘다. */
+  function stopRecordingIn(doc){
+    if(!doc) return;
+    let recording=false;
+    try{
+      const rec=doc.defaultView && doc.defaultView.OliveRecorder;
+      recording=Boolean(rec && typeof rec.isRecording==='function' && rec.isRecording());
+    }catch(e){}
+    if(recording){
+      const toggle=doc.querySelector('#recordToggle');
+      if(toggle) toggle.click();
+    }
+    /* 멈추면 확인용 초안이 남는다. 도움말에서는 저장하지 않으니 버린다. */
+    const draft=doc.querySelector('#recordDraft');
+    if(draft && !draft.hidden){
+      const discard=doc.querySelector('#recordDiscard');
+      if(discard) discard.click();
+    }
   }
   /* 목록과 재생기는 앞 단계에서 열리지만, 건너뛴 사람에게도 보여 줘야 한다. */
   function openList(doc){
@@ -687,36 +727,42 @@
   }
 
   /* ── 스포트라이트 ── */
-  let tracked=null, trackTimer=0;   /* tracked는 요소가 아니라 '찾는 법'이다 */
+  let tracked=null, trackedAlso=null, trackTimer=0;   /* tracked는 요소가 아니라 '찾는 법'이다 */
   /* 드롭다운 목록은 자리를 차지하지 않고 바깥으로 튀어나온다. 부모 상자만 뚫으면
      목록이 어두운 쪽에 남아 고를 수가 없다. 열려 있으면 함께 감싼다. */
-  function holeBox(el){
+  function union(box,other){
+    if(!other) return box;
+    const m=other.getBoundingClientRect();
+    if(!(m.width>0 && m.height>0)) return box;
+    const left=Math.min(box.left,m.left), top=Math.min(box.top,m.top);
+    const right=Math.max(box.right,m.right), bottom=Math.max(box.bottom,m.bottom);
+    return {left,top,right,bottom,width:right-left,height:bottom-top};
+  }
+  /* 한 단계가 두 곳을 가리켜야 할 때가 있다. 파형은 왼쪽 재생 버튼과 한 짝이다.
+     드롭다운 목록은 부모 상자 밖으로 나가므로 열려 있으면 함께 감싼다. */
+  function holeBox(el,also){
     let box=el.getBoundingClientRect();
-    const menu=el.querySelector('.dd-menu:not([hidden])');
-    if(menu){
-      const m=menu.getBoundingClientRect();
-      if(m.width>0 && m.height>0){
-        const left=Math.min(box.left,m.left), top=Math.min(box.top,m.top);
-        const right=Math.max(box.right,m.right), bottom=Math.max(box.bottom,m.bottom);
-        box={left,top,right,bottom,width:right-left,height:bottom-top};
-      }
+    box=union(box,el.querySelector('.dd-menu:not([hidden])'));
+    if(also){
+      const doc=frameDoc();
+      box=union(box,doc?doc.querySelector(also):null);
     }
     return box;
   }
-  function stageRect(el){
+  function stageRect(el,also){
     const frameBox=frame.getBoundingClientRect();
     const stageBox=stage.getBoundingClientRect();
-    const box=holeBox(el);
+    const box=holeBox(el,also);
     return {
       left:frameBox.left-stageBox.left+box.left,
       top:frameBox.top-stageBox.top+box.top,
       width:box.width, height:box.height,
     };
   }
-  function paint(el){
+  function paint(el,also){
     if(!el || !el.isConnected) return;
     const pad=7;
-    const box=stageRect(el);
+    const box=stageRect(el,also);
     const x=Math.round(box.left-pad), y=Math.round(box.top-pad);
     const w=Math.round(box.width+pad*2), h=Math.round(box.height+pad*2);
     parts.top.style.cssText='left:0;top:0;right:0;height:'+Math.max(0,y)+'px';
@@ -744,15 +790,15 @@
     if(!tracked || !doc) return;
     let el=null;
     try{ el=resolveTarget(doc,tracked); }catch(e){}
-    if(el && el.isConnected) paint(el);
+    if(el && el.isConnected) paint(el,trackedAlso);
   }
   let nudge=null, nudgeDoc=null;
   function dropNudge(){
     if(nudge && nudgeDoc){ try{ nudgeDoc.removeEventListener('pointerdown',nudge,true); }catch(e){} }
     nudge=null; nudgeDoc=null;
   }
-  function track(target){
-    tracked=target;
+  function track(target,also){
+    tracked=target; trackedAlso=also||null;
     repaint();
     clearInterval(trackTimer);
     trackTimer=setInterval(repaint,280);
@@ -765,7 +811,7 @@
     }
   }
   function untrack(){
-    tracked=null;
+    tracked=null; trackedAlso=null;
     clearInterval(trackTimer);
     trackTimer=0;
     dropNudge();
@@ -832,6 +878,7 @@
         return;
       }
       goScreen(doc,step.screen);
+      if(!step.recording) stopRecordingIn(doc);
       if(step.before){ try{ step.before(doc); }catch(e){} }
       return waitFor(()=>resolveTarget(frameDoc(),step.target)).then(el=>{
       if(!running || mine!==token) return;
@@ -851,7 +898,7 @@
       retry=null;
       mask.hidden=false;
       coach.hidden=false;
-      track(step.target);
+      track(step.target,step.also);
       listen(step);
       });
     });
@@ -870,18 +917,26 @@
         if(!now) return;
         let ok=false;
         try{ ok=step.check(now,memo); }catch(e){}
-        if(ok) advance();
+        if(!ok) return;
+        /* 마지막 단계에서 소리를 켜자마자 끄면 '팍' 꺼지는 느낌이 든다.
+           linger가 있으면 그동안 들려주고 넘어간다. 그 사이 두 번 울리지 않게 세운다. */
+        clearInterval(timer); timer=0;
+        setTimeout(advance,step.linger||0);
       },160);
     }else if(step.advance!=='next'){
       onDown=event=>{
         let current=null;
         try{ current=resolveTarget(frameDoc(),step.target); }catch(e){}
-        if(current && (current===event.target||current.contains(event.target))) setTimeout(advance,420);
+        let extra=null;
+        if(step.also){ const now=frameDoc(); extra=now?now.querySelector(step.also):null; }
+        const hit=(current && (current===event.target||current.contains(event.target)))
+          || (extra && (extra===event.target||extra.contains(event.target)));
+        if(hit) setTimeout(advance,420);
       };
       doc.addEventListener('pointerdown',onDown,true);
     }
     pass=()=>{
-      if(timer) clearInterval(timer);
+      if(timer){ clearInterval(timer); timer=0; }
       if(onDown){ try{ doc.removeEventListener('pointerdown',onDown,true); }catch(e){} }
       pass=null;
     };
@@ -905,21 +960,30 @@
     if(metro && metro.classList.contains('running')) metro.click();
     const jam=doc.querySelector('#jamStart');
     if(jam && jam.classList.contains('on')) jam.click();
+    stopRecordingIn(doc);
   }
   function exit(){
     running=false;
     token+=1;
     stopListening();
     untrack();
-    quiet();
-    show('home');
+    leaveTour(()=>show('home'));
+  }
+  /* 소리를 남긴 채로 화면만 바꾸면 뚝 끊긴다. 먼저 어두워지고, 그다음 멈춘다. */
+  function leaveTour(then){
+    const screen=document.getElementById('tour');
+    screen.classList.add('leaving');
+    setTimeout(()=>{
+      quiet();
+      screen.classList.remove('leaving');
+      then();
+    },460);
   }
   function finish(){
     running=false;
     token+=1;
     stopListening();
     untrack();
-    quiet();
     const last=queue.length?queue[queue.length-1].chapter:null;
     const index=last?CHAPTERS.indexOf(last):-1;
     const next=index>=0?CHAPTERS[index+1]:null;
@@ -932,7 +996,7 @@
       button.querySelector('b').textContent=next.name+' 배우기';
       button.querySelector('small').textContent=next.blurb;
     }else button.hidden=true;
-    show('done');
+    leaveTour(()=>show('done'));
   }
 
   /* ── 첫 화면 ── */
