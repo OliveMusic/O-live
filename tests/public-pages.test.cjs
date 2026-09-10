@@ -374,6 +374,16 @@ assert.match(guide,/transform:translateX\(-\.04em\)/);
 assert.match(guide,/\.mock-olive::after\{[\s\S]{0,200}?left:70%; top:50%/);
 assert.match(guide,/width:calc\(var\(--olive-w\) \* \.294\)/);
 assert.equal((guide.match(/class="mock-olive"/g)||[]).length,2);
+/* 목업은 .note 안에 산다. .note p / .note b는 클래스 하나짜리 목업 규칙보다 구체적이라
+   그냥 두면 iOS 화면 글자가 본문 크기로 부풀고, 워치에서는 조작 버튼이 화면 밖으로 밀려난다.
+   먼저 되돌리고, 글자 규칙은 모두 .mock 아래에 두어 그보다 구체적으로 만든다. */
+assert.match(guide,/\.mock p\{[\s\S]{0,160}?font-size:inherit/,'목업 문단은 본문 크기를 물려받지 않는다');
+assert.match(guide,/\.mock b\{[\s\S]{0,100}?color:inherit/,'목업의 굵은 글자는 본문 색을 쓰지 않는다');
+for(const cls of ['mock-lock-icon','mock-time','mock-date','mock-watch-app','mock-watch-title','mock-watch-sub']){
+  assert.match(guide,new RegExp(`\\.mock \\.${cls}\\{`),`.mock 아래로: ${cls}`);
+  assert.doesNotMatch(guide,new RegExp(`\\n  \\.${cls}\\{`),`.note p에 지는 규칙: ${cls}`);
+}
+assert.match(guide,/\.mock \.mock-skip b\{/);
 
 /* 광고가 먼저 붙으면 본 영상이 검은 화면으로 멎었다. onReady에서 미리 감거나 배속을 걸던 것이
    원인이라, 실제 재생이 시작된 뒤에 한 번만 적용한다. 그래도 멎으면 제자리로 다시 감는다. */

@@ -174,6 +174,12 @@
   /* 잠금화면 목업 — iOS 화면이라 앱 팔레트가 아니라 iOS의 어두운 배경을 쓴다. */
   .mock-row{ display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:center; gap:18px; margin:14px 0 0; }
   .mock{ margin:0; }
+  /* 목업 안의 글자는 본문이 아니라 iOS 화면의 일부다. .note p / .note b는 클래스
+     하나짜리 목업 규칙보다 구체적이어서 그대로 두면 글자가 13px로 커지고 문단 간격까지
+     붙어 워치 화면 밖으로 조작 버튼이 밀려난다. 여기서 먼저 되돌리고, 아래 글자 규칙은
+     모두 .mock을 앞에 붙여 그보다 구체적으로 둔다. */
+  .mock p{ margin:0; font-size:inherit; line-height:normal; color:inherit; word-break:normal; }
+  .mock b{ color:inherit; font-weight:inherit; }
   .mock figcaption{ margin-top:9px; color:var(--ink-3); font-size:.6875rem; text-align:center; }
   .ios{
     color:#fff; background:linear-gradient(170deg,#2c3340,#14161b 62%,#0b0c0f);
@@ -183,12 +189,12 @@
     width:196px; height:392px; padding:26px 14px 16px; border-radius:26px;
     border:1px solid var(--line); box-sizing:border-box; display:flex; flex-direction:column;
   }
-  .mock-lock-icon{ text-align:center; font-size:.75rem; opacity:.65; }
-  .mock-time{
+  .mock .mock-lock-icon{ text-align:center; font-size:.75rem; opacity:.65; }
+  .mock .mock-time{
     margin:2px 0 0; text-align:center; font-size:2.75rem; font-weight:250;
     letter-spacing:-.02em; line-height:1.05;
   }
-  .mock-date{ margin:1px 0 0; text-align:center; font-size:.6875rem; opacity:.72; }
+  .mock .mock-date{ margin:1px 0 0; text-align:center; font-size:.6875rem; opacity:.72; }
   .mock-np{ margin-top:auto; padding:11px 11px 12px; border-radius:15px; background:rgba(255,255,255,.13); }
   .mock-np-head{ display:flex; align-items:center; gap:8px; }
   .mock-np-art{
@@ -222,7 +228,7 @@
   .mock-skip.fwd svg{ transform:scaleX(-1); }
   /* '10'은 자간 상자로는 정중앙이지만 잉크 무게중심이 0.04em 오른쪽에 있다.
      '0'이 '1'보다 훨씬 굵기 때문이다. 그만큼 왼쪽으로 밀어 눈에 가운데로 보이게 한다. */
-  .mock-skip b{
+  .mock .mock-skip b{
     position:absolute; inset:0; display:grid; place-items:center;
     font-size:.625rem; font-weight:500; letter-spacing:-.04em;
     font-variant-numeric:tabular-nums; transform:translateX(-.04em);
@@ -233,10 +239,10 @@
     width:118px; height:142px; padding:13px 10px 11px; border-radius:28px;
     border:1px solid var(--line); box-sizing:border-box; display:flex; flex-direction:column; gap:5px;
   }
-  .mock-watch-app{ display:flex; align-items:center; gap:4px; font-size:.5625rem; color:#97a982; }
+  .mock .mock-watch-app{ display:flex; align-items:center; gap:4px; font-size:.5625rem; color:#97a982; }
   .mock-watch-app .mock-olive{ --olive-w:9px; --olive-pit:#252b35; }
-  .mock-watch-title{ margin:0; font-size:.625rem; font-weight:600; line-height:1.35; }
-  .mock-watch-sub{ margin:0; font-size:.5625rem; opacity:.6; }
+  .mock .mock-watch-title{ margin:0; font-size:.625rem; font-weight:600; line-height:1.35; }
+  .mock .mock-watch-sub{ margin:0; font-size:.5625rem; opacity:.6; }
   .mock-watch-controls{ margin-top:auto; display:flex; align-items:center; justify-content:space-between; }
   .mock-watch-controls .mock-skip{ width:21px; height:21px; }
   .mock-watch-controls .mock-skip svg{ width:21px; height:21px; }
