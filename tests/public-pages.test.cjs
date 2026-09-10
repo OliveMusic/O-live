@@ -241,6 +241,16 @@ for(const part of ['top','right','bottom','left']){
 assert.match(guide,/\.mask-part\{[\s\S]{0,120}?position:absolute; background:rgba/);
 assert.match(guide,/\.halo\{[\s\S]{0,80}?pointer-events:none/,'테두리는 터치를 가로채지 않는다');
 
+/* 미리보기 프레임은 서비스 워커를 건드리지 않는다. 갱신이 잡히면 스스로 새로고침하고,
+   그 순간 도움말이 붙잡고 있던 문서가 끊겨 투어가 빈 화면에서 헛돈다. */
+assert.match(index,/const oliveIsPreview=\/\[\?&\]guide=1/);
+assert.match(index,/if\(!oliveIsPreview && 'serviceWorker' in navigator\)/);
+/* 그래도 프레임이 다시 뜰 수 있다. 그때는 지금 단계를 그 자리에서 다시 건다. */
+assert.match(guide,/frame\.addEventListener\('load',\(\)=>\{ if\(running\) runStep\(\); \}\)/);
+assert.match(guide,/function readyDoc\(\)/,'문서를 붙잡지 않고 그때그때 묻는다');
+assert.match(guide,/앱을 여는 중입니다/,'기다리는 동안 빈 화면을 두지 않는다');
+assert.match(guide,/앱을 열지 못했습니다/,'못 열면 다시 시도할 수 있다');
+
 /* 앱이 목록을 다시 그리면 붙잡아 둔 요소가 떨어져 나가 구멍이 얼어붙는다.
    요소가 아니라 찾는 법을 들고 매번 다시 찾아야 한다. */
 assert.match(guide,/function repaint\(\)\{[\s\S]{0,240}?resolveTarget\(doc,tracked\)/);

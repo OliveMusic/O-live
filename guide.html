@@ -645,8 +645,14 @@
     if(open && open.getAttribute('aria-expanded')!=='true') open.click();
   }
   function resolveTarget(doc,target){
+    if(!doc) return null;
     if(typeof target==='function') return target(doc)||null;
     return doc.querySelector(target);
+  }
+  /* 프레임이 다시 뜨는 사이에는 문서가 바뀐다. 붙잡지 말고 그때그때 묻는다. */
+  function readyDoc(){
+    const doc=frameDoc();
+    return doc && doc.querySelector('.tab-btn') ? doc : null;
   }
   function waitFor(get,timeout){
     return new Promise(resolve=>{
@@ -733,7 +739,7 @@
   window.addEventListener('resize',repaint);
 
   /* ── 진행 ── */
-  let queue=[], at=0, running=false, pass=null, token=0;
+  let queue=[], at=0, running=false, pass=null, token=0, retry=null;
 
   function show(id){
     ['home','tour','done','more'].forEach(key=>{
@@ -752,10 +758,23 @@
     at=0; running=true;
     show('tour');
     if(!frame.getAttribute('src')) frame.setAttribute('src','index.html?guide=1');
-    waitFor(()=>{
-      const doc=frameDoc();
-      return doc && doc.querySelector('.tab-btn') ? doc : null;
-    },12000).then(doc=>{ if(doc && running) runStep(); else exit(); });
+    runStep();
+  }
+
+  /* 프레임을 기다리는 동안, 그리고 끝내 못 열었을 때 무엇이 일어나는지 보여 준다.
+     아무것도 없이 비워 두면 고장 난 것처럼 보인다. */
+  function notice(title,body,label,action){
+    untrack();
+    coach.hidden=false;
+    coachTitle.textContent=title;
+    coachBody.textContent=body;
+    coachHint.textContent='';
+    coachNext.textContent=label;
+    coachNext.classList.remove('quiet');
+    retry=action||null;
+    coach.style.top='50%';
+    coach.style.left='50%';
+    coach.style.transform='translate(-50%,-50%)';
   }
 
   function runStep(){
@@ -764,17 +783,21 @@
     const mine=++token;
     const entry=queue[at];
     if(!entry) return finish();
-    const doc=frameDoc();
-    if(!doc) return exit();
     const step=entry.step;
     tourWhere.textContent=entry.chapter.name;
     tourCount.textContent=(at+1)+' / '+queue.length;
     tourBar.style.width=Math.round((at/queue.length)*100)+'%';
 
-    goScreen(doc,step.screen);
-    if(step.before){ try{ step.before(doc); }catch(e){} }
-
-    waitFor(()=>resolveTarget(doc,step.target)).then(el=>{
+    if(!readyDoc()) notice('앱을 여는 중입니다','잠시만 기다려 주세요.','건너뛰기',null);
+    waitFor(readyDoc,12000).then(doc=>{
+      if(!running || mine!==token) return;
+      if(!doc){
+        notice('앱을 열지 못했습니다','연결을 확인하고 다시 시도해 주세요.','다시 시도',()=>runStep());
+        return;
+      }
+      goScreen(doc,step.screen);
+      if(step.before){ try{ step.before(doc); }catch(e){} }
+      return waitFor(()=>resolveTarget(frameDoc(),step.target)).then(el=>{
       if(!running || mine!==token) return;
       if(!el){ advance(); return; }
       /* 접힌 카드 아래에 있으면 구멍이 화면 밖을 가리킨다. 한 번만 끌어온다. */
@@ -789,35 +812,41 @@
       coachHint.textContent=needsTap?(step.hint||'눌러 보세요'):'';
       coachNext.textContent=needsTap?'건너뛰기':'다음';
       coachNext.classList.toggle('quiet',needsTap);
+      retry=null;
       mask.hidden=false;
       coach.hidden=false;
       track(step.target);
-      listen(doc,step);
+      listen(step);
+      });
     });
   }
 
   /* 통과 판정. check가 있으면 앱 상태가 실제로 바뀌었는지 보고, 없으면 구멍 안의 터치를 본다. */
-  function listen(doc,step){
+  function listen(step){
     stopListening();
+    const doc=frameDoc();
+    if(!doc) return;
     const memo=step.memo?step.memo(doc):null;
     let timer=0, onDown=null;
     if(step.check){
       timer=setInterval(()=>{
+        const now=frameDoc();
+        if(!now) return;
         let ok=false;
-        try{ ok=step.check(doc,memo); }catch(e){}
+        try{ ok=step.check(now,memo); }catch(e){}
         if(ok) advance();
       },160);
     }else if(step.advance!=='next'){
       onDown=event=>{
         let current=null;
-        try{ current=resolveTarget(doc,step.target); }catch(e){}
+        try{ current=resolveTarget(frameDoc(),step.target); }catch(e){}
         if(current && (current===event.target||current.contains(event.target))) setTimeout(advance,420);
       };
       doc.addEventListener('pointerdown',onDown,true);
     }
     pass=()=>{
       if(timer) clearInterval(timer);
-      if(onDown) doc.removeEventListener('pointerdown',onDown,true);
+      if(onDown){ try{ doc.removeEventListener('pointerdown',onDown,true); }catch(e){} }
       pass=null;
     };
   }
@@ -825,6 +854,7 @@
 
   function advance(){
     if(!running) return;
+    retry=null;
     stopListening();
     at+=1;
     if(at>=queue.length) return finish();
@@ -898,7 +928,12 @@
       show(where);
     }
   });
-  coachNext.addEventListener('click',advance);
+  coachNext.addEventListener('click',()=>{
+    if(retry){ const again=retry; retry=null; again(); return; }
+    advance();
+  });
+  /* 프레임이 다시 뜨면 붙잡아 둔 문서가 끊긴다. 지금 단계를 그 자리에서 다시 건다. */
+  frame.addEventListener('load',()=>{ if(running) runStep(); });
   document.getElementById('tourExit').addEventListener('click',exit);
 })();
 </script>

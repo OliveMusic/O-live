@@ -80,7 +80,11 @@ if(appVersion){
   appVersion.textContent='버전 '+release.version;
   if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('app:ready');
 }
-if('serviceWorker' in navigator){
+/* 도움말이 띄우는 미리보기 프레임은 서비스 워커를 건드리지 않는다.
+   갱신이 잡히면 스스로 새로고침하는데, 그러면 도움말이 붙잡고 있던 문서가 끊겨
+   투어가 빈 화면에서 헛돈다. 워커는 부모 창이 이미 관리한다. */
+const oliveIsPreview=/[?&]guide=1(?:&|$)/.test(location.search);
+if(!oliveIsPreview && 'serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('service-worker.js?v='+release.build).then(reg=>{
       // 새 버전이 올라왔는지 확인하고, 준비되면 한 번만 자동 새로고침한다
