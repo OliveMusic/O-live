@@ -385,9 +385,20 @@ for(const cls of ['mock-lock-icon','mock-time','mock-date','mock-watch-app','moc
 }
 assert.match(guide,/\.mock \.mock-skip b\{/);
 
-/* also는 가까이 붙은 것끼리만 묶는다. #rhyTap은 #rhySig보다 두 카드 위에 있어
-   함께 묶으면 구멍이 그 사이 331px를 통째로 삼켜 4/4 상자 위로 길게 늘어난다. */
-assert.doesNotMatch(guide,/target:'#rhySig', also:'#rhyTap'/);
+const core=read('js/core.js');
+/* 박자 고르기는 눈에 보이는 대로라 단계를 두지 않는다. #rhyTap과 함께 묶었을 때는
+   둘이 두 카드, 331px 떨어져 있어 구멍이 그 사이를 통째로 삼키기까지 했다. */
+assert.doesNotMatch(guide,/#rhySig/);
+
+/* 갓 깨어난 컨텍스트는 state가 'running'이 된 뒤에도 시계가 0에 멈춰 있다.
+   그때 잡은 시각은 오디오 유닛이 열리는 순간 지나간 시각이 되어 음이 통째로 사라진다.
+   도움말은 현도 코드도 한 번만 눌러 보게 하므로 그 한 번이 늘 첫 소리다. */
+assert.match(core,/function clockAwake\(ctx\)\{ return ctx\.state==='running' && ctx\.currentTime>CLOCK_AWAKE; \}/);
+assert.match(core,/function whenClockAwake\(ctx, play\)/);
+assert.match(core,/const wake=clockAwake\(ctx\)/,'noteStart는 state가 아니라 시계를 본다');
+assert.match(core,/function guitarPluck[\s\S]{0,120}?whenClockAwake\(ctx,/,'현 음은 시계가 산 뒤에 잡는다');
+assert.match(jam,/function previewChord[\s\S]{0,400}?whenClockAwake\(ctx,/,'코드 미리 듣기도 같다');
+assert.doesNotMatch(jam,/pianoChord\(c\.intervals\.map\(iv=>base\+iv\), ctx\.currentTime/);
 /* ••• 메뉴에서는 즐겨찾기만 밝게 남긴다. 눌리지 않는 것만으로는 어디를 눌러야 할지 모른다. */
 assert.match(guide,/button\.style\.opacity=on\?'\.3':''/);
 /* 예시 녹음은 조옮김까지만 들려준다. 남은 단계 내내 울리면 설명을 덮는다. */
@@ -395,6 +406,12 @@ assert.match(guide,/function stopRowPlayback\(doc\)/);
 assert.match(guide,/rec\.stopPlayback\(\)/);
 assert.match(recorder,/stopPlayback:stopPlaybackForOtherTool/,'도움말이 부르는 이름이다');
 assert.match(guide,/before:doc=>\{ stopRowPlayback\(doc\); openList\(doc\); \}, title:'즐겨찾기 올리브'/);
+/* ••• 시트가 열리면 강조는 즐겨찾기 한 줄로 옮겨 간다. 시트 전체를 비추면
+   어디를 눌러야 할지 알 수 없고 이름 변경·삭제까지 손이 닿는다. */
+assert.match(guide,/sheet\.querySelector\('\[id\$="MenuPin"\]'\)\) \|\| part\(doc,'link','\.record-row-more'\)/);
+assert.doesNotMatch(guide,/also:'\.record-menu-backdrop/);
+assert.match(indexHtml,/id="linkMenuPin"/,'앱에 있는 이름이다');
+assert.match(indexHtml,/id="recordMenuPin"/,'녹음본 시트도 같은 꼬리를 쓴다');
 assert.match(guide,/stopRecordingIn\(doc\);\s*\n\s*stopRowPlayback\(doc\);/,'투어를 나갈 때도 끈다');
 
 /* 광고가 먼저 붙으면 본 영상이 검은 화면으로 멎었다. onReady에서 미리 감거나 배속을 걸던 것이
@@ -403,9 +420,10 @@ assert.match(practiceLinks,/function applyStartOnce\(row\)/);
 assert.doesNotMatch(practiceLinks,/onReady\(\)\{[\s\S]{0,200}?player\.seekTo/,'onReady에서 미리 감지 않는다');
 assert.match(practiceLinks,/if\(player && playerReady && appliedStart\)/,'첫 재생 전에는 배속을 걸지 않는다');
 assert.match(practiceLinks,/stallFixed=true;\s*\n\s*try\{ player\.seekTo/);
-/* 방금 깨운 오디오 컨텍스트에 곧바로 걸면 첫 소리가 삼켜진다. iPhone 튜너 첫 현이 그랬다. */
+/* 방금 깨운 오디오 컨텍스트에 곧바로 걸면 첫 소리가 삼켜진다. iPhone 튜너 첫 현이 그랬다.
+   state는 시계보다 먼저 'running'이 되므로 state를 믿으면 안 된다 — 위 clockAwake 참고. */
 assert.match(index,/function noteStart\(ctx, lead\)/);
-assert.match(index,/ctx\.state==='running' \? \(lead\|\|0\.005\) : 0\.18/);
+assert.doesNotMatch(index,/ctx\.state==='running' \? \(lead\|\|0\.005\) : 0\.18/);
 /* 도움말이 시킨 것만 눌리게 잠그되, 그 단계를 떠나면 반드시 되돌린다. */
 assert.match(guide,/const MENU_LOCKS=/);
 assert.match(guide,/if\(!step\.lockMenu\) lockMenuItems\(doc,false\)/);

@@ -291,18 +291,46 @@ function makeGuitarBuffer(ctx, freq, dur){
    깨어나는 사이에 통째로 삼켜져 '첫 소리만 안 들린다'가 된다. iPhone에서 특히 그렇다.
    running이 아니면 여유를 두고 건다. 컨텍스트가 멈춰 있는 동안 currentTime도 멈춰 있으므로
    이 여유는 '깨어난 뒤 그만큼'이 된다. */
+/* 갓 깨어난 컨텍스트는 state가 'running'으로 바뀐 뒤에도 시계가 0에 멈춰 있다가
+   오디오 유닛이 실제로 열리는 순간 껑충 뛴다. state만 보고 몇 밀리초 앞을 잡으면
+   그 시각은 유닛이 열리는 순간 이미 지나간 시각이 되어 음이 통째로 삼켜진다.
+   계측해 보면 currentTime이 0일 때 0.005를 잡았는데 정작 start()가 불릴 때는
+   시계가 이미 0.021이었다. 시계가 움직이기 시작했는지로 판단해야 한다. */
+const CLOCK_AWAKE=0.15;
+function clockAwake(ctx){ return ctx.state==='running' && ctx.currentTime>CLOCK_AWAKE; }
+/* 도움말은 현도 코드도 한 번만 눌러 보게 하고, 챕터를 열 때마다 프레임을 새로 띄운다.
+   그래서 그 한 번이 늘 그 프레임의 첫 소리다 — 첫 음을 놓치면 사용자에게는
+   '어쩌다 한 번'이 아니라 '계속 안 들린다'가 된다. 시계가 살아난 뒤에 잡는다. */
+function whenClockAwake(ctx, play){
+  if(clockAwake(ctx)) return play();
+  const from=ctx.currentTime, deadline=Date.now()+1500;
+  (function wait(){
+    const now=ctx.currentTime;
+    if((ctx.state==='running' && now>CLOCK_AWAKE && now>from) || Date.now()>deadline){
+      try{ play(); }catch(e){}
+      return;
+    }
+    setTimeout(wait,25);
+  })();
+}
 function noteStart(ctx, lead){
-  const wake=ctx.state==='running' ? (lead||0.005) : 0.18;
+  const wake=clockAwake(ctx) ? (lead||0.005) : 0.18;
   return ctx.currentTime+wake;
 }
 function guitarPluck(midi, dur=2.4, vol=0.62){
-  const ctx=getCtx(), t=noteStart(ctx,0.005);
-  const src=ctx.createBufferSource();
-  src.buffer=makeGuitarBuffer(ctx, midiToFreq(midi), dur);
-  const g=ctx.createGain(); g.gain.value=vol;
-  src.connect(g).connect(getMaster());
-  sendTo(g, 0.24);
-  src.start(t); src.stop(t+dur+0.05);
+  const ctx=getCtx();
+  whenClockAwake(ctx,()=>{
+    const src=ctx.createBufferSource();
+    /* 이 줄에서 2초가 넘는 현 소리를 합성한다. 처음 듣는 음은 30ms 가까이 걸려서,
+       시각을 먼저 잡아 두면 버퍼가 만들어질 즈음엔 그 시각이 이미 지나간 뒤다.
+       다 만든 다음에 시계를 본다. */
+    src.buffer=makeGuitarBuffer(ctx, midiToFreq(midi), dur);
+    const g=ctx.createGain(); g.gain.value=vol;
+    src.connect(g).connect(getMaster());
+    sendTo(g, 0.24);
+    const t=noteStart(ctx,0.005);
+    src.start(t); src.stop(t+dur+0.05);
+  });
 }
 function referenceTone(midi, dur=2.6){ guitarPluck(midi, dur, 0.78); }
 

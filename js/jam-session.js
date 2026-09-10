@@ -524,7 +524,13 @@
     const ctx=getCtx();
     const c=chordInfo(deg, sev, fam);
     const base = 48 + c.pc;                // 조성 반영
-    pianoChord(c.intervals.map(iv=>base+iv), ctx.currentTime+0.01, 1.5, 0.30);
+    /* 코드 미리 듣기는 이 프레임의 첫 소리인 경우가 많다. 시계가 아직 0에 멈춰 있을 때
+       currentTime+0.01을 잡으면 오디오 유닛이 열리는 순간 지나간 시각이 되어 사라진다. */
+    whenClockAwake(ctx,()=>{
+      /* pianoChord는 이 시각을 받은 뒤에야 음마다 노드를 짓는다. 화음 하나면 그 일이
+         수십 ms다. 그 몫까지 앞을 벌어 두지 않으면 예약 시각이 지나간 시각이 된다. */
+      pianoChord(c.intervals.map(iv=>base+iv), noteStart(ctx,0.08), 1.5, 0.30);
+    });
   }
 
   /* ---------- 스케줄러 ---------- */

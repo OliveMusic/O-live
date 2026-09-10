@@ -542,10 +542,6 @@
          hint:'손잡이를 두 번 탭하세요', check:doc=>doc.querySelector('#rhySynco').value==='5'},
         {screen:'trainer:rhythm', target:'#rhyGen', title:'새 리듬',
          body:'두 슬라이더의 성향에 맞춰 패턴을 만들어 줍니다.', hint:'눌러 보세요'},
-        /* #rhyTap은 두 카드 위 템포 줄에 있다. also로 묶으면 구멍이 그 사이 빈 곳까지
-           삼켜 4/4 상자 위로 길게 늘어난다. 박자만 비추고 템포는 글로 가리킨다. */
-        {screen:'trainer:rhythm', target:'#rhySig', title:'박자와 템포',
-         body:'박자를 여기서 고릅니다. 위쪽 템포의 −/+와 TAP은 메트로놈과 같습니다.', advance:'next'},
       ],
     },
     {
@@ -589,8 +585,14 @@
          body:'올리브가 붙은 항목이 <b>목록 맨 위</b>에 옵니다. 눌러서 해제해 보세요.',
          hint:'올리브를 눌러 보세요',
          check:doc=>!part(doc,'link','.record-row-favorite')},
-        {screen:'trainer:record', target:doc=>part(doc,'link','.record-row-more'),
-         also:'.record-menu-backdrop:not([hidden]) .record-menu-sheet',
+        /* 시트 전체를 비추면 어디를 눌러야 할지 여전히 알 수 없고 이름 변경·삭제까지
+           손이 닿는다. 메뉴가 열리는 순간 강조를 즐겨찾기 한 줄로 옮긴다.
+           대상은 그릴 때마다 다시 찾으므로 열림에 맞춰 저절로 따라간다. */
+        {screen:'trainer:record', target:doc=>{
+           const sheet=doc.querySelector('.record-menu-backdrop:not([hidden]) .record-menu-sheet');
+           /* 시트는 녹음본과 링크가 서로 다른 id를 쓴다. 열린 쪽의 즐겨찾기를 집는다. */
+           return (sheet && sheet.querySelector('[id$="MenuPin"]')) || part(doc,'link','.record-row-more');
+         },
          /* 앞 단계를 건너뛰어 아직 붙어 있으면 떼어 둔다. 그래야 되돌리는 것을 배운다. */
          lockMenu:true,
          before:doc=>{
