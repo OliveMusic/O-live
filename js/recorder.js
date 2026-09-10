@@ -546,6 +546,10 @@
       return;
     }
     cloudPlaybackMode=cloudMediaUsesPersistentNative?'native-direct':'native-connected';
+    /* 재생 중에 조옮김을 처음 건드리면 여기서 SoundTouch 경로로 통째로 갈아탄다.
+       그 자리에서 워클릿 모듈을 처음 받아 오면 갈아타는 사이가 '렉'처럼 들린다.
+       모듈은 컨텍스트마다 한 번이면 되니 재생을 시작할 때 미리 받아 둔다. */
+    if(ctx) ensureSoundTouchProcessor(ctx).catch(()=>{});
     const audio=activeCloudAudio();
     applyNativePlaybackSettings(row,audio);
     prepareNativeOffset(offset,audio);
@@ -1464,7 +1468,7 @@
     cloudDecodedLoad={id:row.id,ctx,promise};
     return promise;
   }
-  function startDecodedSource(ctx,buffer,row,token,offset){
+  function startDecodedSource(ctx,buffer,row,token,offset,fadeIn){
     try{
       releaseCloudSource();
       const source=ctx.createBufferSource();
@@ -1480,7 +1484,17 @@
         source.loopStart=region.a;
         source.loopEnd=region.b;
       }
-      gain.gain.value=rowPlaybackGain(row);
+      const level=rowPlaybackGain(row);
+      gain.gain.value=level;
+      /* 네이티브 재생에서 갈아탈 때는 이미 스피커로 나간 소리와 새 소스의 첫 프레임이
+         겹쳐 아주 짧게 되울린 것처럼 들린다. 30여 밀리초만 열어 주면 그 이음매가 사라진다. */
+      if(fadeIn){
+        const open=ctx.currentTime;
+        try{
+          gain.gain.setValueAtTime(.0001,open);
+          gain.gain.linearRampToValueAtTime(Math.max(.0001,level),open+.035);
+        }catch(error){ gain.gain.value=level; }
+      }
       try{ source.playbackRate.value=rate; }catch(error){}
       if(needsPitchProcessing(row) && typeof AudioWorkletNode==='function'){
         const stretch=new AudioWorkletNode(ctx,'soundtouch-processor',{
@@ -1679,7 +1693,7 @@
       armCloudTransport(ctx,row),
     ]).then(results=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
-      startDecodedSource(ctx,results[1],row,token,offset);
+      startDecodedSource(ctx,results[1],row,token,offset,true);
     }).catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token));
     return true;
   }

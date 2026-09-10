@@ -385,6 +385,18 @@ for(const cls of ['mock-lock-icon','mock-time','mock-date','mock-watch-app','moc
 }
 assert.match(guide,/\.mock \.mock-skip b\{/);
 
+/* also는 가까이 붙은 것끼리만 묶는다. #rhyTap은 #rhySig보다 두 카드 위에 있어
+   함께 묶으면 구멍이 그 사이 331px를 통째로 삼켜 4/4 상자 위로 길게 늘어난다. */
+assert.doesNotMatch(guide,/target:'#rhySig', also:'#rhyTap'/);
+/* ••• 메뉴에서는 즐겨찾기만 밝게 남긴다. 눌리지 않는 것만으로는 어디를 눌러야 할지 모른다. */
+assert.match(guide,/button\.style\.opacity=on\?'\.3':''/);
+/* 예시 녹음은 조옮김까지만 들려준다. 남은 단계 내내 울리면 설명을 덮는다. */
+assert.match(guide,/function stopRowPlayback\(doc\)/);
+assert.match(guide,/rec\.stopPlayback\(\)/);
+assert.match(recorder,/stopPlayback:stopPlaybackForOtherTool/,'도움말이 부르는 이름이다');
+assert.match(guide,/before:doc=>\{ stopRowPlayback\(doc\); openList\(doc\); \}, title:'즐겨찾기 올리브'/);
+assert.match(guide,/stopRecordingIn\(doc\);\s*\n\s*stopRowPlayback\(doc\);/,'투어를 나갈 때도 끈다');
+
 /* 광고가 먼저 붙으면 본 영상이 검은 화면으로 멎었다. onReady에서 미리 감거나 배속을 걸던 것이
    원인이라, 실제 재생이 시작된 뒤에 한 번만 적용한다. 그래도 멎으면 제자리로 다시 감는다. */
 assert.match(practiceLinks,/function applyStartOnce\(row\)/);

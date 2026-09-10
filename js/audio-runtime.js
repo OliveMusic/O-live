@@ -614,14 +614,24 @@ function createCtx(mode='ambient'){
 function resumeCtx(ctx){
   if(ctx.state==='running') return Promise.resolve(ctx);
   if(__ctxResumePromise && audioCtx===ctx) return __ctxResumePromise;
-  const resume=Promise.resolve().then(()=>ctx.resume()).then(()=>{
+  /* iOS는 사용자 제스처가 살아 있는 동안 부른 resume()만 받아 준다. 마이크로태스크로
+     한 번만 미뤄도 그 자격을 잃고, 그때 WebKit이 돌려준 프라미스는 끝나지 않는 채로 남는다.
+     그러면 아래 __ctxResumePromise가 영영 비워지지 않아 getCtx()가 다음 탭부터 resume()
+     자체를 건너뛴다. 놓치는 것이 첫 소리 하나가 아니라 그 뒤 모든 소리가 된다 —
+     튜너의 현 음과 잼의 코드 미리 듣기가 통째로 묵음이 되던 까닭이다.
+     제스처 안에서 곧바로 부르고, 끝나지 않는 시도에는 시한을 두어 다음 탭에 길을 내준다. */
+  let started;
+  try{ started=Promise.resolve(ctx.resume()); }
+  catch(error){ started=Promise.reject(error); }
+  const resume=started.then(()=>{
     if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
     return ctx;
   });
-  __ctxResumePromise=resume.finally(()=>{
-    if(audioCtx===ctx) __ctxResumePromise=null;
+  const gate=withTimeout(resume,1500).finally(()=>{
+    if(__ctxResumePromise===gate) __ctxResumePromise=null;
   });
-  return __ctxResumePromise;
+  __ctxResumePromise=gate;
+  return gate;
 }
 
 function withTimeout(promise, ms){

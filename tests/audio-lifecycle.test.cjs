@@ -10,6 +10,7 @@ assert.ok(start>=0 && end>start,'audio lifecycle source is present');
 class FakeAudioContext{
   static instances=[];
   static rejectNextResume=false;
+  static hangNextResume=false;
   constructor(options){
     this.options=options;
     this.state='suspended';
@@ -25,6 +26,10 @@ class FakeAudioContext{
     if(FakeAudioContext.rejectNextResume){
       FakeAudioContext.rejectNextResume=false;
       throw new Error('resume failed');
+    }
+    if(FakeAudioContext.hangNextResume){
+      FakeAudioContext.hangNextResume=false;
+      await new Promise(()=>{});   // WebKit이 제스처 밖 resume()에 하는 짓
     }
     this.state='running';
     this.emit('statechange');
@@ -136,6 +141,26 @@ vm.runInContext(
   assert.equal(runtime.getMode(),'playback');
   assert.equal(sandbox.navigator.audioSession.type,'playback');
   assert.equal(stopForegroundCalls,1,'background playback stops only foreground transports');
+
+  /* iOS는 사용자 제스처가 살아 있는 동안 부른 resume()만 받아 준다. 마이크로태스크로
+     한 번만 미뤄도 자격을 잃으므로 제스처 안에서 곧바로 불러야 한다. */
+  sounding=false;
+  await runtime.releaseCtx();
+  const gesture=runtime.getCtx();
+  assert.equal(gesture.resumeCalls,1,'resume()는 제스처와 같은 실행 안에서 불린다');
+
+  /* 그 자격을 잃으면 WebKit은 끝나지 않는 프라미스를 준다. 그것이 빗장을 걸어 두면
+     놓치는 것이 첫 소리 하나가 아니라 그 뒤 모든 소리가 된다. 시한을 두어 풀어 준다. */
+  await runtime.releaseCtx();
+  FakeAudioContext.hangNextResume=true;
+  const stuck=runtime.getCtx();
+  assert.equal(stuck.resumeCalls,1);
+  assert.equal(stuck.state,'suspended','끝나지 않은 시도는 컨텍스트를 열지 못한다');
+  await new Promise(done=>setTimeout(done,1700));
+  assert.equal(runtime.getCtx(),stuck,'같은 컨텍스트를 다시 쓴다');
+  assert.equal(stuck.resumeCalls,2,'끝나지 않은 시도가 다음 소리까지 막지 않는다');
+  await new Promise(done=>setTimeout(done,0));
+  assert.equal(stuck.state,'running','다음 탭이 컨텍스트를 연다');
 
   console.log('audio lifecycle tests passed');
 })().catch(error=>{

@@ -542,8 +542,10 @@
          hint:'손잡이를 두 번 탭하세요', check:doc=>doc.querySelector('#rhySynco').value==='5'},
         {screen:'trainer:rhythm', target:'#rhyGen', title:'새 리듬',
          body:'두 슬라이더의 성향에 맞춰 패턴을 만들어 줍니다.', hint:'눌러 보세요'},
-        {screen:'trainer:rhythm', target:'#rhySig', also:'#rhyTap', title:'박자와 템포',
-         body:'박자를 여기서 고릅니다. 템포의 −/+와 TAP은 메트로놈과 같습니다.', advance:'next'},
+        /* #rhyTap은 두 카드 위 템포 줄에 있다. also로 묶으면 구멍이 그 사이 빈 곳까지
+           삼켜 4/4 상자 위로 길게 늘어난다. 박자만 비추고 템포는 글로 가리킨다. */
+        {screen:'trainer:rhythm', target:'#rhySig', title:'박자와 템포',
+         body:'박자를 여기서 고릅니다. 위쪽 템포의 −/+와 TAP은 메트로놈과 같습니다.', advance:'next'},
       ],
     },
     {
@@ -583,7 +585,7 @@
          title:'속도와 조옮김', body:'속도는 0.5–1.5배, 조옮김은 왼쪽이 플랫 오른쪽이 샵입니다. <b>두 번 탭</b>하면 1배와 원래 키로 돌아옵니다.',
          advance:'next'},
         {screen:'trainer:record', target:doc=>part(doc,'link','.record-row-favorite'),
-         before:openList, title:'즐겨찾기 올리브',
+         before:doc=>{ stopRowPlayback(doc); openList(doc); }, title:'즐겨찾기 올리브',
          body:'올리브가 붙은 항목이 <b>목록 맨 위</b>에 옵니다. 눌러서 해제해 보세요.',
          hint:'올리브를 눌러 보세요',
          check:doc=>!part(doc,'link','.record-row-favorite')},
@@ -739,8 +741,20 @@
     if(!doc) return;
     MENU_LOCKS.forEach(selector=>{
       const button=doc.querySelector(selector);
-      if(button) button.disabled=Boolean(on);
+      if(!button) return;
+      button.disabled=Boolean(on);
+      /* 눌리지 않는 것만으로는 어디를 눌러야 할지 알기 어렵다. 즐겨찾기만 남기고
+         나머지는 흐리게 두어 눈이 갈 곳을 하나로 만든다. */
+      button.style.opacity=on?'.3':'';
     });
+  }
+  /* 예시 녹음은 조옮김까지만 들려주면 된다. 그 뒤로도 계속 울리면 남은 설명을 덮는다. */
+  function stopRowPlayback(doc){
+    if(!doc) return;
+    try{
+      const rec=doc.defaultView && doc.defaultView.OliveRecorder;
+      if(rec && typeof rec.stopPlayback==='function') rec.stopPlayback();
+    }catch(e){}
   }
   function unlockInputs(doc){
     if(!doc) return;
@@ -1054,6 +1068,7 @@
     const jam=doc.querySelector('#jamStart');
     if(jam && jam.classList.contains('on')) jam.click();
     stopRecordingIn(doc);
+    stopRowPlayback(doc);
     unlockInputs(doc);
   }
   function exit(){
