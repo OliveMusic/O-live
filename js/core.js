@@ -287,8 +287,16 @@ function makeGuitarBuffer(ctx, freq, dur){
   if(__gtrCache.size>__GTR_MAX) __gtrCache.delete(__gtrCache.keys().next().value);
   return buf;
 }
+/* 방금 깨운 오디오 컨텍스트는 아직 흐르지 않는다. 몇 ms 뒤에 걸어 둔 소리는
+   깨어나는 사이에 통째로 삼켜져 '첫 소리만 안 들린다'가 된다. iPhone에서 특히 그렇다.
+   running이 아니면 여유를 두고 건다. 컨텍스트가 멈춰 있는 동안 currentTime도 멈춰 있으므로
+   이 여유는 '깨어난 뒤 그만큼'이 된다. */
+function noteStart(ctx, lead){
+  const wake=ctx.state==='running' ? (lead||0.005) : 0.18;
+  return ctx.currentTime+wake;
+}
 function guitarPluck(midi, dur=2.4, vol=0.62){
-  const ctx=getCtx(), t=ctx.currentTime+0.005;
+  const ctx=getCtx(), t=noteStart(ctx,0.005);
   const src=ctx.createBufferSource();
   src.buffer=makeGuitarBuffer(ctx, midiToFreq(midi), dur);
   const g=ctx.createGain(); g.gain.value=vol;
@@ -304,7 +312,7 @@ function referenceTone(midi, dur=2.6){ guitarPluck(midi, dur, 0.78); }
    현 강성에 의한 비조화성과, 고차 배음이 먼저 사라지는 감쇠를 더한다. */
 function pianoNote(midi, when, dur, vol=0.19, destination, reverbAmount=0.3){
   const ctx=getCtx();
-  const t=(when!=null?when:ctx.currentTime)+0.004;
+  const t=when!=null ? when+0.004 : noteStart(ctx,0.004);
   const f0=midiToFreq(midi);
   const B=0.0004;
   const nyq=ctx.sampleRate/2.2;

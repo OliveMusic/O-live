@@ -303,7 +303,9 @@ assert.match(index,/linearRampToValueAtTime\(Math\.max\(\.0001,target\),now\+spa
 assert.match(guide,/view\.OliveAudioFade\.out\(span\/1000\)/);
 assert.match(guide,/view\.OliveAudioFade\.restore\(\)/);
 assert.match(guide,/linger:4000/);
-assert.match(guide,/leaveTour\(\(\)=>show\('done'\),sounding\(\)\?4000:450\)/);
+assert.match(guide,/leaveTour\(\(\)=>show\('done'\),sounding\(\)\?4000:160\)/);
+/* 화면은 그대로 두고 소리만 줄인다. 화면까지 어두워지는 연출은 걷어냈다. */
+assert.doesNotMatch(guide,/#tour\.leaving/);
 /* 잠금화면은 휴대폰 기능이라는 것을 밝히고 직접 해 보게 한다. */
 assert.match(guide,/휴대폰에서 쓰는 기능입니다\. 켜 둔 채 <b>한번 잠가 보세요\.<\/b>/);
 /* 녹음은 시간 막대와 입력 크기까지 짚는다. */
@@ -312,7 +314,8 @@ assert.match(guide,/최대 5분<\/b> 중 지나온 시간/);
 /* 즐겨찾기는 풀어 보고 ••• 메뉴로 되돌려 본다. */
 assert.match(guide,/title:'••• 메뉴에서 되돌리기'/);
 /* 체크박스는 실제로 지워 본다. */
-assert.match(guide,/title:'골라서 한 번에 지우기'/);
+assert.match(guide,/title:'\uc9c0\uc6b8 \ud56d\ubaa9 \uace0\ub974\uae30'/);
+assert.match(guide,/target:'#recordSelectDelete',\s*\n\s*title:'\uc0ad\uc81c'/,'삭제 버튼을 따로 강조한다');
 
 /* 녹음을 켜 둔 채 다음 단계로 가면 도움말 내내 녹음이 돈다. 그 단계를 떠나면 멈춘다. */
 assert.match(guide,/function stopRecordingIn\(doc\)/);
@@ -322,15 +325,15 @@ assert.match(guide,/target:'#recordToggle', recording:true/);
 assert.match(guide,/target:'\.record-waveform', also:'\.record-player-play'/);
 assert.match(guide,/function holeBox\(el,also\)/);
 /* 링크를 담는 화면도 설명한다. 누르고 아무 말 없이 지나가면 안 된다. */
-assert.match(guide,/target:'#linkPanel'/);
-assert.match(guide,/검색하거나 주소를 붙여넣기/);
+assert.match(guide,/target:'#linkSearchForm', also:'#linkPanel'/);
+assert.match(guide,/title:'검색해서 담기'/);
+assert.match(guide,/title:'결과를 눌러 담기'/);
 /* 시연이라도 즐겨찾기가 눌린 대로 남아야 한다. 다시 부를 때 상태를 들고 있는다. */
 assert.match(cloud,/function guidePin\(list,id,pinned\)/);
 assert.match(cloud,/if\(guideMode\)\{ guidePin\(guideState\(\)\.links,id,pinned\); return true; \}/);
 assert.match(cloud,/if\(guideMode\)\{ guidePin\(guideState\(\)\.recordings,id,pinned\); return true; \}/);
 /* 소리를 켜자마자 끄면 팍 꺼진다. 몇 초 들려주고 서서히 어두워지며 넘긴다. */
-assert.match(guide,/#tour\.leaving\{ opacity:0; pointer-events:none; \}/);
-assert.match(guide,/#tour\{ transition:opacity var\(--leave,\.45s\) linear; \}/);
+
 assert.match(guide,/function leaveTour\(then,ms\)/);
 
 /* 목록에는 녹음본과 링크가 섞여 있고 예시는 이름까지 같다. 구조로 갈라야 한다. */
@@ -371,6 +374,29 @@ assert.match(guide,/transform:translateX\(-\.04em\)/);
 assert.match(guide,/\.mock-olive::after\{[\s\S]{0,200}?left:70%; top:50%/);
 assert.match(guide,/width:calc\(var\(--olive-w\) \* \.294\)/);
 assert.equal((guide.match(/class="mock-olive"/g)||[]).length,2);
+
+/* 광고가 먼저 붙으면 본 영상이 검은 화면으로 멎었다. onReady에서 미리 감거나 배속을 걸던 것이
+   원인이라, 실제 재생이 시작된 뒤에 한 번만 적용한다. 그래도 멎으면 제자리로 다시 감는다. */
+assert.match(practiceLinks,/function applyStartOnce\(row\)/);
+assert.doesNotMatch(practiceLinks,/onReady\(\)\{[\s\S]{0,200}?player\.seekTo/,'onReady에서 미리 감지 않는다');
+assert.match(practiceLinks,/if\(player && playerReady && appliedStart\)/,'첫 재생 전에는 배속을 걸지 않는다');
+assert.match(practiceLinks,/stallFixed=true;\s*\n\s*try\{ player\.seekTo/);
+/* 방금 깨운 오디오 컨텍스트에 곧바로 걸면 첫 소리가 삼켜진다. iPhone 튜너 첫 현이 그랬다. */
+assert.match(index,/function noteStart\(ctx, lead\)/);
+assert.match(index,/ctx\.state==='running' \? \(lead\|\|0\.005\) : 0\.18/);
+/* 도움말이 시킨 것만 눌리게 잠그되, 그 단계를 떠나면 반드시 되돌린다. */
+assert.match(guide,/const MENU_LOCKS=/);
+assert.match(guide,/if\(!step\.lockMenu\) lockMenuItems\(doc,false\)/);
+assert.match(guide,/function unlockInputs\(doc\)/);
+/* 링크는 검색어를 미리 채워 두고 고치지 못하게 한 뒤 실제로 담아 본다. */
+assert.match(guide,/input\.value='C Major Scale'; input\.readOnly=true;/);
+assert.match(cloud,/const id='guide-link-'\+\(guideState\(\)\.links\.length\+1\)/);
+/* 마침 문구는 담백하게. */
+assert.match(guide,/last\.name\+' 끝'/);
+assert.doesNotMatch(guide,/다 봤습니다/);
+/* 잠금화면 목업은 원래 크기로 둔다. 줄이면 못생겨진다. */
+assert.match(guide,/width:196px; height:392px; padding:26px 14px 16px/);
+assert.match(guide,/class="mock-lock-icon"/);
 
 assert.match(worker,/'\.\/guide\.html'/,'오프라인에서도 열린다');
 assert.match(sitemap,/guide\.html/);

@@ -814,7 +814,17 @@
     return data||[];
   }
   async function savePracticeLink(videoId,title,durationMs){
-    if(guideMode) return true;
+    if(guideMode){
+      /* 시연에서도 실제로 담겨야 배운다. 다시 시작하면 처음 상태로 돌아온다. */
+      const id='guide-link-'+(guideState().links.length+1);
+      guideState().links.unshift({
+        id,provider:'youtube',video_id:String(videoId||''),
+        title:String(title||''),duration_ms:Math.max(0,Math.round(Number(durationMs)||0)),
+        last_position_ms:0,loop_a_ms:null,loop_b_ms:null,loop_enabled:false,
+        playback_rate:1,pinned:false,created_at:new Date().toISOString(),
+      });
+      return id;
+    }
     await ensureRecordingAccess();
     const id=makeId();
     const {data,error}=await client.rpc('save_practice_link',{

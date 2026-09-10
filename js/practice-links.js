@@ -68,6 +68,11 @@
   let saveTimer=0;
   let pendingState=null;
   let apiPromise=null;
+  /* 광고가 먼저 붙으면 본 영상이 검은 화면으로 멎는 일이 있다. onReady에서 미리 감거나
+     배속을 걸어 두는 것이 원인이라, 실제 재생이 시작된 뒤에 한 번만 적용한다. */
+  let restoreMs=0, appliedStart=false;
+  /* 그래도 멎으면 제자리로 다시 감아 깨운다. 진행바를 옮겼다 되돌리던 것과 같다. */
+  let stallAt=-1, stallSince=0, stallFixed=false;
   let searching=false;
   let selectedRow=null;
   let menuTrigger=null;
@@ -260,6 +265,16 @@
     try{ position=player.getCurrentTime()*1000; }catch(e){ return; }
     /* 길이는 재생이 시작된 뒤에야 알려지는 경우가 있다. 그때 반복 버튼을 되살린다. */
     if(syncDuration(row,playerDurationMs(row))) refreshLoopUi(row);
+    /* 재생 중이라는데 시간이 멎어 있으면 광고 뒤 검은 화면이다. 한 번만 제자리로 감는다. */
+    if(playing){
+      if(Math.abs(position-stallAt)<20){
+        if(!stallSince) stallSince=Date.now();
+        else if(!stallFixed && Date.now()-stallSince>2200){
+          stallFixed=true;
+          try{ player.seekTo(Math.max(0,position/1000),true); }catch(e){}
+        }
+      }else{ stallAt=position; stallSince=0; }
+    }
     const active=activeLoopFor(row);
     if(active && position>=active.b){
       try{ player.seekTo(active.a/1000,true); }catch(e){}
@@ -279,6 +294,8 @@
     playing=false;
     playerReady=false;
     playerVideoId='';
+    restoreMs=0; appliedStart=false;
+    stallAt=-1; stallSince=0; stallFixed=false;
     if(player){
       try{ player.destroy(); }catch(e){}
       player=null;
@@ -342,7 +359,7 @@
         onReady(){
           playerReady=true;
           const start=Number(row.last_position_ms)||0;
-          if(start>1000){ try{ player.seekTo(start/1000,true); }catch(e){} }
+          restoreMs=start; appliedStart=false;
           syncDuration(row,playerDurationMs(row));
           /* 길이를 알고 나서야 A/B 구간을 올바른 비율로 그릴 수 있다. */
           refreshLoopUi(row);
@@ -366,6 +383,7 @@
           if(!YT || !YT.PlayerState) return;
           if(event.data===YT.PlayerState.PLAYING){
             playing=true;
+            applyStartOnce(row);
             /* 저장 녹음 재생과 같은 취급이다. 다른 재생은 정리한다. */
             if(window.OliveRecorder && typeof window.OliveRecorder.stopPlayback==='function'){
               window.OliveRecorder.stopPlayback();
@@ -433,6 +451,18 @@
     const rate=Number(row&&row.playback_rate);
     return Number.isFinite(rate) && rate>0 ? rate : 1;
   }
+  /* 저장된 위치와 배속은 재생이 실제로 시작된 뒤 한 번만 건다. onReady 시점에 걸면
+     광고가 붙은 영상에서 본 편이 검은 화면으로 멎는 일이 있다. */
+  function applyStartOnce(row){
+    if(appliedStart || !player || !playerReady) return;
+    appliedStart=true;
+    try{
+      if(restoreMs>1000) player.seekTo(restoreMs/1000,true);
+      const rate=rowPlaybackRate(row);
+      if(Math.abs(rate-1)>0.001) player.setPlaybackRate(rate);
+    }catch(e){}
+    restoreMs=0;
+  }
   function clampRate(value){
     const rate=Math.round((Number(value)||1)/PLAYBACK_RATE_STEP)*PLAYBACK_RATE_STEP;
     return Math.min(PLAYBACK_RATE_MAX,Math.max(PLAYBACK_RATE_MIN,Number(rate.toFixed(2))));
@@ -440,7 +470,8 @@
   function setPlaybackRate(row,rate,persist){
     const next=clampRate(rate);
     row.playback_rate=next;
-    if(player && playerReady){
+    /* 아직 한 번도 재생하지 않았으면 플레이어에는 걸지 않는다. applyStartOnce가 맡는다. */
+    if(player && playerReady && appliedStart){
       try{ player.setPlaybackRate(next); }catch(e){}
     }
     const wrap=list.querySelector(`#link-player-${row.id}`);

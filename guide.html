@@ -35,10 +35,6 @@
   }
   .screen{ flex:1; min-height:0; display:flex; flex-direction:column; }
   .screen[hidden]{ display:none; }
-  /* 투어를 마칠 때 뚝 끊지 않고 서서히 어두워지며 넘긴다. */
-  #tour{ transition:opacity var(--leave,.45s) linear; }
-  #tour.leaving{ opacity:0; pointer-events:none; }
-  @media (prefers-reduced-motion:reduce){ #tour{ transition:none; } }
 
   /* ── 챕터 고르기 ── */
   .sheet{
@@ -184,10 +180,14 @@
     font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
   }
   .mock-phone .ios{
-    width:196px; height:300px; padding:22px 14px 16px; border-radius:26px;
+    width:196px; height:392px; padding:26px 14px 16px; border-radius:26px;
     border:1px solid var(--line); box-sizing:border-box; display:flex; flex-direction:column;
   }
-  .mock-time{ margin:2px 0 0; text-align:center; font-size:2.5rem; font-weight:250; letter-spacing:-.02em; line-height:1.05; }
+  .mock-lock-icon{ text-align:center; font-size:.75rem; opacity:.65; }
+  .mock-time{
+    margin:2px 0 0; text-align:center; font-size:2.75rem; font-weight:250;
+    letter-spacing:-.02em; line-height:1.05;
+  }
   .mock-date{ margin:1px 0 0; text-align:center; font-size:.6875rem; opacity:.72; }
   .mock-np{ margin-top:auto; padding:11px 11px 12px; border-radius:15px; background:rgba(255,255,255,.13); }
   .mock-np-head{ display:flex; align-items:center; gap:8px; }
@@ -308,8 +308,8 @@
   <section class="screen" id="done" hidden>
     <div class="sheet" style="text-align:center">
       <div class="done-mark" aria-hidden="true"></div>
-      <h1 style="margin-top:22px" id="doneTitle">다 봤습니다</h1>
-      <p class="lead" id="doneBody">이제 앱에서 직접 해 보세요.</p>
+      <h1 style="margin-top:22px" id="doneTitle">끝</h1>
+      <p class="lead" id="doneBody">이제 직접 해 보세요.</p>
       <div class="chapters" style="margin-top:28px">
         <button class="chapter wide" type="button" id="doneNext">
           <span><b>다음 기능 배우기</b><small></small></span>
@@ -350,6 +350,7 @@
         <div class="mock-row">
           <figure class="mock mock-phone">
             <div class="ios">
+              <p class="mock-lock-icon" aria-hidden="true">&#128274;</p>
               <p class="mock-time">9:41</p>
               <p class="mock-date">9월 9일 화요일</p>
               <div class="mock-np">
@@ -583,10 +584,13 @@
         {screen:'trainer:record', target:doc=>part(doc,'link','.record-row-more'),
          also:'.record-menu-backdrop:not([hidden]) .record-menu-sheet',
          /* 앞 단계를 건너뛰어 아직 붙어 있으면 떼어 둔다. 그래야 되돌리는 것을 배운다. */
+         lockMenu:true,
          before:doc=>{
            openList(doc);
            const fav=part(doc,'link','.record-row-favorite');
            if(fav) fav.click();
+           /* 여기서는 즐겨찾기만 눌리게 한다. 이름 변경이나 삭제가 눌리면 곤란하다. */
+           lockMenuItems(doc,true);
          },
          title:'••• 메뉴에서 되돌리기',
          body:'이름 변경·다운로드·삭제도 여기에 있습니다. <b>즐겨찾기</b>를 눌러 다시 올려 보세요.',
@@ -595,15 +599,28 @@
         {screen:'trainer:record', target:'#recordLink', before:openList,
          title:'YouTube 링크 더하기', body:'노래 제목이나 가수를 <b>검색</b>해서 고르거나 주소를 붙여 넣습니다. 백킹 트랙을 A/B로 반복하며 연습할 수 있습니다.',
          hint:'눌러 보세요'},
-        {screen:'trainer:record', target:'#linkPanel', advance:'next',
+        {screen:'trainer:record', target:'#linkSearchForm', also:'#linkPanel',
          before:doc=>{
            openList(doc);
            const panel=doc.querySelector('#linkPanel');
            const button=doc.querySelector('#recordLink');
            if(panel && panel.hidden && button) button.click();
+           const search=doc.querySelector('#linkModeSearch');
+           if(search && !search.classList.contains('active')) search.click();
+           /* 검색어를 미리 채워 두고 고치지 못하게 한다. 도움말에서는 검색만 눌러 보면 된다. */
+           const input=doc.querySelector('#linkSearchInput');
+           if(input){ input.value='C Major Scale'; input.readOnly=true; }
          },
-         title:'검색하거나 주소를 붙여넣기',
-         body:'<b>검색</b>은 노래 제목이나 가수로 찾아 고르고, <b>URL</b>은 주소를 그대로 붙여넣습니다. 담은 링크도 A/B 반복과 배속을 그대로 씁니다.'},
+         title:'검색해서 담기',
+         body:'<b>검색</b>은 노래 제목이나 가수로 찾고, <b>URL</b>은 주소를 그대로 붙여넣습니다. 검색어를 넣어 뒀으니 눌러 보세요.',
+         hint:'검색을 눌러 보세요',
+         check:doc=>Boolean(doc.querySelector('#linkResults .link-result'))},
+        {screen:'trainer:record', target:'#linkResults',
+         title:'결과를 눌러 담기',
+         body:'고른 영상이 목록에 담깁니다. 이름을 물어보면 그대로 확인하세요. 담은 링크도 <b>A/B 반복과 배속</b>을 그대로 씁니다.',
+         hint:'결과를 눌러 보세요',
+         memo:doc=>doc.querySelectorAll('#recordList .record-entry').length,
+         check:(doc,memo)=>doc.querySelectorAll('#recordList .record-entry').length>memo},
         {screen:'trainer:record', target:'#recordSelect',
          before:doc=>{
            openList(doc);
@@ -616,9 +633,12 @@
          hint:'체크 아이콘을 눌러 보세요',
          check:doc=>{ const bar=doc.querySelector('#recordSelectBar'); return Boolean(bar && !bar.hidden); }},
         {screen:'trainer:record', target:'#recordList', also:'#recordSelectBar',
-         title:'골라서 한 번에 지우기',
-         body:'지울 항목을 체크하고 <b>삭제</b>를 누릅니다. 여기서 지운 예시는 도움말을 다시 시작하면 돌아옵니다.',
-         hint:'하나 골라 지워 보세요',
+         title:'지울 항목 고르기', body:'행을 눌러 체크합니다. 여러 개를 한꺼번에 고를 수 있습니다.',
+         hint:'하나 골라 보세요',
+         check:doc=>{ const del=doc.querySelector('#recordSelectDelete'); return Boolean(del && !del.disabled); }},
+        {screen:'trainer:record', target:'#recordSelectDelete',
+         title:'삭제', body:'고른 것을 한 번에 지웁니다. 정말 지울지 물어보면 확인하세요. 여기서 지운 예시는 도움말을 다시 시작하면 돌아옵니다.',
+         hint:'삭제를 눌러 보세요',
          memo:doc=>doc.querySelectorAll('#recordList .record-entry').length,
          check:(doc,memo)=>doc.querySelectorAll('#recordList .record-entry').length<memo},
       ],
@@ -704,6 +724,23 @@
       const discard=doc.querySelector('#recordDiscard');
       if(discard) discard.click();
     }
+  }
+  /* 도움말이 시키는 것만 눌리게 잠갔다가, 그 단계를 떠나면 반드시 되돌린다.
+     잠근 채로 두면 프레임 안의 앱이 반쯤 망가진 상태로 남는다. */
+  const MENU_LOCKS=['#linkMenuRename','#linkMenuDelete',
+                    '#recordMenuRename','#recordMenuDownload','#recordMenuDelete'];
+  function lockMenuItems(doc,on){
+    if(!doc) return;
+    MENU_LOCKS.forEach(selector=>{
+      const button=doc.querySelector(selector);
+      if(button) button.disabled=Boolean(on);
+    });
+  }
+  function unlockInputs(doc){
+    if(!doc) return;
+    lockMenuItems(doc,false);
+    const input=doc.querySelector('#linkSearchInput');
+    if(input) input.readOnly=false;
   }
   /* 목록과 재생기는 앞 단계에서 열리지만, 건너뛴 사람에게도 보여 줘야 한다. */
   function openList(doc){
@@ -924,6 +961,7 @@
       }
       goScreen(doc,step.screen);
       if(!step.recording) stopRecordingIn(doc);
+      if(!step.lockMenu) lockMenuItems(doc,false);
       if(step.before){ try{ step.before(doc); }catch(e){} }
       return waitFor(()=>resolveTarget(frameDoc(),step.target)).then(el=>{
       if(!running || mine!==token) return;
@@ -1010,13 +1048,14 @@
     const jam=doc.querySelector('#jamStart');
     if(jam && jam.classList.contains('on')) jam.click();
     stopRecordingIn(doc);
+    unlockInputs(doc);
   }
   function exit(){
     running=false;
     token+=1;
     stopListening();
     untrack();
-    leaveTour(()=>show('home'),450);
+    leaveTour(()=>show('home'),160);
   }
   function sounding(){
     const doc=frameDoc();
@@ -1026,20 +1065,15 @@
     return Boolean((metro && metro.classList.contains('running'))
       || (jam && jam.classList.contains('on')));
   }
-  /* 소리를 남긴 채로 화면만 바꾸면 뚝 끊긴다. 소리와 화면을 같은 시간 동안 함께
-     줄이고, 다 줄어든 다음에 멈춘다. 마스터 출력을 되돌리는 것을 잊으면 안 된다. */
+  /* 소리를 뚝 끊으면 '팍' 꺼지는 느낌이 든다. 화면은 그대로 두고 소리만 천천히 줄인 뒤
+     다음 화면으로 넘긴다. 마스터 출력을 되돌리는 것을 잊으면 안 된다. */
   function leaveTour(then,ms){
-    const screen=document.getElementById('tour');
-    const span=Math.max(200,Number(ms)||450);
+    const span=Math.max(120,Number(ms)||160);
     const view=frame.contentWindow;
     if(view && view.OliveAudioFade){ try{ view.OliveAudioFade.out(span/1000); }catch(e){} }
-    screen.style.setProperty('--leave',span+'ms');
-    screen.classList.add('leaving');
     setTimeout(()=>{
       quiet();
       if(view && view.OliveAudioFade){ try{ view.OliveAudioFade.restore(); }catch(e){} }
-      screen.classList.remove('leaving');
-      screen.style.removeProperty('--leave');
       then();
     },span+40);
   }
@@ -1051,8 +1085,8 @@
     const last=queue.length?queue[queue.length-1].chapter:null;
     const index=last?CHAPTERS.indexOf(last):-1;
     const next=index>=0?CHAPTERS[index+1]:null;
-    document.getElementById('doneTitle').textContent=last?(last.name+', 다 봤습니다'):'다 봤습니다';
-    document.getElementById('doneBody').textContent='이제 앱에서 직접 해 보세요.';
+    document.getElementById('doneTitle').textContent=last?(last.name+' 끝'):'끝';
+    document.getElementById('doneBody').textContent='이제 직접 해 보세요.';
     const button=document.getElementById('doneNext');
     if(next){
       button.hidden=false;
@@ -1061,7 +1095,7 @@
       button.querySelector('small').textContent=next.blurb;
     }else button.hidden=true;
     /* 소리가 나는 채로 끝나면 그 소리를 4초에 걸쳐 함께 줄인다. */
-    leaveTour(()=>show('done'),sounding()?4000:450);
+    leaveTour(()=>show('done'),sounding()?4000:160);
   }
 
   /* ── 첫 화면 ── */
