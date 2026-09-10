@@ -36,7 +36,7 @@
   .screen{ flex:1; min-height:0; display:flex; flex-direction:column; }
   .screen[hidden]{ display:none; }
   /* 투어를 마칠 때 뚝 끊지 않고 서서히 어두워지며 넘긴다. */
-  #tour{ transition:opacity .45s var(--ease-out,ease); }
+  #tour{ transition:opacity var(--leave,.45s) linear; }
   #tour.leaving{ opacity:0; pointer-events:none; }
   @media (prefers-reduced-motion:reduce){ #tour{ transition:none; } }
 
@@ -452,7 +452,7 @@
          title:'박자와 세분화', body:'2/4부터 12/8까지 고를 수 있고, 6/8·7/8·9/8·12/8은 <b>묶음의 첫 박</b>에 중간 강세가 붙습니다.',
          advance:'next'},
         {screen:'metronome', target:'#metroStart',
-         title:'화면을 잠가도 계속', body:'잠금화면의 원형 <b>10초 버튼이 BPM을 ±10</b> 바꿉니다. Apple Watch에서도 됩니다. 올리브를 다시 누르면 멈춥니다.',
+         title:'화면을 잠가도 계속', body:'휴대폰에서 쓰는 기능입니다. 켜 둔 채 <b>한번 잠가 보세요.</b> 잠금화면에 뜨고, 원형 <b>10초 버튼이 BPM을 ±10</b> 바꿉니다. Apple Watch에서도 됩니다.',
          advance:'next'},
       ],
     },
@@ -535,8 +535,8 @@
          hint:'손잡이를 두 번 탭하세요', check:doc=>doc.querySelector('#rhySynco').value==='5'},
         {screen:'trainer:rhythm', target:'#rhyGen', title:'새 리듬',
          body:'두 슬라이더의 성향에 맞춰 패턴을 만들어 줍니다.', hint:'눌러 보세요'},
-        {screen:'trainer:rhythm', target:'#rhySig', title:'6/8은 여기',
-         body:'프리셋에는 없고 박자 목록에서 고릅니다. 템포의 −/+와 TAP은 메트로놈과 같습니다.', advance:'next'},
+        {screen:'trainer:rhythm', target:'#rhySig', also:'#rhyTap', title:'박자와 템포',
+         body:'박자를 여기서 고릅니다. 템포의 −/+와 TAP은 메트로놈과 같습니다.', advance:'next'},
       ],
     },
     {
@@ -545,8 +545,18 @@
         {screen:'trainer', target:'#trainerSeg', title:'트랙을 고릅니다',
          body:'녹음한 것, 올린 파일, YouTube 링크가 <b>한 목록</b>에 모입니다.', hint:'트랙을 누르세요',
          check:doc=>seg(doc)==='record'},
-        {screen:'trainer:record', target:'#recordToggle', recording:true, title:'녹음하기',
-         body:'최대 5분. 메트로놈이나 잼을 켜 둔 채로 녹음할 수 있습니다. 녹음 중에는 화면을 <b>직접 잠그지 마세요.</b>',
+        {screen:'trainer:record', target:'#recordToggle', recording:true, title:'눌러서 녹음',
+         body:'메트로놈이나 잼을 켜 둔 채로 녹음할 수 있습니다. 녹음 중에는 화면을 <b>직접 잠그지 마세요.</b> 자동으로 꺼지는 것은 막아 줍니다.',
+         hint:'눌러서 녹음해 보세요',
+         check:doc=>{
+           try{
+             const rec=doc.defaultView && doc.defaultView.OliveRecorder;
+             return Boolean(rec && rec.isRecording());
+           }catch(e){ return false; }
+         }},
+        {screen:'trainer:record', target:'#recordTimeProgress', also:'#recordLevelRow', recording:true,
+         title:'남은 시간과 입력 크기',
+         body:'위 막대가 <b>최대 5분</b> 중 지나온 시간이고, 아래 막대는 지금 들어오는 <b>소리의 크기</b>입니다. 소리를 내면 함께 움직입니다.',
          advance:'next'},
         {screen:'trainer:record', target:'#recordListCard', title:'목록 펼치기',
          body:'여기 두 항목은 도움말용 예시입니다. 여기서 바꾼 것은 저장되지 않습니다.',
@@ -566,8 +576,22 @@
          title:'속도와 조옮김', body:'속도는 0.5–1.5배, 조옮김은 왼쪽이 플랫 오른쪽이 샵입니다. <b>두 번 탭</b>하면 1배와 원래 키로 돌아옵니다.',
          advance:'next'},
         {screen:'trainer:record', target:doc=>part(doc,'link','.record-row-favorite'),
-         before:openList, title:'즐겨찾기 올리브', body:'올리브가 붙은 항목이 <b>목록 맨 위</b>에 옵니다. 올리브를 누르면 해제되고, 오른쪽 ••• 메뉴에서 다시 넣습니다.',
-         advance:'next'},
+         before:openList, title:'즐겨찾기 올리브',
+         body:'올리브가 붙은 항목이 <b>목록 맨 위</b>에 옵니다. 눌러서 해제해 보세요.',
+         hint:'올리브를 눌러 보세요',
+         check:doc=>!part(doc,'link','.record-row-favorite')},
+        {screen:'trainer:record', target:doc=>part(doc,'link','.record-row-more'),
+         also:'.record-menu-backdrop:not([hidden]) .record-menu-sheet',
+         /* 앞 단계를 건너뛰어 아직 붙어 있으면 떼어 둔다. 그래야 되돌리는 것을 배운다. */
+         before:doc=>{
+           openList(doc);
+           const fav=part(doc,'link','.record-row-favorite');
+           if(fav) fav.click();
+         },
+         title:'••• 메뉴에서 되돌리기',
+         body:'이름 변경·다운로드·삭제도 여기에 있습니다. <b>즐겨찾기</b>를 눌러 다시 올려 보세요.',
+         hint:'•••을 열어 즐겨찾기를 누르세요',
+         check:doc=>Boolean(part(doc,'link','.record-row-favorite'))},
         {screen:'trainer:record', target:'#recordLink', before:openList,
          title:'YouTube 링크 더하기', body:'노래 제목이나 가수를 <b>검색</b>해서 고르거나 주소를 붙여 넣습니다. 백킹 트랙을 A/B로 반복하며 연습할 수 있습니다.',
          hint:'눌러 보세요'},
@@ -588,8 +612,15 @@
            const button=doc.querySelector('#recordLink');
            if(panel && !panel.hidden && button) button.click();
          },
-         title:'여러 개 한 번에', body:'체크 아이콘을 누르면 각 행에 체크박스가 생겨 <b>골라서 한 번에</b> 지웁니다.',
-         advance:'next'},
+         title:'여러 개 고르기', body:'체크 아이콘을 누르면 각 행에 <b>체크박스</b>가 생깁니다.',
+         hint:'체크 아이콘을 눌러 보세요',
+         check:doc=>{ const bar=doc.querySelector('#recordSelectBar'); return Boolean(bar && !bar.hidden); }},
+        {screen:'trainer:record', target:'#recordList', also:'#recordSelectBar',
+         title:'골라서 한 번에 지우기',
+         body:'지울 항목을 체크하고 <b>삭제</b>를 누릅니다. 여기서 지운 예시는 도움말을 다시 시작하면 돌아옵니다.',
+         hint:'하나 골라 지워 보세요',
+         memo:doc=>doc.querySelectorAll('#recordList .record-entry').length,
+         check:(doc,memo)=>doc.querySelectorAll('#recordList .record-entry').length<memo},
       ],
     },
     {
@@ -615,7 +646,7 @@
          body:'8비트, 기본 락, 포크 스트럼, 셔플, 보사노바, 레게, 왈츠가 있습니다.', hint:'하나 골라 보세요'},
         {screen:'jam', target:'#jamStart', title:'시작',
          body:'잼도 화면을 잠가도 계속 울리고, 잠금화면에서 BPM을 ±10 바꿉니다. 다시 누르면 멈춥니다.',
-         hint:'눌러서 들어 보세요', linger:3200,
+         hint:'눌러서 들어 보세요', linger:4000,
          check:doc=>doc.querySelector('#jamStart').classList.contains('on')},
       ],
     },
@@ -821,7 +852,15 @@
   window.addEventListener('resize',repaint);
 
   /* ── 진행 ── */
-  let queue=[], at=0, running=false, pass=null, token=0, retry=null;
+  let queue=[], at=0, running=false, pass=null, token=0, retry=null, deferTimer=0;
+  /* 미뤄 둔 진행은 반드시 취소할 수 있어야 한다. 통과 판정이 이미 잡아 둔 setTimeout이
+     사용자가 건너뛴 뒤에 뒤늦게 터지면 한 단계를 통째로 삼킨다. 지금 단계에서만 유효하다. */
+  function deferAdvance(ms){
+    const mine=token;
+    clearTimeout(deferTimer);
+    deferTimer=setTimeout(()=>{ deferTimer=0; if(mine===token) advance(); },Math.max(0,ms||0));
+  }
+  function cancelDefer(){ if(deferTimer){ clearTimeout(deferTimer); deferTimer=0; } }
 
   function show(id){
     ['home','tour','done','more'].forEach(key=>{
@@ -839,7 +878,13 @@
     if(!queue.length) return;
     at=0; running=true;
     show('tour');
-    if(!frame.getAttribute('src')) frame.setAttribute('src','index.html?guide=1');
+    /* 챕터를 시작할 때마다 앱을 새로 연다. 앞서 만지작거린 BPM·박자·확대가 남아 있으면
+       설명과 화면이 어긋나고, 지웠던 예시 목록도 돌아오지 않는다. */
+    const src='index.html?guide=1';
+    if(frame.getAttribute('src')===src && frame.contentWindow){
+      try{ frame.contentWindow.location.replace(src); }
+      catch(e){ frame.setAttribute('src',src); }
+    }else frame.setAttribute('src',src);
     runStep();
   }
 
@@ -883,11 +928,15 @@
       return waitFor(()=>resolveTarget(frameDoc(),step.target)).then(el=>{
       if(!running || mine!==token) return;
       if(!el){ advance(); return; }
-      /* 접힌 카드 아래에 있으면 구멍이 화면 밖을 가리킨다. 한 번만 끌어온다. */
+      /* 앱은 위에 제목 줄, 아래에 탭바가 떠 있다. 그 밑에 깔리면 강조 표시가 잘려 보인다.
+         가운데 띠를 벗어나면 한 번 끌어와 가운데에 세운다. */
       try{
         const box=el.getBoundingClientRect();
-        const view=doc.documentElement.clientHeight||0;
-        if(box.top<8 || box.bottom>view-8) el.scrollIntoView({block:'center'});
+        const view=frameDoc().documentElement.clientHeight||0;
+        const safeTop=84, safeBottom=104;
+        if(view && (box.top<safeTop || box.bottom>view-safeBottom)){
+          el.scrollIntoView({block:'center',inline:'nearest'});
+        }
       }catch(e){}
       coachTitle.textContent=step.title;
       coachBody.innerHTML=step.body;
@@ -921,7 +970,7 @@
         /* 마지막 단계에서 소리를 켜자마자 끄면 '팍' 꺼지는 느낌이 든다.
            linger가 있으면 그동안 들려주고 넘어간다. 그 사이 두 번 울리지 않게 세운다. */
         clearInterval(timer); timer=0;
-        setTimeout(advance,step.linger||0);
+        deferAdvance(step.linger||0);
       },160);
     }else if(step.advance!=='next'){
       onDown=event=>{
@@ -931,7 +980,7 @@
         if(step.also){ const now=frameDoc(); extra=now?now.querySelector(step.also):null; }
         const hit=(current && (current===event.target||current.contains(event.target)))
           || (extra && (extra===event.target||extra.contains(event.target)));
-        if(hit) setTimeout(advance,420);
+        if(hit) deferAdvance(420);
       };
       doc.addEventListener('pointerdown',onDown,true);
     }
@@ -941,7 +990,7 @@
       pass=null;
     };
   }
-  function stopListening(){ if(pass) pass(); }
+  function stopListening(){ cancelDefer(); if(pass) pass(); }
 
   function advance(){
     if(!running) return;
@@ -967,17 +1016,32 @@
     token+=1;
     stopListening();
     untrack();
-    leaveTour(()=>show('home'));
+    leaveTour(()=>show('home'),450);
   }
-  /* 소리를 남긴 채로 화면만 바꾸면 뚝 끊긴다. 먼저 어두워지고, 그다음 멈춘다. */
-  function leaveTour(then){
+  function sounding(){
+    const doc=frameDoc();
+    if(!doc) return false;
+    const metro=doc.querySelector('#metroStart');
+    const jam=doc.querySelector('#jamStart');
+    return Boolean((metro && metro.classList.contains('running'))
+      || (jam && jam.classList.contains('on')));
+  }
+  /* 소리를 남긴 채로 화면만 바꾸면 뚝 끊긴다. 소리와 화면을 같은 시간 동안 함께
+     줄이고, 다 줄어든 다음에 멈춘다. 마스터 출력을 되돌리는 것을 잊으면 안 된다. */
+  function leaveTour(then,ms){
     const screen=document.getElementById('tour');
+    const span=Math.max(200,Number(ms)||450);
+    const view=frame.contentWindow;
+    if(view && view.OliveAudioFade){ try{ view.OliveAudioFade.out(span/1000); }catch(e){} }
+    screen.style.setProperty('--leave',span+'ms');
     screen.classList.add('leaving');
     setTimeout(()=>{
       quiet();
+      if(view && view.OliveAudioFade){ try{ view.OliveAudioFade.restore(); }catch(e){} }
       screen.classList.remove('leaving');
+      screen.style.removeProperty('--leave');
       then();
-    },460);
+    },span+40);
   }
   function finish(){
     running=false;
@@ -996,7 +1060,8 @@
       button.querySelector('b').textContent=next.name+' 배우기';
       button.querySelector('small').textContent=next.blurb;
     }else button.hidden=true;
-    leaveTour(()=>show('done'));
+    /* 소리가 나는 채로 끝나면 그 소리를 4초에 걸쳐 함께 줄인다. */
+    leaveTour(()=>show('done'),sounding()?4000:450);
   }
 
   /* ── 첫 화면 ── */
@@ -1021,10 +1086,18 @@
       startChapters(key==='all'?CHAPTERS.map(item=>item.key):[key]);
       return;
     }
+    /* 앱으로 나갈 때 도움말을 방문 기록에 남기지 않는다. 남기면 아이폰에서 옆으로 쓸었을 때
+       앱으로 돌아온 사람이 도움말로 되돌아간다. */
+    const appLink=event.target.closest('a[href^="index.html"]');
+    if(appLink){
+      event.preventDefault();
+      location.replace(appLink.getAttribute('href'));
+      return;
+    }
     const goButton=event.target.closest('[data-go]');
     if(goButton){
       const where=goButton.dataset.go;
-      if(where==='app'){ location.href='index.html#splash'; return; }
+      if(where==='app'){ location.replace('index.html#splash'); return; }
       show(where);
     }
   });

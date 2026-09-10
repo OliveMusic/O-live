@@ -220,7 +220,7 @@ console.log('public pages tests passed');
 assert.match(guide,/<title>도움말<\/title>/);
 assert.match(guide,/<h1>도움말<\/h1>/);
 assert.doesNotMatch(guide,/사용법/);
-assert.match(guide,/frame\.setAttribute\('src','index\.html\?guide=1'\)/,'투어는 진짜 앱을 띄운다');
+assert.match(guide,/const src='index\.html\?guide=1';/,'투어는 진짜 앱을 띄운다');
 /* 앱이 iframe 안에서 열려야 하므로 frame-ancestors로 막으면 안 된다. */
 assert.doesNotMatch(indexHtml,/frame-ancestors/);
 /* 미리보기 프레임은 시작 화면을 건너뛴다. 진짜 첫 실행의 시작 화면을 뺏으면 안 된다. */
@@ -276,6 +276,44 @@ assert.match(guide,/memo:doc=>ddValue\(doc,'#scaleKey'\), check:\(doc,memo\)=>dd
 assert.match(guide,/memo:doc=>ddValue\(doc,'#scaleType'\), check:\(doc,memo\)=>ddValue\(doc,'#scaleType'\)!==memo/);
 assert.match(guide,/el\.querySelector\('\.dd-menu:not\(\[hidden\]\)'\)/,'열린 목록까지 뚫는다');
 
+/* 도움말은 늘 기본값에서 시작한다. 앱에서 올려 둔 BPM이나 확대가 따라오면 설명과 어긋난다. */
+assert.match(index,/const preview=\/\[\?&\]guide=1/);
+assert.match(index,/function read\(\)\{\s*if\(preview\) return \{data:\{\},updatedAt:''\};/);
+assert.match(index,/function write\(record\)\{\s*if\(preview\) return false;/);
+/* 챕터를 시작할 때마다 앱을 새로 연다. 지웠던 예시 목록도 그때 돌아온다. */
+assert.match(guide,/frame\.contentWindow\.location\.replace\(src\)/);
+/* 시연에서도 실제로 지워져야 배운다. 지운 것은 다시 시작할 때 돌아온다. */
+assert.match(cloud,/function guideRemove\(list,ids\)/);
+assert.match(cloud,/guideRemove\(guideState\(\)\.links,list\)/);
+assert.match(cloud,/guideRemove\(guideState\(\)\.recordings,rows\.map\(row=>row\.id\)\)/);
+/* 미뤄 둔 진행은 취소할 수 있어야 한다. 건너뛴 뒤 뒤늦게 터지면 한 단계를 삼킨다. */
+assert.match(guide,/function deferAdvance\(ms\)/);
+assert.match(guide,/if\(mine===token\) advance\(\)/);
+assert.match(guide,/function stopListening\(\)\{ cancelDefer\(\); if\(pass\) pass\(\); \}/);
+assert.doesNotMatch(guide,/setTimeout\(advance,/,'진행은 반드시 취소 가능한 경로로만 미룬다');
+/* 앱은 위에 제목 줄, 아래에 탭바가 떠 있다. 그 밑에 깔리면 강조가 잘려 보인다. */
+assert.match(guide,/const safeTop=84, safeBottom=104;/);
+assert.match(guide,/el\.scrollIntoView\(\{block:'center',inline:'nearest'\}\)/);
+/* 앱으로 나갈 때 도움말을 방문 기록에 남기지 않는다. 아이폰에서 옆으로 쓸면 되돌아간다. */
+assert.match(guide,/a\[href\^="index\.html"\]/);
+assert.match(guide,/location\.replace\(appLink\.getAttribute\('href'\)\)/);
+/* 마칠 때 소리와 화면을 같은 시간 동안 함께 줄인다. 잼은 4초 듣고 4초에 걸쳐 사라진다. */
+assert.match(index,/window\.OliveAudioFade=Object\.freeze/);
+assert.match(index,/linearRampToValueAtTime\(Math\.max\(\.0001,target\),now\+span\)/);
+assert.match(guide,/view\.OliveAudioFade\.out\(span\/1000\)/);
+assert.match(guide,/view\.OliveAudioFade\.restore\(\)/);
+assert.match(guide,/linger:4000/);
+assert.match(guide,/leaveTour\(\(\)=>show\('done'\),sounding\(\)\?4000:450\)/);
+/* 잠금화면은 휴대폰 기능이라는 것을 밝히고 직접 해 보게 한다. */
+assert.match(guide,/휴대폰에서 쓰는 기능입니다\. 켜 둔 채 <b>한번 잠가 보세요\.<\/b>/);
+/* 녹음은 시간 막대와 입력 크기까지 짚는다. */
+assert.match(guide,/target:'#recordTimeProgress', also:'#recordLevelRow'/);
+assert.match(guide,/최대 5분<\/b> 중 지나온 시간/);
+/* 즐겨찾기는 풀어 보고 ••• 메뉴로 되돌려 본다. */
+assert.match(guide,/title:'••• 메뉴에서 되돌리기'/);
+/* 체크박스는 실제로 지워 본다. */
+assert.match(guide,/title:'골라서 한 번에 지우기'/);
+
 /* 녹음을 켜 둔 채 다음 단계로 가면 도움말 내내 녹음이 돈다. 그 단계를 떠나면 멈춘다. */
 assert.match(guide,/function stopRecordingIn\(doc\)/);
 assert.match(guide,/if\(!step\.recording\) stopRecordingIn\(doc\)/);
@@ -291,10 +329,9 @@ assert.match(cloud,/function guidePin\(list,id,pinned\)/);
 assert.match(cloud,/if\(guideMode\)\{ guidePin\(guideState\(\)\.links,id,pinned\); return true; \}/);
 assert.match(cloud,/if\(guideMode\)\{ guidePin\(guideState\(\)\.recordings,id,pinned\); return true; \}/);
 /* 소리를 켜자마자 끄면 팍 꺼진다. 몇 초 들려주고 서서히 어두워지며 넘긴다. */
-assert.match(guide,/linger:3200/);
-assert.match(guide,/setTimeout\(advance,step\.linger\|\|0\)/);
 assert.match(guide,/#tour\.leaving\{ opacity:0; pointer-events:none; \}/);
-assert.match(guide,/function leaveTour\(then\)/);
+assert.match(guide,/#tour\{ transition:opacity var\(--leave,\.45s\) linear; \}/);
+assert.match(guide,/function leaveTour\(then,ms\)/);
 
 /* 목록에는 녹음본과 링크가 섞여 있고 예시는 이름까지 같다. 구조로 갈라야 한다. */
 assert.match(guide,/const prefix=kind==='link'\?'link-player-':'record-player-'/);

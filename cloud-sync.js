@@ -588,7 +588,7 @@
     return true;
   }
   async function deleteRecording(recording){
-    if(guideMode) return true;
+    if(guideMode){ guideRemove(guideState().recordings,[recording&&recording.id]); return true; }
     await ensureRecordingAccess();
     const path=String(recording&&recording.object_path||'');
     const id=String(recording&&recording.id||'');
@@ -863,7 +863,7 @@
     return true;
   }
   async function deletePracticeLink(id){
-    if(guideMode) return true;
+    if(guideMode){ guideRemove(guideState().links,[id]); return true; }
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('delete_practice_link',{p_link_id:String(id||'')});
     if(error) throw error;
@@ -945,7 +945,11 @@
   }
   /* 여러 항목을 한 번에 지운다. 녹음 파일은 Storage에서도 함께 지운다. */
   async function deleteRecordings(recordings){
-    if(guideMode) return true;
+    if(guideMode){
+      const rows=(recordings||[]).filter(Boolean);
+      guideRemove(guideState().recordings,rows.map(row=>row.id));
+      return rows.length;
+    }
     await ensureRecordingAccess();
     const rows=(recordings||[]).filter(Boolean);
     if(!rows.length) return 0;
@@ -961,7 +965,11 @@
     return Number(data)||0;
   }
   async function deletePracticeLinks(ids){
-    if(guideMode) return true;
+    if(guideMode){
+      const list=(ids||[]).map(id=>String(id||'')).filter(Boolean);
+      guideRemove(guideState().links,list);
+      return list.length;
+    }
     await ensureRecordingAccess();
     const list=(ids||[]).map(id=>String(id||'')).filter(Boolean);
     if(!list.length) return 0;
@@ -994,6 +1002,11 @@
   function guideState(){
     if(!guideRows) guideRows={recordings:makeGuideRecordings(),links:makeGuideLinks()};
     return guideRows;
+  }
+  function guideRemove(list,ids){
+    const gone={};
+    (ids||[]).forEach(id=>{ gone[String(id||'')]=true; });
+    for(let i=list.length-1;i>=0;i--){ if(gone[list[i].id]) list.splice(i,1); }
   }
   function guidePin(list,id,pinned){
     const row=(list||[]).find(item=>item&&item.id===String(id||''));

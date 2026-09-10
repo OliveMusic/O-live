@@ -759,6 +759,34 @@ function getCtx(){
   return audioCtx;
 }
 
+/* 도움말이 투어를 마칠 때 소리를 뚝 끊지 않고 천천히 줄인다. 앱의 마스터 출력을
+   그대로 쓰므로 스피커로 나가든 잠금화면 스트림으로 나가든 함께 줄어든다.
+   다 줄인 뒤에는 반드시 restore()로 되돌려야 다음 재생이 묵음이 되지 않는다. */
+function fadeAppOutputTo(target,seconds){
+  try{
+    if(!audioCtx || audioCtx.state==='closed') return 0;
+    const out=getAppOutput(audioCtx);
+    const span=Math.max(.05,Number(seconds)||0);
+    const now=audioCtx.currentTime;
+    out.gain.cancelScheduledValues(now);
+    out.gain.setValueAtTime(Math.max(.0001,out.gain.value||1),now);
+    out.gain.linearRampToValueAtTime(Math.max(.0001,target),now+span);
+    return span;
+  }catch(e){ return 0; }
+}
+window.OliveAudioFade=Object.freeze({
+  out(seconds){ return fadeAppOutputTo(.0001,seconds); },
+  restore(){
+    try{
+      if(!audioCtx || audioCtx.state==='closed') return;
+      const out=getAppOutput(audioCtx);
+      const now=audioCtx.currentTime;
+      out.gain.cancelScheduledValues(now);
+      out.gain.setValueAtTime(1,now);
+    }catch(e){}
+  },
+});
+
 /* ===== 소리 나는 동안 화면 켜 두기 ===== */
 let __wakeLock = null;
 async function keepAwake(on){

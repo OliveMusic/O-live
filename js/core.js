@@ -10,8 +10,12 @@ function pcName(pc){ return NOTE_NAMES[((pc%12)+12)%12]; }
   const KEY='olive-preferences-v1';
   const providers=new Map();
   let applying=false, saveTimer=null;
+  /* 도움말 미리보기는 늘 기본값에서 시작한다. 앱에서 올려 둔 BPM이나 확대 상태가
+     그대로 따라오면 설명과 화면이 어긋난다. 여기서 바꾼 것도 저장하지 않는다. */
+  const preview=/[?&]guide=1(?:&|$)/.test(location.search);
 
   function read(){
+    if(preview) return {data:{},updatedAt:''};
     try{
       const value=JSON.parse(localStorage.getItem(KEY)||'null');
       if(!value || typeof value!=='object' || Array.isArray(value)) return {data:{},updatedAt:''};
@@ -22,6 +26,7 @@ function pcName(pc){ return NOTE_NAMES[((pc%12)+12)%12]; }
     }catch(e){ return {data:{},updatedAt:''}; }
   }
   function write(record){
+    if(preview) return false;
     try{ localStorage.setItem(KEY,JSON.stringify(record)); return true; }
     catch(e){ return false; }
   }
