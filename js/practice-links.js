@@ -285,6 +285,7 @@
     /* A에서 충분히 지나가면 B가 다시 눌린다. 틱마다 그 문턱을 넘었는지 본다. */
     const pointB=list.querySelector(`#link-player-${row.id} [data-role="b"]`);
     if(pointB) pointB.disabled=!loopBReady(row,position);
+    renderLoopTimes(row);
     scheduleLoopReturn(row);
   }
   function updateTimes(row,position){
@@ -748,16 +749,23 @@
     const clear=wrap.querySelector('[data-role="clear"]');
     if(clear) clear.disabled=loop.a===null && loop.b===null;
     scheduleLoopReturn(row);
-    const loopTimes=wrap.querySelector('.link-loop-times');
-    if(loopTimes){
-      const parts=[];
-      if(loop.a!==null) parts.push(`A ${formatDuration(loop.a)}`);
-      if(loop.b!==null) parts.push(`B ${formatDuration(loop.b)}`);
-      if(parts.length && loop.a!==null && loop.b!==null){
-        parts.push(`구간 ${formatDuration(loop.b-loop.a)}`);
-      }
-      loopTimes.textContent=parts.join(' · ');
-    }
+    renderLoopTimes(row);
+  }
+  /* 이 줄은 실제로 무엇이 도는지를 말해야 한다. A만 찍고 순환을 켜면 도는 것은 전곡인데,
+     그때 'A 0:56'만 덩그러니 남으면 구간 반복이 고장 난 것처럼 보인다.
+     그리고 어느 한 경로가 다시 그리기를 잊어도 어긋난 채 남지 않도록 틱마다 맞춘다. */
+  function renderLoopTimes(row){
+    const el=list.querySelector(`#link-player-${row.id} .link-loop-times`);
+    if(!el) return;
+    const loop=loopFor(row);
+    const active=activeLoopFor(row);
+    const parts=[];
+    if(loop.a!==null) parts.push(`A ${formatDuration(loop.a)}`);
+    if(loop.b!==null) parts.push(`B ${formatDuration(loop.b)}`);
+    if(loop.a!==null && loop.b!==null) parts.push(`구간 ${formatDuration(loop.b-loop.a)}`);
+    if(active && active.whole) parts.push('전체 반복');
+    const text=parts.join(' · ');
+    if(el.textContent!==text) el.textContent=text;
   }
 
   function createPlayer(row){
@@ -1116,7 +1124,7 @@
     }catch(error){
       const text=String(error&&error.message||'');
       if(/already saved/i.test(text)) setMessage('이미 추가한 영상입니다',true);
-      else if(/count limit/i.test(text)) setMessage('목록이 가득 찼습니다',true);
+      else if(/count limit/i.test(text)) setMessage('목록이 가득 찼습니다. 즐겨찾기를 일부 해제해 주세요',true);
       else setMessage('링크를 저장하지 못했습니다',true);
     }
   }

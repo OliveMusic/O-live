@@ -5,6 +5,10 @@
 
   const MAX_DURATION_MS=5*60*1000;
   const MAX_RECORDINGS=50;
+  /* 녹음은 오디오 파일을 들고 있어 한 개마다 저장 공간을 쓴다. 연습 링크는 영상 id와
+     제목뿐이고 영상은 YouTube에 있으므로 같은 칸을 나눠 쓸 까닭이 없다.
+     서버(supabase/015)도 둘을 따로 센다. */
+  const MAX_LINKS=200;
   const MAX_UPLOAD_BYTES=15*1024*1024;
   const MAX_UPLOAD_DURATION_MS=30*60*1000;
   const WAVEFORM_POINTS=160;
@@ -2310,17 +2314,18 @@
     expandedRecordingId=row.id;
     renderList();
   }
-  /* 목록 길이 제한 50개는 녹음과 연습 링크를 합쳐서 센다. */
   function practiceLinkCount(){
     return window.OlivePracticeLinks && typeof window.OlivePracticeLinks.count==='function'
       ? Number(window.OlivePracticeLinks.count())||0 : 0;
   }
   function renderUsage(){
-    const total=rows.length+practiceLinkCount();
-    recordUsage.textContent=`${total} / ${MAX_RECORDINGS}`;
+    const links=practiceLinkCount();
+    recordUsage.textContent=`녹음 ${rows.length}/${MAX_RECORDINGS} · 링크 ${links}/${MAX_LINKS}`;
     /* 가득 차고 나서야 알게 되면 늦다. 다섯 자리 남았을 때부터 색으로 알린다. */
-    recordUsage.classList.toggle('near-limit',total>=MAX_RECORDINGS-5 && total<MAX_RECORDINGS);
-    recordUsage.classList.toggle('at-limit',total>=MAX_RECORDINGS);
+    /* 링크는 꽉 차면 즐겨찾기가 아닌 오래된 것부터 비워 자리를 만든다. 사용자가 직접
+       치워야 하는 것은 녹음뿐이라 눈에 띄게 하는 것도 녹음 쪽이다. */
+    recordUsage.classList.toggle('near-limit',rows.length>=MAX_RECORDINGS-5 && rows.length<MAX_RECORDINGS);
+    recordUsage.classList.toggle('at-limit',rows.length>=MAX_RECORDINGS);
   }
   /* 목록 맨 왼쪽의 작은 올리브. 누르면 즐겨찾기가 풀린다. */
   function createFavoriteMark(row,onRemove){
@@ -2563,7 +2568,7 @@
   async function uploadExternalFile(file){
     if(!currentUser || !file || recordUpload.disabled) return;
     if(rows.length>=MAX_RECORDINGS){
-      setMessage('목록에는 최대 50개까지 저장할 수 있습니다',true); return;
+      setMessage('녹음은 최대 50개까지 저장할 수 있습니다',true); return;
     }
     const mimeType=uploadMimeType(file);
     if(!mimeType){ setMessage('지원하는 오디오 파일을 선택해 주세요',true); return; }
@@ -2604,7 +2609,7 @@
       const detail=String(error&&error.message||'');
       const code=String(error&&error.code||'');
       console.warn('[O\'live recording upload cloud]',code,detail);
-      const message=/count limit/i.test(detail) ? '목록에는 최대 50개까지 저장할 수 있습니다'
+      const message=/count limit/i.test(detail) ? '녹음은 최대 50개까지 저장할 수 있습니다'
         : /storage limit|too large|payload.*large|maximum.*size/i.test(detail) ? '녹음 저장 용량이 가득 찼습니다'
         : /^DB-|schema/i.test(code+' '+detail) ? `클라우드 저장소 업데이트가 필요합니다 · ${SCHEMA_ERROR_CODE}`
         : /mime|unsupported|not supported/i.test(detail) ? `MP3 업로드를 위한 저장소 업데이트가 필요합니다 · ${SCHEMA_ERROR_CODE}`

@@ -71,8 +71,8 @@ assert.match(cloud,/remove_practice_recordings/);
 assert.match(cloud,/delete_practice_links/);
 assert.match(cloud,/storage\.from\('practice-recordings'\)\.remove\(paths\)/,'파일도 함께 지운다');
 assert.match(links,/async function deleteMany\(ids\)/);
-/* 목록이 가득 차기 전에 알린다. */
-assert.match(recorder,/near-limit',total>=MAX_RECORDINGS-5/);
+/* 녹음이 가득 차기 전에 알린다. 링크는 스스로 자리를 만들므로 눈에 띄게 할 것이 없다. */
+assert.match(recorder,/near-limit',rows\.length>=MAX_RECORDINGS-5/);
 assert.match(index,/\.record-usage\.near-limit\{/);
 /* 정리 함수가 실제로 불린다. 이전에는 정의만 있고 호출이 없었다. */
 assert.match(migration13,/perform public\.cleanup_ear_sync_events\(\)/);
@@ -256,8 +256,18 @@ for(const fn of ['setLoopPoint','toggleLoop','clearLoop']){
   assert.doesNotMatch(body,/renderList\(\)/,`${fn}는 목록을 다시 그리지 않는다`);
 }
 
-/* 목록 길이 50개는 녹음과 링크를 합쳐서 센다. */
-assert.match(recorder,/rows\.length\+practiceLinkCount\(\)/);
+/* 녹음은 파일을 들고 있어 한 개마다 저장 공간을 쓰지만 링크는 영상 id와 제목뿐이다.
+   같은 칸을 나눠 쓸 까닭이 없어 따로 센다 — 서버도 supabase/015부터 그렇게 센다. */
+assert.match(recorder,/const MAX_LINKS=200;/);
+assert.match(recorder,/녹음 \$\{rows\.length\}\/\$\{MAX_RECORDINGS\} · 링크 \$\{links\}\/\$\{MAX_LINKS\}/);
+assert.doesNotMatch(recorder,/rows\.length\+practiceLinkCount\(\)/);
+const linkLimits=fs.readFileSync('supabase/015_practice_link_limits.sql','utf8');
+assert.match(linkLimits,/v_limit constant integer := 200;/);
+assert.match(linkLimits,/where user_id=v_user_id and pinned=false/,'즐겨찾기는 비우지 않는다');
+assert.match(linkLimits,/order by created_at asc/,'오래된 것부터');
+/* 열도 서명도 바꾸지 않으므로 계약 번호를 올리지 않는다. 올리면 이 SQL을 돌리기
+   전까지 클라우드 동기화가 통째로 멈춘다. */
+assert.doesNotMatch(linkLimits,/create or replace function public\.olive_schema_version/);
 assert.match(recorder,/olive-practice-links-change/);
 assert.match(links,/olive-practice-links-change/);
 

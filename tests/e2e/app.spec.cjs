@@ -562,7 +562,8 @@ test('트랙 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 �
   await expect(page.locator('#recordTimeOlive')).toHaveCount(0);
   await expect(page.locator('#recordGuest')).toBeVisible();
   await expect(page.locator('#recordWorkspace')).toBeHidden();
-  await expect(page.locator('#recordUsage')).toHaveText('0 / 50');
+  /* 녹음과 링크는 한도가 다르다 — 녹음은 파일을 들고 있고 링크는 주소뿐이다. */
+  await expect(page.locator('#recordUsage')).toHaveText('녹음 0/50 · 링크 0/200');
 
   const olive=await page.locator('.record-olive-static').evaluate(element=>{
     const style=getComputedStyle(element);
@@ -615,7 +616,7 @@ test('목록은 접고 펼칠 수 있고 계정 상태에서 같은 관리 화�
 
   const details=page.locator('#recordListCard');
   await expect(details).not.toHaveAttribute('open','');
-  await expect(page.locator('#recordUsage')).toHaveText('1 / 50');
+  await expect(page.locator('#recordUsage')).toHaveText('녹음 1/50 · 링크 0/200');
   await expect(page.locator('#recordList')).toBeHidden();
   await details.locator('summary').click();
   await expect(details).toHaveAttribute('open','');
@@ -1091,6 +1092,20 @@ test('A 직후에는 B가 눌리지 않고, 충분히 지나야 구간이 잡힌
   /* 되돌아오는 것까지 실제로 걸린다. */
   await page.evaluate(()=>{ window.__testYouTube.players[0].time=9.5; });
   await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].time),{timeout:4000}).toBe(5);
+
+  /* A만 찍고 순환을 켜면 도는 것은 구간이 아니라 전곡이다. 그때 'A 0:05'만 덩그러니
+     남으면 구간 반복이 고장 난 것처럼 보인다 — 무엇이 도는지 말해 줘야 한다. */
+  await page.locator('.link-player [data-role="clear"]').click();
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=5; });
+  await pointA.click();
+  await repeat.click();
+  await expect(times).toHaveText('A 0:05 · 전체 반복');
+
+  await page.locator('.link-player [data-role="clear"]').click();
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=5; });
+  await pointA.click();
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=9; });
+  await pointB.click();
 
   /* 되돌아온 자리는 A와 같으니 '너무 가깝다'는 조건에 다시 걸린다. 그때마다 B를 끄면
      반복이 도는 내내 켜졌다 꺼졌다 깜빡인다. 이미 찍힌 B는 건드리지 않아야 한다. */
