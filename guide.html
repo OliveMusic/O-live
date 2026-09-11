@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=230">
+<link rel="stylesheet" href="info.css?v=231">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -154,7 +154,9 @@
   .coach-foot{
     display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px;
   }
-  .coach-hint{ color:var(--signal); font-size:.75rem; font-weight:600; }
+  .coach-hint{ color:var(--signal); font-size:.75rem; font-weight:600; word-break:keep-all; }
+  /* 상자만 비춰서는 무엇이 달라졌는지 알기 어렵다. 같은 자리에 한 줄로 말해 준다. */
+  .coach-hint.done::before{ content:'✓ '; }
   .coach-next{
     min-height:36px; padding:0 15px; cursor:pointer; border:0; border-radius:var(--r-pill);
     background:var(--signal); color:#fff;
@@ -505,13 +507,15 @@
          title:'튜너로 갑니다', body:'튜너에 들어오면 <b>다른 소리가 자동으로 멈춥니다.</b> 마이크를 방해하지 않기 위해서입니다.', hint:'여기를 누르세요'},
         {screen:'tuner', target:'#stringBtns',
          title:'현을 누르면 기준음', body:'귀로 먼저 맞춰 볼 수 있습니다. 기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다. 소리가 안 나면 <b>무음 모드</b>를 꺼 보세요.',
-         hint:'현 하나를 눌러 보세요'},
+         hint:'현 하나를 눌러 보세요', linger:3500, keepOpen:true},
         {screen:'tuner', target:'#tunerStart', also:'.display',
          title:'마이크로 듣기',
          body:'누르면 마이크 권한을 물어봅니다. 소리는 <b>기기 안에서만</b> 분석하고 어디로도 보내지 않습니다. '+
               '위의 올리브는 <b>빠를수록 많이 어긋난 것</b>이고, 멎으면 맞은 것입니다. '+
               '<b>오른쪽으로 돌면 음이 높으니 줄을 풀고</b>, <b>왼쪽으로 돌면 낮으니 조입니다.</b>',
-         advance:'next'},
+         /* 켜 두어야 다음 감도 단계에서 파형이 움직인다. 꺼진 채로는 죽은 선만 보인다. */
+         hint:'눌러서 마이크를 켜 보세요', linger:2500, done:'마이크가 켜졌습니다',
+         check:doc=>{ const button=doc.querySelector('#tunerStart'); return Boolean(button && button.classList.contains('on')); }},
         /* 감도를 움직이면 무엇이 달라지는지 실시간 입력에서 바로 보인다. 함께 비춘다. */
         {screen:'tuner', target:'#tunerSens', also:'.tuner-monitor',
          before:doc=>setSlider(doc,'#tunerSens','50'),
@@ -574,16 +578,21 @@
          body:'트레이너 안의 두 번째입니다.', hint:'리듬을 누르세요', check:doc=>seg(doc)==='rhythm'},
         {screen:'trainer:rhythm', target:'#beatGrid', title:'칸을 눌러 직접 편집',
          body:'16분음표 한 칸씩 켜고 끕니다.', hint:'칸을 눌러 보세요'},
-        {screen:'trainer:rhythm', target:'#rhySynco', also:'#rhyDiff',
-         before:doc=>setSlider(doc,'#rhySynco','5'),
+        {screen:'trainer:rhythm', target:'#rhySynco',
+         also:'#rhySyncoRow, #rhyDiffRow, #rhyDiff',
+         before:doc=>{ setSlider(doc,'#rhySynco','5'); setSlider(doc,'#rhyDiff','5'); },
          title:'당김음과 밀도',
          body:'당김음을 올리면 박 사이가 늘고, 밀도를 올리면 음이 촘촘해집니다.',
-         hint:'손잡이를 옮겨 보세요', check:doc=>doc.querySelector('#rhySynco').value!=='5'},
-        {screen:'trainer:rhythm', target:'#rhySynco', also:'#rhyDiff',
-         before:doc=>{ if(doc.querySelector('#rhySynco').value==='5') setSlider(doc,'#rhySynco','8'); },
+         hint:'손잡이를 옮겨 보세요',
+         memo:doc=>rhyOffDefault(doc), check:(doc,memo)=>rhyOffDefault(doc)>memo},
+        {screen:'trainer:rhythm', target:'#rhySynco',
+         also:'#rhySyncoRow, #rhyDiffRow, #rhyDiff',
+         /* 되돌릴 것이 하나도 없으면 배울 것도 없다. 둘 다 기본값일 때만 하나를 옮겨 둔다. */
+         before:doc=>{ if(rhyOffDefault(doc)===0) setSlider(doc,'#rhySynco','8'); },
          title:'여기도 두 번 탭',
-         body:'두 슬라이더 모두 <b>두 번 탭하면 기본값 5</b>로 돌아옵니다.',
-         hint:'손잡이를 두 번 탭하세요', check:doc=>doc.querySelector('#rhySynco').value==='5'},
+         body:'두 슬라이더 모두 <b>두 번 탭하면 기본값 5</b>로 돌아옵니다. 어느 쪽이든 해 보세요.',
+         hint:'손잡이를 두 번 탭하세요',
+         memo:doc=>rhyOffDefault(doc), check:(doc,memo)=>rhyOffDefault(doc)<memo},
         {screen:'trainer:rhythm', target:'#rhyGen', title:'새 리듬',
          body:'두 슬라이더의 성향에 맞춰 패턴을 만들어 줍니다.', hint:'눌러 보세요'},
         /* 만들어만 놓고 끝나면 무엇을 만든 건지 모른 채 끝난다. 몇 마디 들려주고 나간다. */
@@ -638,7 +647,7 @@
          target:doc=>part(doc,'link','.record-row-favorite')||part(doc,'link'),
          before:doc=>{ stopRowPlayback(doc); openList(doc); }, title:'즐겨찾기 올리브',
          body:'올리브가 붙은 항목이 <b>목록 맨 위</b>에 옵니다. 눌러서 떼면 올리브가 사라지고 자리도 내려갑니다.',
-         hint:'올리브를 눌러 보세요', linger:1600,
+         hint:'올리브를 눌러 보세요', linger:3000, done:'즐겨찾기가 해제되었습니다',
          check:doc=>!part(doc,'link','.record-row-favorite')},
         /* 시트 전체를 비추면 어디를 눌러야 할지 여전히 알 수 없고 이름 변경·삭제까지
            손이 닿는다. 메뉴가 열리는 순간 강조를 즐겨찾기 한 줄로 옮긴다.
@@ -662,7 +671,7 @@
          },
          title:'••• 메뉴에서 되돌리기',
          body:'이름 변경·다운로드·삭제도 여기에 있습니다. <b>즐겨찾기</b>를 누르면 올리브가 다시 붙고 맨 위로 올라갑니다.',
-         hint:'•••을 열어 즐겨찾기를 누르세요', linger:1600,
+         hint:'•••을 열어 즐겨찾기를 누르세요', linger:3000, done:'즐겨찾기가 다시 설정되었습니다',
          check:doc=>Boolean(part(doc,'link','.record-row-favorite'))},
         {screen:'trainer:record', target:'#recordLink', before:openList,
          title:'YouTube 링크 더하기', body:'노래 제목이나 가수를 <b>검색</b>해서 고르거나 주소를 붙여 넣습니다. 백킹 트랙을 A/B로 반복하며 연습할 수 있습니다.',
@@ -719,7 +728,7 @@
            return (del && bar && !bar.hidden) ? del : doc.querySelector('#recordList');
          },
          title:'삭제', body:'고른 것을 한 번에 지웁니다. 정말 지울지 물어보면 확인하세요. 고른 항목이 목록에서 빠집니다. 여기서 지운 예시는 도움말을 다시 시작하면 돌아옵니다.',
-         hint:'삭제를 눌러 보세요', linger:1600,
+         hint:'삭제를 눌러 보세요', linger:3000, done:'목록에서 삭제되었습니다',
          memo:doc=>doc.querySelectorAll('#recordList .record-entry').length,
          check:(doc,memo)=>doc.querySelectorAll('#recordList .record-entry').length<memo},
       ],
@@ -782,6 +791,14 @@
     const View=doc.defaultView;
     el.dispatchEvent(new View.PointerEvent('pointerdown',{bubbles:true,pointerId:1,cancelable:true}));
     el.dispatchEvent(new View.PointerEvent('pointerup',{bubbles:true,pointerId:1}));
+  }
+  /* 당김음과 밀도는 같은 것을 가르친다. 한쪽만 인정하면 밀도를 만진 사람은
+     아무리 해도 넘어가지 못한다. 기본값(5)에서 벗어난 슬라이더의 수로 센다. */
+  function rhyOffDefault(doc){
+    return ['#rhySynco','#rhyDiff'].filter(selector=>{
+      const el=doc.querySelector(selector);
+      return el && el.value!=='5';
+    }).length;
   }
   function setSlider(doc,selector,value){
     const el=doc.querySelector(selector);
@@ -960,7 +977,8 @@
     box=union(box,el.querySelector('.dd-menu:not([hidden])'));
     if(also){
       const doc=frameDoc();
-      box=union(box,doc?doc.querySelector(also):null);
+      /* 한 단계가 여러 곳을 가리킬 때가 있다. 당김음과 밀도는 라벨 줄까지 한 덩어리다. */
+      if(doc) doc.querySelectorAll(also).forEach(node=>{ box=union(box,node); });
     }
     return box;
   }
@@ -1040,12 +1058,13 @@
   /* 미뤄 둔 진행은 반드시 취소할 수 있어야 한다. 통과 판정이 이미 잡아 둔 setTimeout이
      사용자가 건너뛴 뒤에 뒤늦게 터지면 한 단계를 통째로 삼킨다. 지금 단계에서만 유효하다. */
   const SEAL_AFTER=1000;
-  function deferAdvance(ms){
+  function deferAdvance(ms,keepOpen){
     const mine=token;
     clearTimeout(deferTimer);
     const span=Math.max(0,ms||0);
-    /* 여운이 길다는 것은 이제 들려주고 끝낸다는 뜻이다. 그동안 만질 것은 없다. */
-    if(span>=SEAL_AFTER) sealFrame(true);
+    /* 여운이 길다는 것은 대개 들려주고 끝낸다는 뜻이라 그동안 만질 것이 없다. 다만
+       현처럼 몇 개를 돌아가며 눌러 보는 단계는 열어 둔다 — 누를 때마다 시한이 밀린다. */
+    if(span>=SEAL_AFTER && !keepOpen) sealFrame(true);
     deferTimer=setTimeout(()=>{ deferTimer=0; if(mine===token) advance(); },span);
   }
   function cancelDefer(){
@@ -1081,6 +1100,12 @@
 
   /* 프레임을 기다리는 동안, 그리고 끝내 못 열었을 때 무엇이 일어나는지 보여 준다.
      아무것도 없이 비워 두면 고장 난 것처럼 보인다. */
+  /* 해냈을 때 무엇이 달라졌는지 한 줄로 알린다. 여운을 두는 동안 이 줄을 읽게 된다. */
+  function announce(text){
+    if(!text) return;
+    coachHint.textContent=text;
+    coachHint.classList.add('done');
+  }
   function notice(title,body,label,action){
     untrack();
     coach.hidden=false;
@@ -1135,6 +1160,7 @@
       coachBody.innerHTML=step.body;
       const needsTap=step.advance!=='next';
       coachHint.textContent=needsTap?(step.hint||'눌러 보세요'):'';
+      coachHint.classList.remove('done');
       coachNext.textContent=needsTap?'건너뛰기':'다음';
       coachNext.classList.toggle('quiet',needsTap);
       retry=null;
@@ -1178,17 +1204,18 @@
         /* 마지막 단계에서 소리를 켜자마자 끄면 '팍' 꺼지는 느낌이 든다.
            linger가 있으면 그동안 들려주고 넘어간다. 그 사이 두 번 울리지 않게 세운다. */
         clearInterval(timer); timer=0;
-        deferAdvance(step.linger||0);
+        announce(step.done);
+        deferAdvance(step.linger||0,step.keepOpen);
       },160);
     }else if(step.advance!=='next'){
       onDown=event=>{
         let current=null;
         try{ current=resolveTarget(frameDoc(),step.target); }catch(e){}
-        let extra=null;
-        if(step.also){ const now=frameDoc(); extra=now?now.querySelector(step.also):null; }
+        const now=frameDoc();
+        const extra=step.also&&now?[...now.querySelectorAll(step.also)]:[];
         const hit=(current && (current===event.target||current.contains(event.target)))
-          || (extra && (extra===event.target||extra.contains(event.target)));
-        if(hit) deferAdvance(step.linger||420);
+          || extra.some(node=>node===event.target||node.contains(event.target));
+        if(hit) deferAdvance(step.linger||420,step.keepOpen);
       };
       doc.addEventListener('pointerdown',onDown,true);
     }
@@ -1200,8 +1227,8 @@
       if(!now) return;
       let target=null;
       try{ target=resolveTarget(now,step.target); }catch(e){}
-      const extra=step.also?now.querySelector(step.also):null;
-      if((target && target.contains(event.target)) || (extra && extra.contains(event.target))) return;
+      if(target && target.contains(event.target)) return;
+      if(step.also && [...now.querySelectorAll(step.also)].some(node=>node.contains(event.target))) return;
       event.preventDefault();
       event.stopPropagation();
     };
@@ -1239,6 +1266,9 @@
     if(jam && jam.classList.contains('on')) jam.click();
     const rhy=doc.querySelector('#rhyPlay');
     if(rhy && rhy.classList.contains('on')) rhy.click();
+    /* 도움말에서 켠 마이크를 그대로 두고 나가지 않는다. */
+    const mic=doc.querySelector('#tunerStart');
+    if(mic && mic.classList.contains('on')) mic.click();
     stopRecordingIn(doc);
     stopRowPlayback(doc);
     lockScroll(doc,false);

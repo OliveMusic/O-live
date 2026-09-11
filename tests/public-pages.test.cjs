@@ -292,7 +292,7 @@ assert.match(cloud,/function guideRemove\(list,ids\)/);
 assert.match(cloud,/guideRemove\(guideState\(\)\.links,list\)/);
 assert.match(cloud,/guideRemove\(guideState\(\)\.recordings,rows\.map\(row=>row\.id\)\)/);
 /* 미뤄 둔 진행은 취소할 수 있어야 한다. 건너뛴 뒤 뒤늦게 터지면 한 단계를 삼킨다. */
-assert.match(guide,/function deferAdvance\(ms\)/);
+assert.match(guide,/function deferAdvance\(ms,keepOpen\)/);
 assert.match(guide,/if\(mine===token\) advance\(\)/);
 assert.match(guide,/function stopListening\(\)\{ cancelDefer\(\); if\(pass\) pass\(\); \}/);
 assert.doesNotMatch(guide,/setTimeout\(advance,/,'진행은 반드시 취소 가능한 경로로만 미룬다');
@@ -435,13 +435,34 @@ assert.match(guide,/before:doc=>\{ stopRowPlayback\(doc\); openList\(doc\); \}, 
    얼어붙으므로 행으로 옮겨 잡고, 잠시 머물러 무엇이 달라졌는지 보게 한다.
    되돌린 뒤에도 마찬가지로 다시 붙은 올리브를 잡아 보여 준다. */
 assert.match(guide,/target:doc=>part\(doc,'link','\.record-row-favorite'\)\|\|part\(doc,'link'\)/);
-assert.match(guide,/hint:'올리브를 눌러 보세요', linger:1600/);
+assert.match(guide,/hint:'올리브를 눌러 보세요', linger:3000/);
 assert.match(guide,/\|\| part\(doc,'link','\.record-row-favorite'\)\s*\n\s*\|\| part\(doc,'link','\.record-row-more'\)/);
-assert.match(guide,/hint:'•••을 열어 즐겨찾기를 누르세요', linger:1600/);
+assert.match(guide,/hint:'•••을 열어 즐겨찾기를 누르세요', linger:3000/);
 /* 지우고 나면 고르기 막대가 걷히며 삭제 버튼도 사라진다. 그 자리를 계속 가리키면
    0짜리 상자가 되므로 목록으로 옮겨 잡고, 잠시 머물러 빠진 것을 보게 한다. */
 assert.match(guide,/return \(del && bar && !bar\.hidden\) \? del : doc\.querySelector\('#recordList'\);/);
-assert.match(guide,/hint:'삭제를 눌러 보세요', linger:1600/);
+assert.match(guide,/hint:'삭제를 눌러 보세요', linger:3000/);
+/* 상자만 비춰서는 무엇이 달라졌는지 알기 어렵다. 해야 할 일을 적던 자리에
+   무엇이 달라졌는지를 한 줄로 적고, 그 글을 읽을 만큼 머문다. */
+assert.match(guide,/function announce\(text\)\{[\s\S]{0,160}?coachHint\.classList\.add\('done'\)/);
+assert.match(guide,/announce\(step\.done\);\s*\n\s*deferAdvance\(step\.linger\|\|0,step\.keepOpen\)/);
+assert.match(guide,/coachHint\.classList\.remove\('done'\)/,'다음 단계에서는 다시 할 일을 적는다');
+assert.match(guide,/\.coach-hint\.done::before\{ content:'✓ '; \}/);
+/* 현 음은 소리를 들을 틈을 준다. 다만 여기서는 잠그지 않는다 — 현을 몇 개 돌아가며
+   눌러 봐야 하고, 누를 때마다 시한이 밀린다. */
+assert.match(guide,/hint:'현 하나를 눌러 보세요', linger:3500, keepOpen:true/);
+/* 마이크가 꺼져 있으면 뒤따르는 감도 단계에서 파형이 죽은 선으로만 보인다.
+   여기서 실제로 켜게 하고, 도움말을 나갈 때는 반드시 끈다. */
+assert.match(guide,/hint:'눌러서 마이크를 켜 보세요', linger:2500, done:'마이크가 켜졌습니다'/);
+assert.match(guide,/button\.classList\.contains\('on'\)/,'앱이 마이크 켜짐을 표시하는 방식');
+assert.match(tuner,/tunerStart\.classList\.add\('on'\)/);
+assert.match(guide,/if\(mic && mic\.classList\.contains\('on'\)\) mic\.click\(\)/);
+assert.match(guide,/function deferAdvance\(ms,keepOpen\)/);
+assert.match(guide,/if\(span>=SEAL_AFTER && !keepOpen\) sealFrame\(true\)/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\)/);
+for(const said of ['즐겨찾기가 해제되었습니다','즐겨찾기가 다시 설정되었습니다','목록에서 삭제되었습니다']){
+  assert.ok(guide.includes(`done:'${said}'`),`알림이 없다: ${said}`);
+}
 assert.doesNotMatch(guide,/also:'\.record-menu-backdrop/);
 assert.match(indexHtml,/id="linkMenuPin"/,'앱에 있는 이름이다');
 assert.match(indexHtml,/id="recordMenuPin"/,'녹음본 시트도 같은 꼬리를 쓴다');
@@ -587,8 +608,22 @@ assert.equal((guide.match(/also:'\.tuner-monitor'/g)||[]).length,2);
 assert.doesNotMatch(guide,/무엇을 듣고 있는지/);
 
 /* 당김음과 밀도는 한 이야기다. 함께 비춘다. */
-/* 당김음과 밀도는 한 이야기다. 되돌리는 단계에서도 함께 보여야 한다. */
-assert.equal((guide.match(/target:'#rhySynco', also:'#rhyDiff'/g)||[]).length,2);
+/* 당김음과 밀도는 같은 것을 가르친다. 라벨 줄까지 한 덩어리로 비추고, 어느 쪽을
+   만져도 배운 것으로 친다 — 한쪽만 인정하면 밀도를 만진 사람은 넘어가지 못한다. */
+assert.equal((guide.match(/also:'#rhySyncoRow, #rhyDiffRow, #rhyDiff'/g)||[]).length,2);
+assert.match(indexHtml,/<div class="row" id="rhySyncoRow">/);
+assert.match(indexHtml,/<div class="row" id="rhyDiffRow">/);
+assert.match(guide,/function rhyOffDefault\(doc\)/);
+assert.match(guide,/check:\(doc,memo\)=>rhyOffDefault\(doc\)>memo/);
+assert.match(guide,/check:\(doc,memo\)=>rhyOffDefault\(doc\)<memo/);
+/* 되돌릴 것이 하나도 없을 때만 하나를 옮겨 둔다. 늘 옮기면 단계에 들어설 때마다
+   슬라이더가 저 혼자 뛰는 것처럼 보인다. */
+assert.match(guide,/if\(rhyOffDefault\(doc\)===0\) setSlider\(doc,'#rhySynco','8'\)/);
+assert.match(rhythm,/const synco=parseInt\(rhySynco\.value\)\/10/,'새 리듬은 슬라이더를 읽기만 한다');
+
+/* also는 한 곳만 가리킬 이유가 없다. 구멍도 터치 허용도 모두 같은 목록을 본다. */
+assert.match(guide,/doc\.querySelectorAll\(also\)\.forEach\(node=>\{ box=union\(box,node\); \}\)/);
+assert.match(guide,/\[\.\.\.now\.querySelectorAll\(step\.also\)\]\.some\(node=>node\.contains\(event\.target\)\)/);
 
 /* 제 칸 안에서 좌우로 구르는 것까지 잠가야 코드 이름을 누르다 진행이 밀리지 않는다. */
 assert.match(guide,/let scrollLocks=\[\];/);
@@ -599,7 +634,7 @@ assert.match(guide,/lockScroll\(doc,true,lockTarget\)/);
 /* 여운을 두는 동안과 끝맺는 동안에는 아무것도 눌리지 않는다. */
 assert.match(guide,/const SEALED_EVENTS=GATED_EVENTS\.concat\(\['touchmove','wheel','keydown'\]\)/);
 assert.match(guide,/function sealFrame\(on\)/);
-assert.match(guide,/if\(span>=SEAL_AFTER\) sealFrame\(true\)/);
+assert.match(guide,/if\(span>=SEAL_AFTER && !keepOpen\) sealFrame\(true\)/);
 assert.match(guide,/sealFrame\(true\);\s*\n\s*setTimeout\(\(\)=>\{\s*\n\s*sealFrame\(false\);/);
 assert.match(guide,/function cancelDefer\(\)\{[\s\S]{0,140}?sealFrame\(false\);/,'중간에 그만두면 봉인도 푼다');
 
@@ -634,7 +669,7 @@ assert.match(earTrainer,/classList\.toggle\('active', x\.dataset\.mode===mode\)/
 /* 소리가 끝나기도 전에 달력으로 넘어가면 뚝 끊긴 느낌이 든다. 가장 긴 음계가 2초 남짓이니
    다 들려주고 1초를 더 둔다. 구멍을 눌러 넘어가는 길도 그 여운을 따른다. */
 assert.match(guide,/hint:'눌러서 들어 보세요', linger:3200\}/);
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420\)/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\)/);
 
 /* 만들어만 놓고 끝나면 무엇을 만든 건지 모른 채 끝난다. 몇 마디 들려주고 나간다. */
 assert.match(guide,/target:'#rhyPlay', title:'들어 보기'/);
@@ -661,7 +696,7 @@ assert.doesNotMatch(guide,/target:'\.record-rate-control'/);
 /* 구멍은 네모라 대상 옆 이웃이 그 안에 함께 들어온다. 대상 위가 아니면 막는다.
    같은 노드의 다른 청취자는 그대로 받아야 하므로 stopPropagation까지만 쓴다. */
 assert.match(guide,/const doorman=event=>\{/);
-assert.match(guide,/if\(\(target && target\.contains\(event\.target\)\) \|\| \(extra && extra\.contains\(event\.target\)\)\) return;/);
+assert.match(guide,/if\(target && target\.contains\(event\.target\)\) return;/);
 assert.match(guide,/event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);/);
 assert.doesNotMatch(guide,/stopImmediatePropagation/);
 assert.match(guide,/GATED_EVENTS\.forEach\(type=>doc\.addEventListener\(type,doorman,true\)\)/);
