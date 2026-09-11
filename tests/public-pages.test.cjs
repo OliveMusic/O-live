@@ -521,8 +521,47 @@ assert.equal((guide.match(/소리가 안 나면 <b>무음 모드<\/b>를 꺼 보
    '다음 기능 배우기'를 hidden으로 두어도 잼 세션 뒤에 그대로 남아 있었다. */
 assert.match(guide,/\[hidden\]\{ display:none !important; \}/);
 assert.match(guide,/\.chapter\{[\s\S]{0,120}?display:grid/,'이 규칙이 막고 있었다');
-/* 잼 세션은 마지막 책이라 끝낸 뒤에는 그 밖에 알아둘 것으로 이어 준다. */
-assert.match(guide,/data-go="more">그 밖에 알아둘 것<\/button>\s*\n\s*<\/div>/);
+/* 잼 세션은 마지막 책이라, 끝낸 뒤에는 그 밖에 알아둘 것이 그 자리를 이어받아
+   맨 위의 올리브 버튼이 된다. 다음 책이 있을 때는 아래쪽 담백한 버튼으로 남는다. */
+assert.match(guide,/<button class="chapter wide" type="button" id="doneMore" data-go="more" hidden>/);
+assert.match(guide,/data-go="more" id="doneMoreGhost">그 밖에 알아둘 것<\/button>/);
+assert.match(guide,/document\.getElementById\('doneMore'\)\.hidden=Boolean\(next\);/);
+assert.match(guide,/document\.getElementById\('doneMoreGhost'\)\.hidden=!next;/);
+
+/* 마이크를 켠 뒤에는 스트로브가 무엇을 말하는지도 함께 봐야 한다. */
+assert.match(guide,/target:'#tunerStart', also:'\.strobe'/);
+assert.match(guide,/오른쪽으로 돌면 음이 높으니 줄을 풀고/);
+assert.match(tuner,/const vel = listening \? strobeCents\*14 : 0;/,'빠르기가 어긋난 정도, 부호가 방향');
+/* 파형이 어떻게 달라지는지 보려면 되돌릴 때도 함께 보여야 한다. 마지막 단계는 뺐다. */
+assert.equal((guide.match(/also:'\.tuner-monitor'/g)||[]).length,2);
+assert.doesNotMatch(guide,/무엇을 듣고 있는지/);
+
+/* 당김음과 밀도는 한 이야기다. 함께 비춘다. */
+assert.match(guide,/target:'#rhySynco', also:'#rhyDiff'/);
+
+/* 제 칸 안에서 좌우로 구르는 것까지 잠가야 코드 이름을 누르다 진행이 밀리지 않는다. */
+assert.match(guide,/let scrollLocks=\[\];/);
+assert.match(guide,/function lockScroll\(doc,on,el\)/);
+assert.match(guide,/for\(let node=el&&el\.parentElement; node && node!==doc\.body; node=node\.parentElement\)/);
+assert.match(guide,/lockScroll\(doc,true,lockTarget\)/);
+
+/* 여운을 두는 동안과 끝맺는 동안에는 아무것도 눌리지 않는다. */
+assert.match(guide,/const SEALED_EVENTS=GATED_EVENTS\.concat\(\['touchmove','wheel','keydown'\]\)/);
+assert.match(guide,/function sealFrame\(on\)/);
+assert.match(guide,/if\(span>=SEAL_AFTER\) sealFrame\(true\)/);
+assert.match(guide,/sealFrame\(true\);\s*\n\s*setTimeout\(\(\)=>\{\s*\n\s*sealFrame\(false\);/);
+assert.match(guide,/function cancelDefer\(\)\{[\s\S]{0,140}?sealFrame\(false\);/,'중간에 그만두면 봉인도 푼다');
+
+/* 구간은 MIN_LOOP_MS를 채워야 activeLoopFor가 인정한다. 그 검사 없이 두 점만 찍히면
+   켠 것으로 치는 바람에, A 직후의 B는 두 점이 다 켜진 채 반복만 걸리지 않았다. */
+assert.match(practiceLinks,/if\(loop\.a!==null && position-loop\.a<MIN_LOOP_MS\) return;/);
+assert.match(practiceLinks,/loop\.enabled=loop\.a!==null && loop\.b!==null && loop\.b-loop\.a>=MIN_LOOP_MS;/);
+assert.doesNotMatch(practiceLinks,/loop\.enabled=loop\.a!==null && loop\.b!==null;/);
+assert.match(practiceLinks,/function loopBReady\(row,position\)/);
+assert.match(practiceLinks,/pointB\.disabled=!loopBReady\(row\)/,'다시 그릴 때');
+assert.match(practiceLinks,/if\(pointB\) pointB\.disabled=!loopBReady\(row,position\)/,'틱마다');
+assert.match(indexHtml,/\.record-player-tool:disabled\{ opacity:\.34/,'꺼진 모양이 앱에 있다');
+
 
 /* 감도를 움직이면 무엇이 달라지는지 실시간 입력에서 바로 보인다. 함께 비춘다. */
 assert.match(guide,/target:'#tunerSens', also:'\.tuner-monitor'/);
@@ -549,8 +588,7 @@ assert.match(guide,/\|\| \(rhy && rhy\.classList\.contains\('on'\)\)\)/,'소리�
 
 /* 구멍 안에서 위아래로 끌면 앱이 스크롤돼 방금 비춘 곳이 달아난다.
    이벤트가 아니라 스크롤 칸을 잠그므로 슬라이더·파형 끌기도, 지판의 가로 스크롤도 살아 있다. */
-assert.match(guide,/function lockScroll\(doc,on\)\{[\s\S]{0,200}?page\.style\.overflowY=on\?'hidden':''/);
-assert.match(guide,/lockScroll\(doc,true\);\s*\n\s*pass=\(\)=>\{/,'단계가 살면 잠근다');
+assert.match(guide,/nodes\.forEach\(node=>\{ node\.style\.overflow='hidden'; \}\)/);
 assert.match(guide,/lockScroll\(doc,false\);\s*\n\s*if\(timer\)/,'단계를 떠나면 푸다');
 assert.match(guide,/stopRowPlayback\(doc\);\s*\n\s*lockScroll\(doc,false\);/,'투어를 나갈 때도 푸다');
 assert.match(indexHtml,/main\{flex:1; overflow-y:auto;/,'앱의 스크롤 칸은 main이다');
@@ -568,8 +606,8 @@ assert.match(guide,/const doorman=event=>\{/);
 assert.match(guide,/if\(\(target && target\.contains\(event\.target\)\) \|\| \(extra && extra\.contains\(event\.target\)\)\) return;/);
 assert.match(guide,/event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);/);
 assert.doesNotMatch(guide,/stopImmediatePropagation/);
-assert.match(guide,/GATED\.forEach\(type=>doc\.addEventListener\(type,doorman,true\)\)/);
-assert.match(guide,/GATED\.forEach\(type=>\{ try\{ doc\.removeEventListener\(type,doorman,true\)/,'단계를 떠나면 거둔다');
+assert.match(guide,/GATED_EVENTS\.forEach\(type=>doc\.addEventListener\(type,doorman,true\)\)/);
+assert.match(guide,/GATED_EVENTS\.forEach\(type=>\{ try\{ doc\.removeEventListener\(type,doorman,true\)/,'단계를 떠나면 거둔다');
 
 /* 건반은 눌러서도, 쓸어서도 듣는다. 지나간 건반마다 한 번씩만 울려야 글리산도가 된다. */
 const scales=read('js/scales.js');

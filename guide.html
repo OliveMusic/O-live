@@ -343,9 +343,14 @@
           <span><b>다음 기능 배우기</b><small></small></span>
           <span class="go">→</span>
         </button>
+        <!-- 마지막 책을 덮은 뒤에는 이쪽이 이어질 곳이라 맨 위의 올리브 버튼이 된다. -->
+        <button class="chapter wide" type="button" id="doneMore" data-go="more" hidden>
+          <span><b>그 밖에 알아둘 것</b><small>눌러서 배울 수 없는 것들</small></span>
+          <span class="go">→</span>
+        </button>
         <button class="ghost" type="button" data-go="home">다른 기능 고르기</button>
         <button class="ghost" type="button" data-go="app">앱으로 돌아가기</button>
-        <button class="ghost" type="button" data-go="more">그 밖에 알아둘 것</button>
+        <button class="ghost" type="button" data-go="more" id="doneMoreGhost">그 밖에 알아둘 것</button>
       </div>
     </div>
   </section>
@@ -497,21 +502,23 @@
         {screen:'tuner', target:'#stringBtns',
          title:'현을 누르면 기준음', body:'귀로 먼저 맞춰 볼 수 있습니다. 기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다. 소리가 안 나면 <b>무음 모드</b>를 꺼 보세요.',
          hint:'현 하나를 눌러 보세요'},
-        {screen:'tuner', target:'#tunerStart',
-         title:'마이크로 듣기', body:'누르면 마이크 권한을 물어봅니다. 소리는 <b>기기 안에서만</b> 분석하고 어디로도 보내지 않습니다.',
+        {screen:'tuner', target:'#tunerStart', also:'.strobe',
+         title:'마이크로 듣기',
+         body:'누르면 마이크 권한을 물어봅니다. 소리는 <b>기기 안에서만</b> 분석하고 어디로도 보내지 않습니다. '+
+              '위의 올리브는 <b>빠를수록 많이 어긋난 것</b>이고, 멎으면 맞은 것입니다. '+
+              '<b>오른쪽으로 돌면 음이 높으니 줄을 풀고</b>, <b>왼쪽으로 돌면 낮으니 조입니다.</b>',
          advance:'next'},
         /* 감도를 움직이면 무엇이 달라지는지 실시간 입력에서 바로 보인다. 함께 비춘다. */
         {screen:'tuner', target:'#tunerSens', also:'.tuner-monitor',
          before:doc=>setSlider(doc,'#tunerSens','50'),
          title:'감도 슬라이더', body:'시끄럽거나 신호가 약하면 올리고, 팬·에어컨 소리를 자꾸 잡으면 내립니다. 아래 <b>실시간 입력</b>에서 달라지는 것을 볼 수 있습니다.',
          hint:'손잡이를 옮겨 보세요', check:doc=>doc.querySelector('#tunerSens').value!=='50'},
-        {screen:'tuner', target:'#tunerSens',
+        /* 파형이 어떻게 달라지는지 보려면 되돌릴 때도 함께 보여야 한다. */
+        {screen:'tuner', target:'#tunerSens', also:'.tuner-monitor',
          before:doc=>{ if(doc.querySelector('#tunerSens').value==='50') setSlider(doc,'#tunerSens','78'); },
-         title:'두 번 탭하면 기본값', body:'손잡이를 <b>두 번 탭</b>하면 균형값 50으로 돌아옵니다. 앱의 슬라이더는 모두 이렇습니다.',
+         title:'두 번 탭하면 기본값',
+         body:'손잡이를 <b>두 번 탭</b>하면 균형값 50으로 돌아옵니다. 앱의 슬라이더는 모두 이렇습니다. 이어폰을 꽂으면 마이크 경로가 바뀔 수 있습니다.',
          hint:'손잡이를 두 번 탭하세요', check:doc=>doc.querySelector('#tunerSens').value==='50'},
-        {screen:'tuner', target:'#tunerScope',
-         title:'무엇을 듣고 있는지', body:'입력 파형과 dB로 지금 마이크가 잡는 소리를 확인합니다. 이어폰을 꽂으면 마이크 경로가 바뀔 수 있습니다.',
-         advance:'next'},
       ],
     },
     {
@@ -563,7 +570,8 @@
          body:'트레이너 안의 두 번째입니다.', hint:'리듬을 누르세요', check:doc=>seg(doc)==='rhythm'},
         {screen:'trainer:rhythm', target:'#beatGrid', title:'칸을 눌러 직접 편집',
          body:'16분음표 한 칸씩 켜고 끕니다.', hint:'칸을 눌러 보세요'},
-        {screen:'trainer:rhythm', target:'#rhySynco', before:doc=>setSlider(doc,'#rhySynco','5'),
+        {screen:'trainer:rhythm', target:'#rhySynco', also:'#rhyDiff',
+         before:doc=>setSlider(doc,'#rhySynco','5'),
          title:'당김음과 밀도',
          body:'당김음을 올리면 박 사이가 늘고, 밀도를 올리면 음이 촘촘해집니다.',
          hint:'손잡이를 옮겨 보세요', check:doc=>doc.querySelector('#rhySynco').value!=='5'},
@@ -807,9 +815,42 @@
      손가락으로 굴리지 못하게 잠근다. 이벤트가 아니라 스크롤 칸을 잠그는 것이라
      슬라이더나 파형 끌기는 그대로고, 지판의 가로 스크롤도 제 칸이라 살아 있다.
      프로그램으로 옮기는 scrollIntoView도 그대로 된다. */
-  function lockScroll(doc,on){
-    const page=doc && doc.querySelector('main');
-    if(page) page.style.overflowY=on?'hidden':'';
+  let scrollLocks=[];
+  function lockScroll(doc,on,el){
+    /* 켤 때도 먼저 걷어낸다. 걸어 둔 것을 기억하지 못한 채 덮어쓰면 되돌릴 길이 없다. */
+    scrollLocks.forEach(node=>{ node.style.overflow=''; node.style.overflowY=''; });
+    scrollLocks=[];
+    if(!on || !doc) return;
+    const view=doc.defaultView;
+    const nodes=[];
+    const page=doc.querySelector('main');
+    if(page) nodes.push(page);
+    /* 진행 타임라인처럼 제 칸 안에서 좌우로 구르는 것도 있다. 대상 위쪽에서 구르는 칸을
+       찾아 함께 잠근다. 그러지 않으면 코드 이름을 누르다 진행이 옆으로 밀린다. */
+    for(let node=el&&el.parentElement; node && node!==doc.body; node=node.parentElement){
+      const cs=view.getComputedStyle(node);
+      if((/(auto|scroll)/.test(cs.overflowX) || /(auto|scroll)/.test(cs.overflowY))
+         && nodes.indexOf(node)<0) nodes.push(node);
+    }
+    nodes.forEach(node=>{ node.style.overflow='hidden'; });
+    scrollLocks=nodes;
+  }
+  /* 6) 여운을 두는 동안과 끝맺는 동안에는 아무것도 눌리지 않게 한다. 소리가 잦아드는
+     몇 초 사이에 앱이 그대로 열려 있으면 도움말이 끝나기도 전에 딴 데로 새어 나간다. */
+  const GATED_EVENTS=['pointerdown','pointerup','mousedown','mouseup','click','touchstart','touchend'];
+  const SEALED_EVENTS=GATED_EVENTS.concat(['touchmove','wheel','keydown']);
+  let unseal=null;
+  function sealFrame(on){
+    const doc=frameDoc();
+    if(!on){
+      if(unseal){ unseal(); unseal=null; lockScroll(doc,false); }
+      return;
+    }
+    if(!doc || unseal) return;
+    const stop=event=>{ event.preventDefault(); event.stopPropagation(); };
+    SEALED_EVENTS.forEach(type=>doc.addEventListener(type,stop,true));
+    lockScroll(doc,true,null);
+    unseal=()=>{ SEALED_EVENTS.forEach(type=>{ try{ doc.removeEventListener(type,stop,true); }catch(e){} }); };
   }
   function unlockLinkInputs(doc){
     if(!doc) return;
@@ -978,12 +1019,19 @@
   let queue=[], at=0, running=false, pass=null, token=0, retry=null, deferTimer=0;
   /* 미뤄 둔 진행은 반드시 취소할 수 있어야 한다. 통과 판정이 이미 잡아 둔 setTimeout이
      사용자가 건너뛴 뒤에 뒤늦게 터지면 한 단계를 통째로 삼킨다. 지금 단계에서만 유효하다. */
+  const SEAL_AFTER=1000;
   function deferAdvance(ms){
     const mine=token;
     clearTimeout(deferTimer);
-    deferTimer=setTimeout(()=>{ deferTimer=0; if(mine===token) advance(); },Math.max(0,ms||0));
+    const span=Math.max(0,ms||0);
+    /* 여운이 길다는 것은 이제 들려주고 끝낸다는 뜻이다. 그동안 만질 것은 없다. */
+    if(span>=SEAL_AFTER) sealFrame(true);
+    deferTimer=setTimeout(()=>{ deferTimer=0; if(mine===token) advance(); },span);
   }
-  function cancelDefer(){ if(deferTimer){ clearTimeout(deferTimer); deferTimer=0; } }
+  function cancelDefer(){
+    if(deferTimer){ clearTimeout(deferTimer); deferTimer=0; }
+    sealFrame(false);
+  }
 
   function show(id){
     ['home','tour','done','more'].forEach(key=>{
@@ -1137,11 +1185,12 @@
       event.preventDefault();
       event.stopPropagation();
     };
-    const GATED=['pointerdown','pointerup','mousedown','mouseup','click','touchstart','touchend'];
-    GATED.forEach(type=>doc.addEventListener(type,doorman,true));
-    lockScroll(doc,true);
+    GATED_EVENTS.forEach(type=>doc.addEventListener(type,doorman,true));
+    let lockTarget=null;
+    try{ lockTarget=resolveTarget(doc,step.target); }catch(e){}
+    lockScroll(doc,true,lockTarget);
     pass=()=>{
-      GATED.forEach(type=>{ try{ doc.removeEventListener(type,doorman,true); }catch(e){} });
+      GATED_EVENTS.forEach(type=>{ try{ doc.removeEventListener(type,doorman,true); }catch(e){} });
       lockScroll(doc,false);
       if(timer){ clearInterval(timer); timer=0; }
       if(onDown){ try{ doc.removeEventListener('pointerdown',onDown,true); }catch(e){} }
@@ -1198,7 +1247,9 @@
     const span=Math.max(120,Number(ms)||160);
     const view=frame.contentWindow;
     if(view && view.OliveAudioFade){ try{ view.OliveAudioFade.out(span/1000); }catch(e){} }
+    sealFrame(true);
     setTimeout(()=>{
+      sealFrame(false);
       quiet();
       if(view && view.OliveAudioFade){ try{ view.OliveAudioFade.restore(); }catch(e){} }
       then();
@@ -1221,6 +1272,9 @@
       button.querySelector('b').textContent=next.name+' 배우기';
       button.querySelector('small').textContent=next.blurb;
     }else button.hidden=true;
+    /* 다음 책이 없으면 그 밖에 알아둘 것이 그 자리를 대신한다. */
+    document.getElementById('doneMore').hidden=Boolean(next);
+    document.getElementById('doneMoreGhost').hidden=!next;
     /* 소리가 나는 채로 끝나면 그 소리를 4초에 걸쳐 함께 줄인다. */
     leaveTour(()=>show('done'),sounding()?4000:160);
   }

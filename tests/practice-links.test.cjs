@@ -190,8 +190,9 @@ assert.match(links,/b:msOrNull\(row\.loop_b_ms\)/);
 assert.doesNotMatch(links,/Number\.isFinite\(Number\(row\.loop_[ab]_ms\)\)/);
 assert.match(cloud,/const loopMs=value=>\{/);
 assert.doesNotMatch(cloud,/Number\.isFinite\(Number\(state&&state\.loop[AB]\)\)/);
-/* A 다음 B를 찍으면 곧바로 반복이 시작되어야 한다. */
-assert.match(links,/loop\.enabled=loop\.a!==null && loop\.b!==null;/);
+/* A 다음 B를 찍으면 곧바로 반복이 시작된다. 단, 구간이 MIN_LOOP_MS를 채워야 한다 —
+   activeLoopFor가 그렇게 판정하므로 켜는 쪽도 같은 잣대를 써야 어긋나지 않는다. */
+assert.match(links,/loop\.enabled=loop\.a!==null && loop\.b!==null && loop\.b-loop\.a>=MIN_LOOP_MS;/);
 /* A/B가 없어도 반복을 켤 수 있다. 이때는 처음부터 끝까지가 구간이다.
    녹음본의 activeLoopFor와 같은 규칙이다. */
 assert.match(links,/function activeLoopFor\(row\)/);

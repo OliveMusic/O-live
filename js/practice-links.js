@@ -282,6 +282,9 @@
     }
     updateTimes(row,position);
     updateTrack(row,position);
+    /* A에서 충분히 지나가면 B가 다시 눌린다. 틱마다 그 문턱을 넘었는지 본다. */
+    const pointB=list.querySelector(`#link-player-${row.id} [data-role="b"]`);
+    if(pointB) pointB.disabled=!loopBReady(row,position);
     scheduleLoopReturn(row);
   }
   function updateTimes(row,position){
@@ -413,19 +416,36 @@
     });
   }
 
+  /* 구간은 MIN_LOOP_MS를 채워야 activeLoopFor가 인정한다. 예전에는 그 검사 없이 두 점만
+     찍히면 켠 것으로 쳐서, A 직후에 B를 찍으면 두 점이 다 켜진 채 반복만 걸리지 않았다.
+     거기서 A를 다시 찍으면 이번엔 B가 지워져 A 시간만 남았다. 채울 수 없는 B는 아예
+     찍지 않고, 재생이 그만큼 지나가면 버튼이 저절로 살아난다. */
+  function playerPositionMs(){
+    if(!player || !playerReady) return null;
+    try{ return player.getCurrentTime()*1000; }catch(e){ return null; }
+  }
+  function loopBReady(row,position){
+    const loop=loopFor(row);
+    if(loop.a===null) return true;
+    const at=Number.isFinite(position)?position:playerPositionMs();
+    return at===null ? true : at-loop.a>=MIN_LOOP_MS;
+  }
   function setLoopPoint(row,which){
     if(!player || !playerReady) return;
     let position=0;
     try{ position=Math.round(player.getCurrentTime()*1000); }catch(e){ return; }
     const loop=loopFor(row);
-    if(which==='a') loop.a=position; else loop.b=position;
-    if(loop.a!==null && loop.b!==null && loop.b<=loop.a){
-      /* 뒤집힌 구간은 의미가 없다. 늦게 찍은 쪽을 살린다. */
-      if(which==='a') loop.b=null; else loop.a=null;
+    if(which==='b'){
+      /* 구간을 이루지 못하는 B는 찍어 봐야 반복이 걸리지 않는다. 그대로 둔다. */
+      if(loop.a!==null && position-loop.a<MIN_LOOP_MS) return;
+      loop.b=position;
+    }else{
+      loop.a=position;
+      /* 새 A가 기존 B와 구간을 이루지 못하면 그 B는 버린다. 늦게 찍은 쪽을 살린다. */
+      if(loop.b!==null && loop.b-loop.a<MIN_LOOP_MS) loop.b=null;
     }
-    /* 두 지점이 모두 찍히면 곧바로 반복을 시작한다. B를 현재 위치에 찍으면
-       다음 틱에서 바로 A로 되돌아간다. */
-    loop.enabled=loop.a!==null && loop.b!==null;
+    /* 구간이 실제로 성립할 때만 반복이 켜진다. */
+    loop.enabled=loop.a!==null && loop.b!==null && loop.b-loop.a>=MIN_LOOP_MS;
     queueStateSave(row);
     refreshLoopUi(row);
   }
@@ -713,6 +733,7 @@
     const pointB=wrap.querySelector('[data-role="b"]');
     if(pointB){
       pointB.classList.toggle('active',loop.b!==null);
+      pointB.disabled=!loopBReady(row);
       pointB.setAttribute('aria-label',loop.b===null?'현재 위치를 B 지점으로 지정':`B 지점 ${formatDuration(loop.b)}, 다시 지정`);
     }
     const repeat=wrap.querySelector('[data-role="repeat"]');

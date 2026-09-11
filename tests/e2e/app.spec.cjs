@@ -1045,6 +1045,54 @@ test('길이를 늦게 알게 된 YouTube도 전체 반복을 켤 수 있다',as
   await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].time),{timeout:4000}).toBe(0);
 });
 
+/* 구간 반복은 A와 B가 MIN_LOOP_MS(800ms)를 벌려야 성립한다. 예전에는 그 검사 없이
+   두 점만 찍히면 켠 것으로 쳐서, A 직후에 B를 찍으면 두 점이 다 켜진 채 반복만 걸리지
+   않았다. 거기서 A를 다시 찍으면 이번엔 B가 지워져 A 시간만 남았다. */
+test('A 직후에는 B가 눌리지 않고, 충분히 지나야 구간이 잡힌다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    youtube:true,
+    practiceLinks:[{
+      id:'yt-loop',provider:'youtube',video_id:'dQw4w9WgXcQ',
+      title:'구간 반복',duration_ms:200000,last_position_ms:0,
+      loop_a_ms:null,loop_b_ms:null,loop_enabled:false,playback_rate:1,
+      created_at:'2026-09-08T14:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+  await page.locator('.record-entry',{hasText:'구간 반복'}).locator('.record-row-open').click();
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players.length)).toBe(1);
+  await page.evaluate(()=>window.__testYouTube.players[0].playVideo());
+
+  const pointA=page.locator('.link-player [data-role="a"]');
+  const pointB=page.locator('.link-player [data-role="b"]');
+  const repeat=page.locator('.link-player [data-role="repeat"]');
+  const times=page.locator('.link-player .link-loop-times');
+
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=5; });
+  await pointA.click();
+  await expect(pointA).toHaveClass(/active/);
+
+  /* 같은 자리의 B는 구간을 만들 수 없다. 눌리지 않아야 한다. */
+  await expect(pointB).toBeDisabled();
+  await expect(pointB).not.toHaveClass(/active/);
+  await expect(times).toHaveText('A 0:05');
+
+  /* 800ms를 지나면 저절로 살아난다. */
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=9; });
+  await expect(pointB).toBeEnabled();
+  await pointB.click();
+  await expect(pointB).toHaveClass(/active/);
+  await expect(repeat).toHaveAttribute('aria-pressed','true');
+  await expect(times).toHaveText('A 0:05 · B 0:09 · 구간 0:04');
+
+  /* 되돌아오는 것까지 실제로 걸린다. */
+  await page.evaluate(()=>{ window.__testYouTube.players[0].time=9.5; });
+  await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].time),{timeout:4000}).toBe(5);
+});
+
 /* 정보 페이지에서 '앱 열기'로 돌아오는 것은 앱을 다시 여는 것에 가깝다.
    같은 세션이라도 시작 화면을 한 번 더 보여 준다. */
 test('정보 페이지에서 앱 열기로 돌아오면 시작 화면을 다시 보여 준다',async({page})=>{
