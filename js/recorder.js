@@ -143,6 +143,7 @@
   const playbackPositions=new Map();
   const playbackRates=new Map();
   const transposes=new Map();
+  let switchingToPitch=false;
   const loopRegions=new Map();
   const cloudStretchModulePromises=new WeakMap();
   let loadingList=false;
@@ -1294,6 +1295,7 @@
     return cloudNativeAudio;
   }
   function stopCloudPlayback(resetPosition){
+    forgetSettles();
     const mediaId=cloudMediaId||cloudPlayingId;
     ++cloudPlayToken;
     stopCloudProgress();
@@ -1678,6 +1680,10 @@
   }
   function switchActivePlaybackToPitchPreserving(row,position){
     if(cloudPlayingId!==row.id || !audioCtx || audioCtx.state==='closed') return false;
+    /* 갈아타는 데는 디코딩과 워클릿 적재가 걸린다. 그 사이에 또 부르면 세우던 그래프를
+       도로 헐고 처음부터 다시 한다. 한 번에 한 번만 갈아탄다. */
+    if(switchingToPitch) return true;
+    switchingToPitch=true;
     const ctx=audioCtx;
     const token=++cloudPlayToken;
     const offset=clamp(Number(position)||0,0,rowDurationSeconds(row));
@@ -1694,7 +1700,8 @@
     ]).then(results=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
       startDecodedSource(ctx,results[1],row,token,offset,true);
-    }).catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token));
+    }).catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token))
+      .finally(()=>{ switchingToPitch=false; });
     return true;
   }
   function playRow(row,requestedOffset){
@@ -1989,9 +1996,25 @@
     applyLoopToActivePlayback(row,current);
     renderList();
   }
+  /* SoundTouch 워클릿은 렌더 프레임마다 pitch·playbackRate를 파이프라인에 다시 꽂고,
+     값이 바뀌면 스테이지를 다시 엮는다. 슬라이더를 끄는 동안 매 프레임 바꾸면 버퍼가
+     따라오지 못해(_underrunCount) 아주 짧은 조각이 되풀이된다 — 첫 조옮김에서 '퍼퍼퍽'
+     하고 들리던 소리가 이것이다. 숫자는 곧바로 보여 주되 소리에 거는 것은 손이 멎은
+     뒤로 미룬다. 손을 떼면(commit) 기다리지 않는다. */
+  const SLIDER_SETTLE=140;
+  let transposeSettle=0, rateSettle=0;
+  function settle(timer,apply,commit){
+    clearTimeout(timer);
+    if(commit){ apply(); return 0; }
+    return setTimeout(()=>apply(),SLIDER_SETTLE);
+  }
+  function forgetSettles(){
+    clearTimeout(transposeSettle); transposeSettle=0;
+    clearTimeout(rateSettle); rateSettle=0;
+  }
+
   function setPlaybackRate(row,value,commit=false){
     const isActive=cloudPlayingId===row.id;
-    const activePosition=isActive?currentCloudPosition():null;
     const rate=clamp(Math.round((Number(value)||1)/PLAYBACK_RATE_STEP)*PLAYBACK_RATE_STEP,
       PLAYBACK_RATE_MIN,PLAYBACK_RATE_MAX);
     playbackRates.set(row.id,rate);
@@ -2000,35 +2023,7 @@
     const output=player&&player.querySelector('.record-speed-control .record-rate-value');
     if(output) output.value=output.textContent=formatPlaybackRate(rate);
     if(isActive){
-      if(isNativePlaybackMode()){
-        if(needsPitchProcessing(row) && !cloudMediaUsesPersistentNative){
-          switchActivePlaybackToPitchPreserving(row,activePosition);
-          return;
-        }
-        applyNativePlaybackSettings(row);
-        updateCloudMediaSessionPosition(row,activePosition);
-        return;
-      }
-      if(cloudPlaybackMode==='decoded' && cloudSource && cloudDecodedContext){
-        if(needsPitchProcessing(row) && !cloudStretchNode){
-          switchActivePlaybackToPitchPreserving(row,activePosition);
-          return;
-        }
-        cloudStartedOffset=activePosition;
-        cloudStartedAt=cloudDecodedContext.currentTime;
-        cloudStartedRate=rate;
-        try{ cloudSource.playbackRate.setValueAtTime(rate,cloudDecodedContext.currentTime); }
-        catch(error){ try{ cloudSource.playbackRate.value=rate; }catch(ignore){} }
-        const stretchRate=cloudStretchNode&&cloudStretchNode.parameters&&
-          cloudStretchNode.parameters.get('playbackRate');
-        if(stretchRate){
-          try{ stretchRate.setValueAtTime(rate,cloudDecodedContext.currentTime); }
-          catch(error){ stretchRate.value=rate; }
-        }
-        updateCloudMediaSessionPosition(row,activePosition);
-        return;
-      }
-      if(needsPitchProcessing(row)) switchActivePlaybackToPitchPreserving(row,activePosition);
+      rateSettle=settle(rateSettle,()=>applyRateToPlayback(row),commit);
       return;
     }
     if(cloudMediaId===row.id){
@@ -2039,9 +2034,42 @@
     }
     if(commit) renderList();
   }
+  function applyRateToPlayback(row){
+    if(cloudPlayingId!==row.id) return;
+    const activePosition=currentCloudPosition();
+    const rate=rowPlaybackRate(row);
+    if(isNativePlaybackMode()){
+      if(needsPitchProcessing(row) && !cloudMediaUsesPersistentNative){
+        switchActivePlaybackToPitchPreserving(row,activePosition);
+        return;
+      }
+      applyNativePlaybackSettings(row);
+      updateCloudMediaSessionPosition(row,activePosition);
+      return;
+    }
+    if(cloudPlaybackMode==='decoded' && cloudSource && cloudDecodedContext){
+      if(needsPitchProcessing(row) && !cloudStretchNode){
+        switchActivePlaybackToPitchPreserving(row,activePosition);
+        return;
+      }
+      cloudStartedOffset=activePosition;
+      cloudStartedAt=cloudDecodedContext.currentTime;
+      cloudStartedRate=rate;
+      try{ cloudSource.playbackRate.setValueAtTime(rate,cloudDecodedContext.currentTime); }
+      catch(error){ try{ cloudSource.playbackRate.value=rate; }catch(ignore){} }
+      const stretchRate=cloudStretchNode&&cloudStretchNode.parameters&&
+        cloudStretchNode.parameters.get('playbackRate');
+      if(stretchRate){
+        try{ stretchRate.setValueAtTime(rate,cloudDecodedContext.currentTime); }
+        catch(error){ stretchRate.value=rate; }
+      }
+      updateCloudMediaSessionPosition(row,activePosition);
+      return;
+    }
+    if(needsPitchProcessing(row)) switchActivePlaybackToPitchPreserving(row,activePosition);
+  }
   function setTranspose(row,value,commit=false){
     const isActive=cloudPlayingId===row.id;
-    const activePosition=isActive?currentCloudPosition():null;
     const next=clamp(Math.round(Number(value)||0),TRANSPOSE_MIN,TRANSPOSE_MAX);
     const changed=next!==rowTranspose(row);
     transposes.set(row.id,next);
@@ -2052,19 +2080,24 @@
     if(slider && Number(slider.value)!==next) slider.value=String(next);
     if(changed) queueRecordingStateSave(row);
     if(isActive){
-      /* 조옮김은 SoundTouch 경로에서만 된다. 없으면 그 경로로 옮긴다. */
-      if(isNativePlaybackMode() || !cloudStretchNode){
-        if(needsPitchProcessing(row)){
-          switchActivePlaybackToPitchPreserving(row,activePosition);
-          return;
-        }
-      }else{
-        applyTransposeToStretchNode(row);
-      }
-      updateCloudMediaSessionPosition(row,activePosition);
+      transposeSettle=settle(transposeSettle,()=>applyTransposeToPlayback(row),commit);
       return;
     }
     if(commit) renderList();
+  }
+  function applyTransposeToPlayback(row){
+    if(cloudPlayingId!==row.id) return;
+    const activePosition=currentCloudPosition();
+    /* 조옮김은 SoundTouch 경로에서만 된다. 없으면 그 경로로 옮긴다. */
+    if(isNativePlaybackMode() || !cloudStretchNode){
+      if(needsPitchProcessing(row)){
+        switchActivePlaybackToPitchPreserving(row,activePosition);
+        return;
+      }
+    }else{
+      applyTransposeToStretchNode(row);
+    }
+    updateCloudMediaSessionPosition(row,activePosition);
   }
   function applyTransposeToStretchNode(row){
     const pitch=cloudStretchNode&&cloudStretchNode.parameters&&

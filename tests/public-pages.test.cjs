@@ -21,6 +21,7 @@ const earTrainer=read('js/ear-trainer.js');
 const recorder=read('js/recorder.js');
 const practiceLinks=read('js/practice-links.js');
 const jam=read('js/jam-session.js');
+const worklet=read('vendor/soundtouch/soundtouch-processor.js');
 const core=read('js/core.js');
 const audioRuntime=read('js/audio-runtime.js');
 const worker=read('service-worker.js');
@@ -487,15 +488,43 @@ assert.doesNotMatch(indexHtml,/\.link-mode:disabled/,'앱에 꺼진 모양이 �
 /* '두세 개'라고 해 놓고 하나에 넘어가면 안내가 거짓말이 된다. */
 assert.match(guide,/\.prog-bar'\)\.length>=memo\+2\}/);
 
-/* 맥동 테두리는 안쪽보다 2px 밖에 앉는다. 반지름을 물려받으면 모서리에서만 벌어진다. */
+/* 테두리는 하나로 보여야 한다. 맥동을 밖에 따로 세우면 반지름을 맞춰도 두 번 그린
+   가장자리가 모서리에서 실오라기만큼 어긋난다. 쉴 때는 안쪽 테두리와 완전히 포갠다. */
 assert.match(guide,/\.halo\{[\s\S]{0,80}?border-radius:13px/);
-assert.match(guide,/\.halo::after\{[\s\S]{0,80}?inset:-2px; border-radius:15px/);
-assert.doesNotMatch(guide,/inset:-2px; border-radius:inherit/);
+assert.match(guide,/\.halo::after\{[\s\S]{0,80}?inset:0; border-radius:inherit/);
+assert.doesNotMatch(guide,/\.halo::after\{[\s\S]{0,80}?inset:-2px/);
 
 /* 목업은 아래를 맞춰 나란히. 안쪽 치수가 px라 좁은 기기에서는 통째로 줄인다. */
 assert.match(guide,/\.mock-row\{[\s\S]{0,120}?align-items:flex-end/);
 assert.doesNotMatch(guide,/\.mock-row\{[\s\S]{0,120}?align-items:flex-start/);
 assert.match(guide,/@media \(max-width:430px\)\{ \.mock-row\{ zoom:\.86; \} \}/);
+
+/* SoundTouch는 렌더 프레임마다 pitch를 파이프라인에 다시 꽂고 값이 바뀌면 스테이지를
+   다시 엮는다. 끄는 동안 매 프레임 바꾸면 버퍼가 못 따라와 짧은 조각이 되풀이된다.
+   숫자는 곧바로, 소리는 손이 멎은 뒤에. 손을 떼면 기다리지 않는다. */
+assert.match(recorder,/const SLIDER_SETTLE=140;/);
+assert.match(recorder,/function settle\(timer,apply,commit\)\{[\s\S]{0,160}?if\(commit\)\{ apply\(\); return 0; \}/);
+assert.match(recorder,/transposeSettle=settle\(transposeSettle,\(\)=>applyTransposeToPlayback\(row\),commit\)/);
+assert.match(recorder,/rateSettle=settle\(rateSettle,\(\)=>applyRateToPlayback\(row\),commit\)/);
+assert.match(recorder,/function applyTransposeToPlayback\(row\)/);
+assert.match(recorder,/function applyRateToPlayback\(row\)/);
+/* 갈아타는 중에 또 부르면 세우던 그래프를 도로 헌다. */
+assert.match(recorder,/if\(switchingToPitch\) return true;\s*\n\s*switchingToPitch=true;/);
+assert.match(recorder,/\.finally\(\(\)=>\{ switchingToPitch=false; \}\)/);
+assert.match(recorder,/function stopCloudPlayback\(resetPosition\)\{\s*\n\s*forgetSettles\(\);/);
+assert.match(worklet,/if \(available < frameCount\) this\._underrunCount\+\+;/,'버퍼가 못 따라오면 세는 자리');
+
+/* 눌러서 들어 보는 단계에서는 무음 모드를 한 번씩 짚어 준다 — ambient라 스위치를 따른다. */
+assert.equal((guide.match(/소리가 안 나면 <b>무음 모드<\/b>를 꺼 보세요/g)||[]).length,2,'튜너 현음과 잼 코드');
+
+/* 구멍은 네모라 대상 옆 이웃이 그 안에 함께 들어온다. 대상 위가 아니면 막는다.
+   같은 노드의 다른 청취자는 그대로 받아야 하므로 stopPropagation까지만 쓴다. */
+assert.match(guide,/const doorman=event=>\{/);
+assert.match(guide,/if\(\(target && target\.contains\(event\.target\)\) \|\| \(extra && extra\.contains\(event\.target\)\)\) return;/);
+assert.match(guide,/event\.preventDefault\(\);\s*\n\s*event\.stopPropagation\(\);/);
+assert.doesNotMatch(guide,/stopImmediatePropagation/);
+assert.match(guide,/GATED\.forEach\(type=>doc\.addEventListener\(type,doorman,true\)\)/);
+assert.match(guide,/GATED\.forEach\(type=>\{ try\{ doc\.removeEventListener\(type,doorman,true\)/,'단계를 떠나면 거둔다');
 
 /* 건반은 눌러서도, 쓸어서도 듣는다. 지나간 건반마다 한 번씩만 울려야 글리산도가 된다. */
 const scales=read('js/scales.js');
