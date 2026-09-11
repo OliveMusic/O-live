@@ -1128,6 +1128,9 @@
     color:var(--ink-3); font-size:0.6562rem; line-height:1.65;
     letter-spacing:0.0091em; font-weight:500;
   }
+  /* 무음 스위치 안내는 지시가 아니라 단서라 따로 한 줄을 쓴다. 앞 줄에 '·'로 이어 붙이면
+     문장이 길어져 마지막 한 글자가 홀로 다음 줄로 떨어진다. */
+  .hint.mute-note{ word-break:keep-all; }
   .switch-row{display:flex; gap:5px;}
   /* 한 상자 안에서 성격이 다른 두 덩어리를 가르는 선 */
   .card-split{ height:1px; background:var(--line-soft); margin:16px -18px 15px; }
@@ -2273,6 +2276,7 @@
         <div id="tuningSelect"></div>
         <div class="string-btns" id="stringBtns"></div>
         <p class="hint" style="margin-top:10px;">현을 누르면 기준음이 들립니다</p>
+        <p class="hint mute-note" hidden style="margin-top:4px;">무음 모드에서는 들리지 않을 수 있습니다</p>
       </div>
       <div class="card">
         <h2>감도</h2>
@@ -2326,6 +2330,7 @@
         <h2>구성음</h2>
         <div id="scaleNotesList" class="pill-group"></div>
         <p class="hint" style="margin-top:10px;">건반의 숫자는 루트음(1)로부터의 도수</p>
+        <p class="hint mute-note" hidden style="margin-top:4px;">무음 모드에서는 들리지 않을 수 있습니다</p>
       </div>
     </section>
 
@@ -2631,6 +2636,7 @@
         </div>
         <div class="chord-palette" id="chordPalette"></div>
         <p class="hint" style="margin:10px 0 0;">코드를 눌러 미리듣기 · <b class="plus-mark">+</b> 로 진행에 추가</p>
+        <p class="hint mute-note" hidden style="margin-top:4px;">무음 모드에서는 들리지 않을 수 있습니다</p>
       </div>
 
       <div class="card">
@@ -2742,22 +2748,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=219"></script>
+<script src="app-version.js?v=220"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=219"></script>
-<script src="js/audio-runtime.js?v=219"></script>
-<script src="js/core.js?v=219"></script>
-<script src="js/metronome.js?v=219"></script>
-<script src="js/tuner-engine.js?v=219"></script>
-<script src="js/tuner.js?v=219"></script>
-<script src="js/scales.js?v=219"></script>
-<script src="js/ear-trainer.js?v=219"></script>
-<script src="js/rhythm-trainer.js?v=219"></script>
-<script src="js/recording-cache.js?v=219"></script>
-<script src="js/recorder.js?v=219"></script>
-<script src="js/practice-links.js?v=219"></script>
-<script src="js/jam-session.js?v=219"></script>
-<script src="js/app-shell.js?v=219"></script>
+<script src="cloud-sync.js?v=220"></script>
+<script src="js/audio-runtime.js?v=220"></script>
+<script src="js/core.js?v=220"></script>
+<script src="js/metronome.js?v=220"></script>
+<script src="js/tuner-engine.js?v=220"></script>
+<script src="js/tuner.js?v=220"></script>
+<script src="js/scales.js?v=220"></script>
+<script src="js/ear-trainer.js?v=220"></script>
+<script src="js/rhythm-trainer.js?v=220"></script>
+<script src="js/recording-cache.js?v=220"></script>
+<script src="js/recorder.js?v=220"></script>
+<script src="js/practice-links.js?v=220"></script>
+<script src="js/jam-session.js?v=220"></script>
+<script src="js/app-shell.js?v=220"></script>
 </body>
 </html>

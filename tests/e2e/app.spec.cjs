@@ -985,6 +985,21 @@ test('YouTube 재생도 다른 소리와 같은 판에서 관리된다',async({p
   await expect.poll(()=>page.evaluate(()=>navigator.audioSession.type)).toBe('ambient');
 });
 
+/* 눌러서 들어 보는 소리는 ambient라 무음 스위치를 따른다. 무음인지 읽는 API가 웹에
+   없어 그때만 알릴 수 없으니, 스위치가 있는 기기에서만 미리 조용히 적어 둔다.
+   여기 하네스는 navigator.audioSession을 흉내 내고 기기 프로필도 iPhone이라 켜져야 한다. */
+test('무음 스위치가 있는 기기에서는 세 미리 듣기에 무음 모드 안내가 붙는다',async({page})=>{
+  await preparePage(page);
+  await expect(page.locator('.hint.mute-note')).toHaveCount(3);
+  expect(await page.evaluate(()=>(
+    [...document.querySelectorAll('.hint.mute-note')].every(el=>!el.hidden)
+  ))).toBeTruthy();
+  for(const tab of ['tuner','scales','jam']){
+    await page.locator(`.tab-btn[data-tab="${tab}"]`).click();
+    await expect(page.locator(`#tab-${tab} .hint.mute-note`)).toBeVisible();
+  }
+});
+
 /* 저장할 때 길이를 알아내지 못하면 duration_ms가 0으로 남는다. onReady의
    getDuration()도 아직 0을 주는 일이 잦다. 그러면 A/B 반복은 되는데
    전체 반복만 켜지지 않는다. 되돌 지점을 길이에서 얻기 때문이다. */

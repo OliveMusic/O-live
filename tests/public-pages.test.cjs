@@ -21,6 +21,8 @@ const earTrainer=read('js/ear-trainer.js');
 const recorder=read('js/recorder.js');
 const practiceLinks=read('js/practice-links.js');
 const jam=read('js/jam-session.js');
+const core=read('js/core.js');
+const audioRuntime=read('js/audio-runtime.js');
 const worker=read('service-worker.js');
 const manifest=JSON.parse(read('manifest.json'));
 const sitemap=read('sitemap.xml');
@@ -360,6 +362,19 @@ assert.match(cloud,/261\.63\*Math\.pow\(2,semitone\/12\)/);
 
 /* 눌러서 가르칠 수 없는 것은 마지막 카드로 남긴다. */
 assert.match(guide,/무음 모드를 꺼 보세요/);
+/* 무음 스위치를 읽는 API는 웹에 없다. 감지해서 그때만 알릴 수 없으니, 스위치가 있는
+   기기에서만 미리 적어 둔다. 눌러서 듣는 소리 셋에 모두 붙어야 한다. */
+assert.equal((indexHtml.match(/class="hint mute-note"/g)||[]).length,3,'튜너 현·스케일 건반·잼 코드');
+assert.match(indexHtml,/<p class="hint mute-note" hidden style="margin-top:4px;">무음 모드에서는 들리지 않을 수 있습니다<\/p>/);
+assert.match(indexHtml,/\.hint\.mute-note\{ word-break:keep-all; \}/,'마지막 글자가 홀로 떨어지지 않게');
+assert.match(audioRuntime,/function revealMuteSwitchNotes\(\)/);
+assert.match(audioRuntime,/const webkitSession=Boolean\(navigator\.audioSession\)/);
+assert.match(audioRuntime,/matchMedia\('\(pointer:coarse\)'\)/,'무음 스위치가 있는 기기에서만');
+/* 미리 듣기를 playback으로 올리면 다른 앱 음악이 끊기고 잠금화면 위젯이 뜬다. */
+assert.doesNotMatch(core,/guitarPluck[\s\S]{0,300}?setAudioSession/);
+assert.doesNotMatch(jam,/previewChord[\s\S]{0,300}?setAudioSession/);
+/* 잼은 반주와 미리 듣기가 다르다. 한 낱말로 뭉뚱그리면 설명이 어긋난다. */
+assert.match(guide,/잼 반주·저장한 녹음은 잠금화면 재생용/);
 assert.match(guide,/직접 잠그면 끊길 수 있습니다/);
 assert.match(guide,/잠금화면에서 재생되지 않습니다/,'YouTube 잠금화면 제약');
 assert.match(guide,/저장하기 전에는 서버로 나가지 않습니다/);
@@ -385,7 +400,6 @@ for(const cls of ['mock-lock-icon','mock-time','mock-date','mock-watch-app','moc
 }
 assert.match(guide,/\.mock \.mock-skip b\{/);
 
-const core=read('js/core.js');
 /* 박자 고르기는 눈에 보이는 대로라 단계를 두지 않는다. #rhyTap과 함께 묶었을 때는
    둘이 두 카드, 331px 떨어져 있어 구멍이 그 사이를 통째로 삼키기까지 했다. */
 assert.doesNotMatch(guide,/#rhySig/);

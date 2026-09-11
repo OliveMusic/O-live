@@ -93,6 +93,21 @@ function setAudioSession(mode){
   }catch(e){}
 }
 
+/* 눌러서 들어 보는 소리 — 튜너 현음, 스케일 건반, 잼 코드 미리 듣기 — 는 ambient라
+   무음 스위치를 따른다. playback으로 올리면 무음 모드에서도 들리지만 다른 앱 음악이
+   끊기고 현 하나 튕길 때마다 잠금화면 위젯이 떠서, 얻는 것보다 잃는 것이 크다.
+   그렇다고 무음인지 감지해 그때만 알릴 수도 없다 — navigator.audioSession은 세션을
+   '설정'만 할 뿐 기기가 지금 무음인지 알려주지 않고, 웹에 그런 API가 없다.
+   그래서 무음 스위치가 있는 기기에서만 미리 조용히 적어 둔다. 이 API는 WebKit에만
+   있고, 거친 포인터까지 겹치면 사실상 iPhone과 iPad다. */
+function revealMuteSwitchNotes(){
+  const webkitSession=Boolean(navigator.audioSession);
+  const touch=Boolean(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+  if(!webkitSession || !touch) return;
+  document.querySelectorAll('.mute-note').forEach(el=>{ el.hidden=false; });
+}
+revealMuteSwitchNotes();
+
 /* 실제 녹음 파일처럼 자체 HTMLAudioElement를 가진 기능은 공용 메트로놈
    플레이어가 Media Session 핸들러를 지우지 못하도록 소유권을 표시한다. */
 function claimExternalMediaSession(owner){
