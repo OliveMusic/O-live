@@ -489,6 +489,13 @@ async function expandRecordList(page){
   await expect(details).toHaveAttribute('open','');
 }
 
+/* download() 스텁에 닿아야 비로소 resolver가 생긴다. 재생을 누른 직후에 바로 부르면
+   아직 없어서 TypeError로 넘어진다 — 재생 경로가 조금만 길어져도 지는 경주다. */
+async function resolveRecordingDownload(page){
+  await expect.poll(()=>page.evaluate(()=>typeof window.__resolveRecordingDownload)).toBe('function');
+  await page.evaluate(()=>window.__resolveRecordingDownload());
+}
+
 test.afterEach(async({page})=>{
   expect(pageErrors.get(page)||[]).toEqual([]);
 });
@@ -1138,7 +1145,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   expect(playBox.y+playBox.height/2).toBeCloseTo(box.y+box.height/2,0);
   await waveformControl.click({position:{x:box.width*.75,y:box.height/2}});
   expect(await page.evaluate(()=>window.__mediaPlayCalls||0)).toBeGreaterThan(0);
-  await page.evaluate(()=>window.__resolveRecordingDownload());
+  await resolveRecordingDownload(page);
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   expect(await page.evaluate(()=>Boolean(
     window.__recordingTransportMedia &&
@@ -1296,7 +1303,7 @@ test('녹음 재생 중 메트로놈을 시작하면 녹음 버튼도 정지 상
   const recordingPlay=page.locator('.record-player-play');
   await recordingPlay.click();
   await expect(recordingPlay).toHaveClass(/playing/);
-  await page.evaluate(()=>window.__resolveRecordingDownload());
+  await resolveRecordingDownload(page);
 
   await page.locator('.tab-btn[data-tab="metronome"]').click();
   await page.locator('#metroStart').click();
@@ -1760,7 +1767,7 @@ test('멈춰 둔 목록 재생 뒤 청음 트레이너가 일반 출력으로 �
   await expandRecordList(page);
   await page.locator('.record-row-open').click();
   await page.locator('.record-player-play').click();
-  await page.evaluate(()=>window.__resolveRecordingDownload());
+  await resolveRecordingDownload(page);
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   await page.evaluate(()=>window.__recordingTransportMedia.dispatchEvent(new Event('pause')));
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
