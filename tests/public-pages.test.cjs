@@ -459,7 +459,11 @@ assert.match(guide,/coachHint\.classList\.remove\('done'\)/,'다음 단계에서
 assert.match(guide,/\.coach-hint\.done::before\{ content:'✓ '; \}/);
 /* 현 음은 소리를 들을 틈을 준다. 다만 여기서는 잠그지 않는다 — 현을 몇 개 돌아가며
    눌러 봐야 하고, 누를 때마다 시한이 밀린다. */
-assert.match(guide,/hint:'현 하나를 눌러 보세요', linger:3500/);
+/* 기준음은 서로 견줘 봐야 뜻이 있다. 이 단계만 봉하지 않아, 현을 몇 개 눌러 보는 동안
+   시한이 계속 밀리고 손을 멈추면 넘어간다. */
+assert.match(guide,/hint:'현을 몇 개 눌러 보세요', linger:1800, keepOpen:true/);
+assert.match(guide,/const SEAL_NEVER=-1;/);
+assert.match(guide,/if\(span>=SEAL_AFTER && graceMs!==SEAL_NEVER\)\{/);
 /* 마이크가 꺼져 있으면 뒤따르는 감도 단계에서 파형이 죽은 선으로만 보인다.
    여기서 실제로 켜게 하고, 도움말을 나갈 때는 반드시 끈다. */
 assert.match(guide,/hint:'눌러서 마이크를 켜 보세요', linger:2500, done:'마이크가 켜졌습니다'/);
@@ -467,12 +471,12 @@ assert.match(guide,/button\.classList\.contains\('on'\)/,'앱이 마이크 켜�
 assert.match(tuner,/tunerStart\.classList\.add\('on'\)/);
 assert.match(guide,/if\(mic && mic\.classList\.contains\('on'\)\) mic\.click\(\)/);
 assert.match(guide,/function deferAdvance\(ms,graceMs\)/);
-assert.match(guide,/if\(span>=SEAL_AFTER\)\{/,'여운이 길면 반드시 봉한다');
+assert.match(guide,/if\(span>=SEAL_AFTER && graceMs!==SEAL_NEVER\)\{/,'여운이 길면 봉한다 — 견줘 봐야 하는 단계만 뺀다');
 /* 여운 동안에는 아무것도 눌리지 않는다. 다만 구멍을 눌러 넘어가는 길은 pointerdown에서
    불리므로, 그 자리에서 봉하면 방금 그 탭의 click까지 삼켜 버튼이 아무 일도 하지 않는다 —
    청음의 올리브가 그래서 먹통이었다. 그 길만 손이 떨어질 틈을 두고 봉한다. */
 assert.match(guide,/const SEAL_GRACE=260;/);
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,SEAL_GRACE\)/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\?SEAL_NEVER:SEAL_GRACE\)/);
 assert.match(guide,/sealTimer=setTimeout\(\(\)=>\{ sealTimer=0; if\(mine===token\) sealFrame\(true\); \},grace\)/);
 assert.match(guide,/if\(sealTimer\)\{ clearTimeout\(sealTimer\); sealTimer=0; \}/,'그만두면 봉인 예약도 거둔다');
 for(const said of ['즐겨찾기가 해제되었습니다','즐겨찾기가 다시 설정되었습니다','목록에서 삭제되었습니다']){
@@ -655,7 +659,7 @@ assert.match(guide,/lockScroll\(doc,true,lockTarget\)/);
 /* 여운을 두는 동안과 끝맺는 동안에는 아무것도 눌리지 않는다. */
 assert.match(guide,/const SEALED_EVENTS=GATED_EVENTS\.concat\(\['touchmove','wheel','keydown'\]\)/);
 assert.match(guide,/function sealFrame\(on\)/);
-assert.match(guide,/if\(span>=SEAL_AFTER\)\{/,'여운이 길면 반드시 봉한다');
+assert.match(guide,/if\(span>=SEAL_AFTER && graceMs!==SEAL_NEVER\)\{/,'여운이 길면 봉한다 — 견줘 봐야 하는 단계만 뺀다');
 assert.match(guide,/sealFrame\(true\);\s*\n\s*setTimeout\(\(\)=>\{\s*\n\s*sealFrame\(false\);/);
 assert.match(guide,/function cancelDefer\(\)\{[\s\S]{0,140}?sealFrame\(false\);/,'중간에 그만두면 봉인도 푼다');
 
@@ -690,7 +694,7 @@ assert.match(earTrainer,/classList\.toggle\('active', x\.dataset\.mode===mode\)/
 /* 소리가 끝나기도 전에 달력으로 넘어가면 뚝 끊긴 느낌이 든다. 가장 긴 음계가 2초 남짓이니
    다 들려주고 1초를 더 둔다. 구멍을 눌러 넘어가는 길도 그 여운을 따른다. */
 assert.match(guide,/hint:'눌러서 들어 보세요', linger:3200\}/);
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,SEAL_GRACE\)/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\?SEAL_NEVER:SEAL_GRACE\)/);
 
 /* 만들어만 놓고 끝나면 무엇을 만든 건지 모른 채 끝난다. 몇 마디 들려주고 나간다. */
 assert.match(guide,/target:'#rhyPlay', title:'들어 보기'/);

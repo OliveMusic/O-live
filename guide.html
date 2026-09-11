@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=234">
+<link rel="stylesheet" href="info.css?v=235">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -507,7 +507,7 @@
          title:'튜너로 갑니다', body:'튜너에 들어오면 <b>다른 소리가 자동으로 멈춥니다.</b> 마이크를 방해하지 않기 위해서입니다.', hint:'여기를 누르세요'},
         {screen:'tuner', target:'#stringBtns',
          title:'현을 누르면 기준음', body:'귀로 먼저 맞춰 볼 수 있습니다. 기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다. 소리가 안 나면 <b>무음 모드</b>를 꺼 보세요.',
-         hint:'현 하나를 눌러 보세요', linger:3500},
+         hint:'현을 몇 개 눌러 보세요', linger:1800, keepOpen:true},
         {screen:'tuner', target:'#tunerStart', also:'.display',
          title:'마이크로 듣기',
          body:'누르면 마이크 권한을 물어봅니다. 소리는 <b>기기 안에서만</b> 분석하고 어디로도 보내지 않습니다. '+
@@ -1075,6 +1075,9 @@
   /* 손이 떨어질 틈. pointerdown에서 곧바로 봉하면 방금 그 탭의 click까지 삼켜
      버튼이 아무 일도 하지 않는다 — 청음의 올리브가 그래서 먹통이었다. */
   const SEAL_GRACE=260;
+  /* 몇 개를 돌아가며 눌러 보는 단계는 봉하지 않는다. 현 하나만 튕기고 굳어 버리면
+     기준음을 서로 견줄 수가 없다. 누를 때마다 시한이 다시 밀린다. */
+  const SEAL_NEVER=-1;
   let sealTimer=0;
   function deferAdvance(ms,graceMs){
     const mine=token;
@@ -1084,7 +1087,7 @@
     /* 여운 동안에는 아무것도 눌리지 않게 한다. 그 사이에 슬라이더나 버튼이 움직이면
        방금 보여 준 결과와 화면이 어긋난다. 앱 상태가 이미 바뀐 뒤에 부르는 쪽은
        곧바로 봉하고, 탭에서 불리는 쪽만 그 탭이 끝날 틈을 두고 봉한다. */
-    if(span>=SEAL_AFTER){
+    if(span>=SEAL_AFTER && graceMs!==SEAL_NEVER){
       const grace=Math.max(0,graceMs||0);
       if(grace) sealTimer=setTimeout(()=>{ sealTimer=0; if(mine===token) sealFrame(true); },grace);
       else sealFrame(true);
@@ -1240,7 +1243,7 @@
         const extra=step.also&&now?[...now.querySelectorAll(step.also)]:[];
         const hit=(current && (current===event.target||current.contains(event.target)))
           || extra.some(node=>node===event.target||node.contains(event.target));
-        if(hit) deferAdvance(step.linger||420,SEAL_GRACE);
+        if(hit) deferAdvance(step.linger||420,step.keepOpen?SEAL_NEVER:SEAL_GRACE);
       };
       doc.addEventListener('pointerdown',onDown,true);
     }

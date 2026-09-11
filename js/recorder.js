@@ -1690,7 +1690,12 @@
     switchingToPitch=true;
     const ctx=audioCtx;
     const token=++cloudPlayToken;
-    const offset=clamp(Number(position)||0,0,rowDurationSeconds(row));
+    /* 네이티브 요소의 currentTime은 스피커가 이미 내보낸 자리보다 뒤에 있다. 그 값에서
+       그대로 이어 붙이면 방금 귀로 들은 몇십 ms를 한 번 더 듣게 된다 — 조옮김을 처음
+       걸 때 '짧게 되풀이'로 들리던 것이 이것이다. 이미 나간 만큼을 건너뛰고 잇는다.
+       출력 지연은 기기마다 다르고 iOS가 특히 크다. 터무니없는 값은 잘라 쓴다. */
+    const heard=Math.max(0,Math.min(.4,Number(ctx.outputLatency)||Number(ctx.baseLatency)||0));
+    const offset=clamp((Number(position)||0)+heard,0,rowDurationSeconds(row));
     playbackPositions.set(row.id,offset);
     stopCloudProgress();
     resetCloudMediaElement();
