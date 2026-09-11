@@ -474,4 +474,39 @@ assert.match(guide,/if\(step\.presses\)\{/);
 assert.match(guide,/if\(hits>=step\.presses\) deferAdvance/);
 assert.match(guide,/if\(unpress\)\{ unpress\(\); unpress=null; \}/,'단계를 떠나면 세던 것도 거둔다');
 assert.match(core,/if\(taps\.length>1\)\{/,'앱은 두 번째 탭부터 템포를 바꾼다');
+
+/* URL 탭으로 실수로 넘어가면 채워 둔 검색어도 설명도 어긋난다. 그 단계에서만 끄고,
+   단계를 떠나면 반드시 되돌린다 — 앱에 :disabled 모양이 없어 흐리게 해서 알린다. */
+assert.match(guide,/if\(url\)\{ url\.disabled=true; url\.style\.opacity='\.3'; \}/);
+assert.match(guide,/lockLink:true/);
+assert.match(guide,/function unlockLinkInputs\(doc\)/);
+assert.match(guide,/if\(!step\.lockLink\) unlockLinkInputs\(doc\)/,'단계를 떠나면 다시 켠다');
+assert.match(guide,/if\(url\)\{ url\.disabled=false; url\.style\.opacity=''; \}/);
+assert.doesNotMatch(indexHtml,/\.link-mode:disabled/,'앱에 꺼진 모양이 없어 도움말이 흐리게 한다');
+
+/* '두세 개'라고 해 놓고 하나에 넘어가면 안내가 거짓말이 된다. */
+assert.match(guide,/\.prog-bar'\)\.length>=memo\+2\}/);
+
+/* 맥동 테두리는 안쪽보다 2px 밖에 앉는다. 반지름을 물려받으면 모서리에서만 벌어진다. */
+assert.match(guide,/\.halo\{[\s\S]{0,80}?border-radius:13px/);
+assert.match(guide,/\.halo::after\{[\s\S]{0,80}?inset:-2px; border-radius:15px/);
+assert.doesNotMatch(guide,/inset:-2px; border-radius:inherit/);
+
+/* 목업은 아래를 맞춰 나란히. 안쪽 치수가 px라 좁은 기기에서는 통째로 줄인다. */
+assert.match(guide,/\.mock-row\{[\s\S]{0,120}?align-items:flex-end/);
+assert.doesNotMatch(guide,/\.mock-row\{[\s\S]{0,120}?align-items:flex-start/);
+assert.match(guide,/@media \(max-width:430px\)\{ \.mock-row\{ zoom:\.86; \} \}/);
+
+/* 건반은 눌러서도, 쓸어서도 듣는다. 지나간 건반마다 한 번씩만 울려야 글리산도가 된다. */
+const scales=read('js/scales.js');
+assert.match(scales,/scaleNotesList\.addEventListener\('pointerdown'/);
+assert.match(scales,/scaleNotesList\.addEventListener\('pointermove'/);
+assert.match(scales,/scaleNotesList\.addEventListener\('pointercancel', endGlide\)/,'화면을 넘기면 쓸기도 끝난다');
+assert.match(scales,/if\(!el \|\| el===glideLast\) return;/,'같은 건반은 한 번만');
+assert.match(scales,/el\.dataset\.pc=String\(pc\)/);
+/* 손가락 한 번에 pointerdown과 click이 둘 다 온다. 키보드가 만든 click만 받아야 한 번 울린다. */
+assert.match(scales,/if\(!event\.detail\) guitarPluck\(60\+pc, 1\.8, 0\.55\)/);
+assert.doesNotMatch(scales,/addEventListener\('click', \(\)=> guitarPluck/);
+/* 가로로 쓸면 글리산도, 세로로 쓸면 화면 넘기기. manipulation이면 가로 움직임이 오지 않는다. */
+assert.match(indexHtml,/\.piano\{[\s\S]{0,220}?touch-action:pan-y/);
 console.log('guide page checks passed');

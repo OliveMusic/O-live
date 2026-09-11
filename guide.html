@@ -124,8 +124,11 @@
     box-shadow:0 0 0 2px var(--signal), 0 0 0 7px rgba(151,169,130,.22);
     transition:all .22s var(--ease-out,ease);
   }
+  /* 맥동하는 테두리는 안쪽 테두리보다 2px 밖에 앉는다. 반지름까지 물려받으면
+     같은 13px로 더 바깥에서 도는 셈이라 모서리에서 안쪽보다 급히 꺾여, 두 테두리
+     사이가 모서리에서만 벌어져 보인다. 2px 나간 만큼 반지름도 2px 키운다. */
   .halo::after{
-    content:''; position:absolute; inset:-2px; border-radius:inherit;
+    content:''; position:absolute; inset:-2px; border-radius:15px;
     box-shadow:0 0 0 2px var(--signal);
     animation:halo 1.6s var(--ease-out,ease) infinite;
   }
@@ -183,7 +186,10 @@
   @media (prefers-color-scheme:dark){ :root{ --warn:#dda172; --warn-line:#6d5540; } }
 
   /* 잠금화면 목업 — iOS 화면이라 앱 팔레트가 아니라 iOS의 어두운 배경을 쓴다. */
-  .mock-row{ display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:center; gap:18px; margin:14px 0 0; }
+  /* 위아래로 세우면 그 칸만 길어진다. 아래를 맞춰 나란히 둔다. 안쪽 치수가 모두 px라
+     좁은 기기에서는 통째로 줄이는 편이 가장 안전하다. 그래도 모자라면 줄바꿈이 받는다. */
+  .mock-row{ display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:center; gap:16px; margin:14px 0 0; }
+  @media (max-width:430px){ .mock-row{ zoom:.86; } }
   .mock{ margin:0; }
   /* 목업 안의 글자는 본문이 아니라 iOS 화면의 일부다. .note p / .note b는 클래스
      하나짜리 목업 규칙보다 구체적이어서 그대로 두면 글자가 13px로 커지고 문단 간격까지
@@ -637,7 +643,12 @@
            /* 검색어를 미리 채워 두고 고치지 못하게 한다. 도움말에서는 검색만 눌러 보면 된다. */
            const input=doc.querySelector('#linkSearchInput');
            if(input){ input.value='C Major Scale'; input.readOnly=true; }
+           /* URL 탭으로 실수로 넘어가면 채워 둔 검색어도, 설명도 어긋난다.
+              앱에는 :disabled 모양이 없어 끄기만 하면 켜진 것처럼 보인다. 흐리게 해서 알린다. */
+           const url=doc.querySelector('#linkModeUrl');
+           if(url){ url.disabled=true; url.style.opacity='.3'; }
          },
+         lockLink:true,
          title:'검색해서 담기',
          body:'<b>검색</b>은 노래 제목이나 가수로 찾고, <b>URL</b>은 주소를 그대로 붙여넣습니다. 검색어를 넣어 뒀으니 눌러 보세요.',
          hint:'검색을 눌러 보세요',
@@ -679,7 +690,8 @@
          body:'코드 몸통을 누르면 <b>소리만</b> 들어봅니다. 진행에 담으려면 오른쪽 위의 <b>+</b>를 누릅니다.',
          hint:'+를 두세 개 눌러 보세요',
          memo:doc=>doc.querySelectorAll('#progTimeline .prog-bar').length,
-         check:(doc,memo)=>doc.querySelectorAll('#progTimeline .prog-bar').length>memo},
+         /* 하나만 담고 넘어가면 '두세 개'라는 안내가 거짓말이 된다. */
+         check:(doc,memo)=>doc.querySelectorAll('#progTimeline .prog-bar').length>=memo+2},
         {screen:'jam', target:doc=>doc.querySelector('#progTimeline .prog-bar .nm'),
          title:'코드 이름을 탭', body:'같은 자리에서 <b>3화음과 7화음</b>이 번갈아 바뀝니다.',
          hint:'코드 이름을 눌러 보세요'},
@@ -775,11 +787,17 @@
       if(rec && typeof rec.stopPlayback==='function') rec.stopPlayback();
     }catch(e){}
   }
+  function unlockLinkInputs(doc){
+    if(!doc) return;
+    const input=doc.querySelector('#linkSearchInput');
+    if(input) input.readOnly=false;
+    const url=doc.querySelector('#linkModeUrl');
+    if(url){ url.disabled=false; url.style.opacity=''; }
+  }
   function unlockInputs(doc){
     if(!doc) return;
     lockMenuItems(doc,false);
-    const input=doc.querySelector('#linkSearchInput');
-    if(input) input.readOnly=false;
+    unlockLinkInputs(doc);
   }
   /* 목록과 재생기는 앞 단계에서 열리지만, 건너뛴 사람에게도 보여 줘야 한다. */
   function openList(doc){
@@ -1001,6 +1019,7 @@
       goScreen(doc,step.screen);
       if(!step.recording) stopRecordingIn(doc);
       if(!step.lockMenu) lockMenuItems(doc,false);
+      if(!step.lockLink) unlockLinkInputs(doc);
       if(step.before){ try{ step.before(doc); }catch(e){} }
       return waitFor(()=>resolveTarget(frameDoc(),step.target)).then(el=>{
       if(!running || mine!==token) return;

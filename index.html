@@ -1394,7 +1394,8 @@
   /* 피아노 건반 */
   .piano{
     position:relative; display:flex; gap:0;
-    height:104px; margin-top:12px; touch-action:manipulation;
+    /* 가로로 쓸면 글리산도, 세로로 쓸면 화면 넘기기. pan-y라야 가로 움직임이 우리에게 온다. */
+    height:104px; margin-top:12px; touch-action:pan-y;
     border-radius:6px; overflow:visible;
   }
   .pkey{
@@ -2753,22 +2754,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=221"></script>
+<script src="app-version.js?v=222"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=221"></script>
-<script src="js/audio-runtime.js?v=221"></script>
-<script src="js/core.js?v=221"></script>
-<script src="js/metronome.js?v=221"></script>
-<script src="js/tuner-engine.js?v=221"></script>
-<script src="js/tuner.js?v=221"></script>
-<script src="js/scales.js?v=221"></script>
-<script src="js/ear-trainer.js?v=221"></script>
-<script src="js/rhythm-trainer.js?v=221"></script>
-<script src="js/recording-cache.js?v=221"></script>
-<script src="js/recorder.js?v=221"></script>
-<script src="js/practice-links.js?v=221"></script>
-<script src="js/jam-session.js?v=221"></script>
-<script src="js/app-shell.js?v=221"></script>
+<script src="cloud-sync.js?v=222"></script>
+<script src="js/audio-runtime.js?v=222"></script>
+<script src="js/core.js?v=222"></script>
+<script src="js/metronome.js?v=222"></script>
+<script src="js/tuner-engine.js?v=222"></script>
+<script src="js/tuner.js?v=222"></script>
+<script src="js/scales.js?v=222"></script>
+<script src="js/ear-trainer.js?v=222"></script>
+<script src="js/rhythm-trainer.js?v=222"></script>
+<script src="js/recording-cache.js?v=222"></script>
+<script src="js/recorder.js?v=222"></script>
+<script src="js/practice-links.js?v=222"></script>
+<script src="js/jam-session.js?v=222"></script>
+<script src="js/app-shell.js?v=222"></script>
 </body>
 </html>

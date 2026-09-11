@@ -111,7 +111,10 @@
       el.innerHTML = `<span>${label}</span>`;
       el.setAttribute('aria-label', pcName(pc)+(inScale?' '+DEGREE[scaleSet.get(pc)]+'도':''));
       if(inScale){
-        el.addEventListener('click', ()=> guitarPluck(60+pc, 1.8, 0.55));
+        el.dataset.pc=String(pc);
+        /* 손가락과 마우스는 아래 쓸기 처리가 맡는다. 여기서는 키보드로 누른 것만 받는다 —
+           키보드가 만든 click은 detail이 0이다. 둘 다 받으면 한 번 눌러 두 번 울린다. */
+        el.addEventListener('click', event=>{ if(!event.detail) guitarPluck(60+pc, 1.8, 0.55); });
       }else{
         el.classList.add('mute');       // 스케일 밖은 눌러도 소리 안 남
         el.setAttribute('aria-disabled','true');
@@ -126,6 +129,39 @@
       scaleNotesList.appendChild(el);
     });
   }
+
+  /* 건반은 눌러서도, 쓸어서도 듣는다. 손가락이 스치고 지나간 건반마다 한 번씩 울려
+     글리산도가 된다. 건반은 스케일이 바뀔 때마다 다시 그려지지만 담는 칸은 그대로라
+     여기 한 번만 걸어 둔다. */
+  let glidePointer=-1, glideLast=null;
+  function keyUnder(x, y){
+    const el=document.elementFromPoint(x, y);
+    return el && el.closest ? el.closest('.pkey.in') : null;
+  }
+  function soundKey(el){
+    if(!el || el===glideLast) return;      // 같은 건반 위에서 떠는 손가락은 한 번만
+    const pc=Number(el.dataset.pc);
+    if(!Number.isFinite(pc)) return;
+    glideLast=el;
+    guitarPluck(60+pc, 1.8, 0.55);
+  }
+  function endGlide(event){
+    if(event.pointerId!==glidePointer) return;
+    glidePointer=-1; glideLast=null;
+  }
+  scaleNotesList.addEventListener('pointerdown', event=>{
+    if(event.pointerType==='mouse' && event.button!==0) return;
+    glidePointer=event.pointerId; glideLast=null;
+    soundKey(keyUnder(event.clientX, event.clientY));
+    /* 붙잡아 두어야 건반 사이를 지나도, 칸 밖으로 나가도 움직임이 계속 들어온다. */
+    try{ scaleNotesList.setPointerCapture(event.pointerId); }catch(e){}
+  });
+  scaleNotesList.addEventListener('pointermove', event=>{
+    if(event.pointerId!==glidePointer) return;
+    soundKey(keyUnder(event.clientX, event.clientY));
+  });
+  scaleNotesList.addEventListener('pointerup', endGlide);
+  scaleNotesList.addEventListener('pointercancel', endGlide);
 
   function render(){
     const rootPc = scaleRoot;
