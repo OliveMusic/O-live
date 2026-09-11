@@ -406,17 +406,22 @@
       clearTimeout(playFlash);               // 연타하면 앞 타이머가 먼저 꺼버렸다
       playFlash=setTimeout(()=>earPlayBtn.classList.remove('playing'), 900);
     }
-    if(mode==='interval'){
-      playTone(midiToFreq(root), 0.5, 0, 'triangle', 0.98, ctx);
-      playTone(midiToFreq(root+answer.semis), 0.5, 0.6, 'triangle', 0.98, ctx);
-    } else if(mode==='chord'){
-      // 아르페지오 후 동시 울림 — 구성음이 잘 들리도록
-      answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.36, i*0.17, 'triangle', 0.64, ctx));
-      const after = answer.iv.length*0.17 + 0.12;
-      answer.iv.forEach(iv=> playTone(midiToFreq(root+iv), 1.1, after, 'sine', 0.44, ctx));
-    } else {
-      answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.3, i*0.23, 'triangle', 0.84, ctx));
-    }
+    /* 갓 깨어난 컨텍스트는 state가 'running'이 된 뒤에도 시계가 0에 멈춰 있다. playTone은
+       currentTime에 바로 얹으므로 그 사이에 잡으면 오디오 유닛이 열리는 순간 이미 지나간
+       시각이 되어 통째로 사라진다. 튜너 현음·잼 코드를 고친 것과 같은 자리다. */
+    whenClockAwake(ctx,()=>{
+      if(mode==='interval'){
+        playTone(midiToFreq(root), 0.5, 0, 'triangle', 0.98, ctx);
+        playTone(midiToFreq(root+answer.semis), 0.5, 0.6, 'triangle', 0.98, ctx);
+      } else if(mode==='chord'){
+        // 아르페지오 후 동시 울림 — 구성음이 잘 들리도록
+        answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.36, i*0.17, 'triangle', 0.64, ctx));
+        const after = answer.iv.length*0.17 + 0.12;
+        answer.iv.forEach(iv=> playTone(midiToFreq(root+iv), 1.1, after, 'sine', 0.44, ctx));
+      } else {
+        answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.3, i*0.23, 'triangle', 0.84, ctx));
+      }
+    });
   }
   function playCurrent(){
     if(!current) return;

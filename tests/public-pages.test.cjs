@@ -308,7 +308,9 @@ assert.match(index,/linearRampToValueAtTime\(Math\.max\(\.0001,target\),now\+spa
 assert.match(guide,/view\.OliveAudioFade\.out\(span\/1000\)/);
 assert.match(guide,/view\.OliveAudioFade\.restore\(\)/);
 assert.match(guide,/linger:4000/);
-assert.match(guide,/leaveTour\(\(\)=>show\('done'\),sounding\(\)\?4000:160\)/);
+/* 소리가 남아 있으면 4초에 걸쳐 줄이고, 설명으로 끝나는 챕터도 뚝 꺼지지 않는다.
+   마지막 글을 읽을 틈은 있어야 한다. */
+assert.match(guide,/leaveTour\(\(\)=>show\('done'\),sounding\(\)\?4000:2200\)/);
 /* 화면은 그대로 두고 소리만 줄인다. 화면까지 어두워지는 연출은 걷어냈다. */
 assert.doesNotMatch(guide,/#tour\.leaving/);
 /* 잠금화면은 휴대폰 기능이라는 것을 밝히고 직접 해 보게 한다. */
@@ -450,7 +452,7 @@ assert.match(guide,/coachHint\.classList\.remove\('done'\)/,'다음 단계에서
 assert.match(guide,/\.coach-hint\.done::before\{ content:'✓ '; \}/);
 /* 현 음은 소리를 들을 틈을 준다. 다만 여기서는 잠그지 않는다 — 현을 몇 개 돌아가며
    눌러 봐야 하고, 누를 때마다 시한이 밀린다. */
-assert.match(guide,/hint:'현 하나를 눌러 보세요', linger:3500, keepOpen:true/);
+assert.match(guide,/hint:'현 하나를 눌러 보세요', linger:3500/);
 /* 마이크가 꺼져 있으면 뒤따르는 감도 단계에서 파형이 죽은 선으로만 보인다.
    여기서 실제로 켜게 하고, 도움말을 나갈 때는 반드시 끈다. */
 assert.match(guide,/hint:'눌러서 마이크를 켜 보세요', linger:2500, done:'마이크가 켜졌습니다'/);
@@ -459,7 +461,9 @@ assert.match(tuner,/tunerStart\.classList\.add\('on'\)/);
 assert.match(guide,/if\(mic && mic\.classList\.contains\('on'\)\) mic\.click\(\)/);
 assert.match(guide,/function deferAdvance\(ms,keepOpen\)/);
 assert.match(guide,/if\(span>=SEAL_AFTER && !keepOpen\) sealFrame\(true\)/);
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\)/);
+/* 구멍을 눌러 넘어가는 길은 pointerdown에서 불린다. 거기서 봉하면 방금 그 탭의
+   click까지 삼켜 버튼이 아무 일도 하지 않는다 — 청음의 올리브가 그래서 먹통이었다. */
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,true\)/);
 for(const said of ['즐겨찾기가 해제되었습니다','즐겨찾기가 다시 설정되었습니다','목록에서 삭제되었습니다']){
   assert.ok(guide.includes(`done:'${said}'`),`알림이 없다: ${said}`);
 }
@@ -614,8 +618,14 @@ assert.equal((guide.match(/also:'#rhySyncoRow, #rhyDiffRow, #rhyDiff'/g)||[]).le
 assert.match(indexHtml,/<div class="row" id="rhySyncoRow">/);
 assert.match(indexHtml,/<div class="row" id="rhyDiffRow">/);
 assert.match(guide,/function rhyOffDefault\(doc\)/);
-assert.match(guide,/check:\(doc,memo\)=>rhyOffDefault\(doc\)>memo/);
-assert.match(guide,/check:\(doc,memo\)=>rhyOffDefault\(doc\)<memo/);
+assert.match(guide,/check:doc=>rhyOffDefault\(doc\)>0/);
+/* 되돌리는 것을 가르치는 단계는 '몇 개가 벗어났나'를 들어설 때와 견주면 안 된다.
+   단계 중에 슬라이더를 더 움직이면 그 기준이 낡아, 분명히 되돌렸는데도 넘어가지 못한다.
+   벗어나 있던 슬라이더가 기본값으로 돌아오는 순간을 직접 본다. */
+assert.match(guide,/function rhyReturned\(doc,memo\)/);
+assert.match(guide,/if\(home && memo\.away\[selector\]\) returned=true;/);
+assert.match(guide,/memo:\(\)=>\(\{away:\{\}\}\), check:rhyReturned/);
+assert.match(guide,/done:'기본값 5로 돌아왔습니다', linger:2000/);
 /* 되돌릴 것이 하나도 없을 때만 하나를 옮겨 둔다. 늘 옮기면 단계에 들어설 때마다
    슬라이더가 저 혼자 뛰는 것처럼 보인다. */
 assert.match(guide,/if\(rhyOffDefault\(doc\)===0\) setSlider\(doc,'#rhySynco','8'\)/);
@@ -669,7 +679,7 @@ assert.match(earTrainer,/classList\.toggle\('active', x\.dataset\.mode===mode\)/
 /* 소리가 끝나기도 전에 달력으로 넘어가면 뚝 끊긴 느낌이 든다. 가장 긴 음계가 2초 남짓이니
    다 들려주고 1초를 더 둔다. 구멍을 눌러 넘어가는 길도 그 여운을 따른다. */
 assert.match(guide,/hint:'눌러서 들어 보세요', linger:3200\}/);
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\)/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,true\)/);
 
 /* 만들어만 놓고 끝나면 무엇을 만든 건지 모른 채 끝난다. 몇 마디 들려주고 나간다. */
 assert.match(guide,/target:'#rhyPlay', title:'들어 보기'/);

@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=231">
+<link rel="stylesheet" href="info.css?v=232">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -507,7 +507,7 @@
          title:'튜너로 갑니다', body:'튜너에 들어오면 <b>다른 소리가 자동으로 멈춥니다.</b> 마이크를 방해하지 않기 위해서입니다.', hint:'여기를 누르세요'},
         {screen:'tuner', target:'#stringBtns',
          title:'현을 누르면 기준음', body:'귀로 먼저 맞춰 볼 수 있습니다. 기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다. 소리가 안 나면 <b>무음 모드</b>를 꺼 보세요.',
-         hint:'현 하나를 눌러 보세요', linger:3500, keepOpen:true},
+         hint:'현 하나를 눌러 보세요', linger:3500},
         {screen:'tuner', target:'#tunerStart', also:'.display',
          title:'마이크로 듣기',
          body:'누르면 마이크 권한을 물어봅니다. 소리는 <b>기기 안에서만</b> 분석하고 어디로도 보내지 않습니다. '+
@@ -583,16 +583,16 @@
          before:doc=>{ setSlider(doc,'#rhySynco','5'); setSlider(doc,'#rhyDiff','5'); },
          title:'당김음과 밀도',
          body:'당김음을 올리면 박 사이가 늘고, 밀도를 올리면 음이 촘촘해집니다.',
-         hint:'손잡이를 옮겨 보세요',
-         memo:doc=>rhyOffDefault(doc), check:(doc,memo)=>rhyOffDefault(doc)>memo},
+         /* 들어설 때 둘 다 5로 맞춰 두므로, 하나라도 벗어나면 만져 본 것이다. */
+         hint:'손잡이를 옮겨 보세요', check:doc=>rhyOffDefault(doc)>0},
         {screen:'trainer:rhythm', target:'#rhySynco',
          also:'#rhySyncoRow, #rhyDiffRow, #rhyDiff',
          /* 되돌릴 것이 하나도 없으면 배울 것도 없다. 둘 다 기본값일 때만 하나를 옮겨 둔다. */
          before:doc=>{ if(rhyOffDefault(doc)===0) setSlider(doc,'#rhySynco','8'); },
          title:'여기도 두 번 탭',
          body:'두 슬라이더 모두 <b>두 번 탭하면 기본값 5</b>로 돌아옵니다. 어느 쪽이든 해 보세요.',
-         hint:'손잡이를 두 번 탭하세요',
-         memo:doc=>rhyOffDefault(doc), check:(doc,memo)=>rhyOffDefault(doc)<memo},
+         hint:'손잡이를 두 번 탭하세요', done:'기본값 5로 돌아왔습니다', linger:2000,
+         memo:()=>({away:{}}), check:rhyReturned},
         {screen:'trainer:rhythm', target:'#rhyGen', title:'새 리듬',
          body:'두 슬라이더의 성향에 맞춰 패턴을 만들어 줍니다.', hint:'눌러 보세요'},
         /* 만들어만 놓고 끝나면 무엇을 만든 건지 모른 채 끝난다. 몇 마디 들려주고 나간다. */
@@ -799,6 +799,20 @@
       const el=doc.querySelector(selector);
       return el && el.value!=='5';
     }).length;
+  }
+  /* 되돌리는 것을 가르치는 단계는 '몇 개가 벗어났나'를 들어설 때와 견주면 안 된다.
+     단계 중에 슬라이더를 더 움직이면 그 기준이 낡아, 분명히 되돌렸는데도 넘어가지
+     못한다. 벗어나 있던 슬라이더가 기본값으로 돌아오는 순간을 직접 본다. */
+  function rhyReturned(doc,memo){
+    let returned=false;
+    ['#rhySynco','#rhyDiff'].forEach(selector=>{
+      const el=doc.querySelector(selector);
+      if(!el) return;
+      const home=el.value==='5';
+      if(home && memo.away[selector]) returned=true;
+      memo.away[selector]=!home;
+    });
+    return returned;
   }
   function setSlider(doc,selector,value){
     const el=doc.querySelector(selector);
@@ -1063,7 +1077,9 @@
     clearTimeout(deferTimer);
     const span=Math.max(0,ms||0);
     /* 여운이 길다는 것은 대개 들려주고 끝낸다는 뜻이라 그동안 만질 것이 없다. 다만
-       현처럼 몇 개를 돌아가며 눌러 보는 단계는 열어 둔다 — 누를 때마다 시한이 밀린다. */
+       구멍을 눌러 넘어가는 길은 pointerdown에서 불린다 — 그 자리에서 봉하면 방금 그 탭의
+       click까지 함께 삼켜 버튼이 아무 일도 하지 않는다. 청음의 올리브가 그래서 먹통이었다.
+       그 길은 열어 두고, 앱 상태가 실제로 바뀐 뒤에 부르는 쪽만 봉한다. */
     if(span>=SEAL_AFTER && !keepOpen) sealFrame(true);
     deferTimer=setTimeout(()=>{ deferTimer=0; if(mine===token) advance(); },span);
   }
@@ -1215,7 +1231,7 @@
         const extra=step.also&&now?[...now.querySelectorAll(step.also)]:[];
         const hit=(current && (current===event.target||current.contains(event.target)))
           || extra.some(node=>node===event.target||node.contains(event.target));
-        if(hit) deferAdvance(step.linger||420,step.keepOpen);
+        if(hit) deferAdvance(step.linger||420,true);
       };
       doc.addEventListener('pointerdown',onDown,true);
     }
@@ -1325,8 +1341,9 @@
     /* 다음 책이 없으면 그 밖에 알아둘 것이 그 자리를 대신한다. */
     document.getElementById('doneMore').hidden=Boolean(next);
     document.getElementById('doneMoreGhost').hidden=!next;
-    /* 소리가 나는 채로 끝나면 그 소리를 4초에 걸쳐 함께 줄인다. */
-    leaveTour(()=>show('done'),sounding()?4000:160);
+    /* 소리가 나는 채로 끝나면 그 소리를 4초에 걸쳐 함께 줄인다. 소리 없이 설명으로
+       끝나는 챕터도 뚝 꺼지면 마지막 글을 읽을 수 없다. 두어 초는 머문다. */
+    leaveTour(()=>show('done'),sounding()?4000:2200);
   }
 
   /* ── 첫 화면 ── */
