@@ -69,6 +69,17 @@
     font-family:inherit; font-size:.8125rem; font-weight:500;
   }
   .ghost:active{ background:var(--key-press); }
+  /* 앱으로 돌아가는 길이 맨 아래 작은 글씨뿐이면 찾기 어렵다. 제목 줄에도 하나 둔다. */
+  .sheet-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .sheet-top .eyebrow{ margin-bottom:0; }
+  .open-app{
+    flex:0 0 auto; display:inline-flex; align-items:center; min-height:36px;
+    margin-top:-9px; padding:0 15px;
+    border:1px solid var(--line-soft); border-radius:999px;
+    background:transparent; color:var(--ink-2); text-decoration:none;
+    font-size:.75rem; font-weight:500; white-space:nowrap;
+  }
+  .open-app:active{ background:var(--key-press); }
   .sheet-foot{
     display:flex; flex-wrap:wrap; justify-content:center; gap:4px 12px;
     margin:26px 0 0; color:var(--ink-3); font-size:.6875rem;
@@ -256,8 +267,11 @@
   <!-- ── 무엇을 배울지 고른다 ── -->
   <section class="screen" id="home">
     <div class="sheet">
-      <p class="eyebrow">Help</p>
-      <h1>도움말</h1>
+      <div class="sheet-top">
+        <p class="eyebrow">Help</p>
+        <a class="open-app" href="index.html#splash">앱 열기</a>
+      </div>
+      <h1 style="margin-top:12px">도움말</h1>
       <p class="lead">
         읽는 대신 눌러 봅니다. 진짜 앱 위에 <b>눌러야 할 곳만 밝혀</b> 하나씩 안내합니다.
         배우고 싶은 것을 고르세요.
@@ -330,8 +344,11 @@
   <!-- ── 눌러서 배울 수 없는 것들 ── -->
   <section class="screen" id="more" hidden>
     <div class="sheet">
-      <p class="eyebrow">Help</p>
-      <h1 style="font-size:1.75rem">그 밖에 알아둘 것</h1>
+      <div class="sheet-top">
+        <p class="eyebrow">Help</p>
+        <a class="open-app" href="index.html#splash">앱 열기</a>
+      </div>
+      <h1 style="font-size:1.75rem; margin-top:12px">그 밖에 알아둘 것</h1>
 
       <div class="note warn" style="margin-top:22px">
         <h3>소리가 안 들릴 때</h3>
@@ -447,7 +464,7 @@
          hint:'눌러서 시작해 보세요', check:doc=>doc.querySelector('#metroStart').classList.contains('running')},
         {screen:'metronome', target:'#tapTempoBtn',
          title:'TAP으로 박자 잡기', body:'원하는 박자에 맞춰 <b>여러 번</b> 누르면 그 속도로 맞춰집니다. 누른 간격의 평균을 씁니다.',
-         hint:'네 번쯤 눌러 보세요', memo:doc=>bpm(doc), check:(doc,memo)=>bpm(doc)!==memo},
+         hint:'네 번쯤 눌러 보세요', presses:4},
         {screen:'metronome', target:'#bpmPlus',
          title:'−와 +는 두 가지', body:'짧게 누르면 1씩, <b>꾹 누르고 있으면 10씩</b> 계속 움직입니다.',
          hint:'꾹 눌러 보세요', check:(doc,memo)=>Math.abs(bpm(doc)-memo)>=10, memo:doc=>bpm(doc)},
@@ -1019,8 +1036,23 @@
     const doc=frameDoc();
     if(!doc) return;
     const memo=step.memo?step.memo(doc):null;
-    let timer=0, onDown=null;
-    if(step.check){
+    let timer=0, onDown=null, unpress=null;
+    /* '여러 번 누르기'를 가르치는 단계는 결과로 판정하면 안 된다. TAP은 두 번째 탭에서
+       이미 간격 하나를 얻어 템포를 바꾸므로, BPM이 변했는지 보면 네 번 누르라고 해 놓고
+       두 번에 넘어간다. 이럴 때는 앱 상태가 아니라 누른 횟수를 센다. */
+    if(step.presses){
+      const target=resolveTarget(doc,step.target);
+      if(target){
+        let hits=0;
+        const onHit=()=>{
+          hits+=1;
+          /* 더 눌러도 좋다. 손을 뗀 뒤에 넘어가도록 셀 때마다 미룬다. */
+          if(hits>=step.presses) deferAdvance(step.linger||420);
+        };
+        target.addEventListener('click',onHit);
+        unpress=()=>{ try{ target.removeEventListener('click',onHit); }catch(e){} };
+      }
+    }else if(step.check){
       timer=setInterval(()=>{
         const now=frameDoc();
         if(!now) return;
@@ -1047,6 +1079,7 @@
     pass=()=>{
       if(timer){ clearInterval(timer); timer=0; }
       if(onDown){ try{ doc.removeEventListener('pointerdown',onDown,true); }catch(e){} }
+      if(unpress){ unpress(); unpress=null; }
       pass=null;
     };
   }

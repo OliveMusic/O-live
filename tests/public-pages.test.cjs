@@ -220,7 +220,7 @@ console.log('public pages tests passed');
 
 /* 도움말은 문서가 아니라 앱이다. 진짜 앱을 띄우고 그 위에 눌러야 할 곳만 밝힌다. */
 assert.match(guide,/<title>도움말<\/title>/);
-assert.match(guide,/<h1>도움말<\/h1>/);
+assert.match(guide,/<h1[^>]*>도움말<\/h1>/);
 assert.doesNotMatch(guide,/사용법/);
 assert.match(guide,/const src='index\.html\?guide=1';/,'투어는 진짜 앱을 띄운다');
 /* 앱이 iframe 안에서 열려야 하므로 frame-ancestors로 막으면 안 된다. */
@@ -456,5 +456,22 @@ assert.match(worker,/'\.\/guide\.html'/,'오프라인에서도 열린다');
 assert.match(sitemap,/guide\.html/);
 /* 앱에서는 도움말이 나머지 링크 위 줄에 홀로 가운데 온다. */
 assert.match(indexHtml,/<a class="app-help" href="guide\.html">도움말<\/a>/);
-assert.match(indexHtml,/\.app-footer \.app-help\{ flex:0 0 100%; justify-content:center; \}/);
+/* 줄을 차지하는 것은 감싼 칸이고, 누르는 자리는 글자만큼만이다. 링크에 직접
+   flex:0 0 100%를 주면 글자 25px에 누르는 자리가 339px이 되어 줄 어디를 스쳐도 열린다. */
+assert.match(indexHtml,/\.app-footer \.app-help-row\{ flex:0 0 100%; display:flex; justify-content:center; \}/);
+assert.doesNotMatch(indexHtml,/\.app-footer \.app-help\{ flex:0 0 100%/);
+assert.match(indexHtml,/<div class="app-help-row">/);
+
+/* 앱으로 돌아가는 길이 맨 아래 작은 글씨뿐이면 찾기 어렵다. 머리에도 하나 둔다. */
+assert.equal((guide.match(/class="open-app" href="index\.html#splash"/g)||[]).length,2,'고르는 화면과 그 밖에 알아둘 것');
+assert.match(guide,/\.sheet-top\{ display:flex;/);
+
+/* TAP은 두 번째 탭에서 이미 간격 하나를 얻어 템포를 바꾼다. 결과로 판정하면
+   네 번 누르라고 해 놓고 두 번에 넘어간다. 누른 횟수를 센다. */
+assert.match(guide,/hint:'네 번쯤 눌러 보세요', presses:4\}/);
+assert.doesNotMatch(guide,/네 번쯤 눌러 보세요', memo:doc=>bpm\(doc\)/);
+assert.match(guide,/if\(step\.presses\)\{/);
+assert.match(guide,/if\(hits>=step\.presses\) deferAdvance/);
+assert.match(guide,/if\(unpress\)\{ unpress\(\); unpress=null; \}/,'단계를 떠나면 세던 것도 거둔다');
+assert.match(core,/if\(taps\.length>1\)\{/,'앱은 두 번째 탭부터 템포를 바꾼다');
 console.log('guide page checks passed');
