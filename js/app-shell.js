@@ -106,7 +106,22 @@ if(!oliveIsPreview && 'serviceWorker' in navigator){
     navigator.serviceWorker.addEventListener('controllerchange', ()=>{
       if(!hadController || reloaded) return;   // 첫 설치 / 무한 새로고침 방지
       reloaded=true;
-      location.reload();
+      /* 새 버전이 올라왔다고 그 자리에서 새로고침하면 연습 중이던 소리가 뚝 끊긴다.
+         YouTube를 틀어 놓고 있으면 재생이 통째로 사라진다. 울리는 것도 녹음도 없을
+         때까지 기다렸다 바꾼다. 끝내 조용해지지 않으면 다음에 열 때 바뀐다. */
+      const quiet=()=>{
+        try{
+          if(typeof anySounding==='function' && anySounding()) return false;
+          if(window.OliveRecorder && window.OliveRecorder.isRecording()) return false;
+        }catch(e){}
+        return true;
+      };
+      if(quiet()){ location.reload(); return; }
+      const waiting=setInterval(()=>{
+        if(!quiet()) return;
+        clearInterval(waiting);
+        location.reload();
+      },1000);
     });
   });
 }

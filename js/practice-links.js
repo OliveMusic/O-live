@@ -426,7 +426,9 @@
   }
   function loopBReady(row,position){
     const loop=loopFor(row);
-    if(loop.a===null) return true;
+    /* B가 이미 있으면 막을 까닭이 없다. 반복이 도는 동안 재생 머리가 자꾸 A로 돌아오는데
+       그때마다 버튼을 끄면 켜졌다 꺼졌다 깜빡이는 것으로만 보인다. */
+    if(loop.a===null || loop.b!==null) return true;
     const at=Number.isFinite(position)?position:playerPositionMs();
     return at===null ? true : at-loop.a>=MIN_LOOP_MS;
   }

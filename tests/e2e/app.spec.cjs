@@ -1091,6 +1091,14 @@ test('A 직후에는 B가 눌리지 않고, 충분히 지나야 구간이 잡힌
   /* 되돌아오는 것까지 실제로 걸린다. */
   await page.evaluate(()=>{ window.__testYouTube.players[0].time=9.5; });
   await expect.poll(()=>page.evaluate(()=>window.__testYouTube.players[0].time),{timeout:4000}).toBe(5);
+
+  /* 되돌아온 자리는 A와 같으니 '너무 가깝다'는 조건에 다시 걸린다. 그때마다 B를 끄면
+     반복이 도는 내내 켜졌다 꺼졌다 깜빡인다. 이미 찍힌 B는 건드리지 않아야 한다. */
+  for(let i=0;i<4;i++){
+    await page.waitForTimeout(300);
+    await expect(pointB).toBeEnabled();
+  }
+  await expect(times).toHaveText('A 0:05 · B 0:09 · 구간 0:04');
 });
 
 /* 정보 페이지에서 '앱 열기'로 돌아오는 것은 앱을 다시 여는 것에 가깝다.

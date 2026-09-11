@@ -377,8 +377,7 @@
 
       <div class="note">
         <h3>계정과 개인정보</h3>
-        <p>계정 없이 바로 씁니다. Google 계정을 연결하면 녹음·연습 링크·청음 기록이 기기 사이에서 이어집니다.</p>
-        <p>마이크 소리는 <b>저장하기 전에는 서버로 나가지 않습니다.</b></p>
+        <p>계정 없이 이용할 수 있습니다. Google 계정을 연결하면 녹음·연습 링크·청음 기록이 기기 사이에서 이어집니다.</p>
       </div>
 
       <div class="note">
@@ -502,7 +501,7 @@
         {screen:'tuner', target:'#stringBtns',
          title:'현을 누르면 기준음', body:'귀로 먼저 맞춰 볼 수 있습니다. 기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다. 소리가 안 나면 <b>무음 모드</b>를 꺼 보세요.',
          hint:'현 하나를 눌러 보세요'},
-        {screen:'tuner', target:'#tunerStart', also:'.strobe',
+        {screen:'tuner', target:'#tunerStart', also:'.display',
          title:'마이크로 듣기',
          body:'누르면 마이크 권한을 물어봅니다. 소리는 <b>기기 안에서만</b> 분석하고 어디로도 보내지 않습니다. '+
               '위의 올리브는 <b>빠를수록 많이 어긋난 것</b>이고, 멎으면 맞은 것입니다. '+
@@ -575,7 +574,7 @@
          title:'당김음과 밀도',
          body:'당김음을 올리면 박 사이가 늘고, 밀도를 올리면 음이 촘촘해집니다.',
          hint:'손잡이를 옮겨 보세요', check:doc=>doc.querySelector('#rhySynco').value!=='5'},
-        {screen:'trainer:rhythm', target:'#rhySynco',
+        {screen:'trainer:rhythm', target:'#rhySynco', also:'#rhyDiff',
          before:doc=>{ if(doc.querySelector('#rhySynco').value==='5') setSlider(doc,'#rhySynco','8'); },
          title:'여기도 두 번 탭',
          body:'두 슬라이더 모두 <b>두 번 탭하면 기본값 5</b>로 돌아옵니다.',

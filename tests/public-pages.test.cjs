@@ -21,6 +21,7 @@ const earTrainer=read('js/ear-trainer.js');
 const recorder=read('js/recorder.js');
 const practiceLinks=read('js/practice-links.js');
 const jam=read('js/jam-session.js');
+const appShell=read('js/app-shell.js');
 const worklet=read('vendor/soundtouch/soundtouch-processor.js');
 const core=read('js/core.js');
 const audioRuntime=read('js/audio-runtime.js');
@@ -378,7 +379,13 @@ assert.doesNotMatch(jam,/previewChord[\s\S]{0,300}?setAudioSession/);
 assert.match(guide,/잼 반주·저장한 녹음은 잠금화면 재생용/);
 assert.match(guide,/직접 잠그면 끊길 수 있습니다/);
 assert.match(guide,/잠금화면에서 재생되지 않습니다/,'YouTube 잠금화면 제약');
-assert.match(guide,/저장하기 전에는 서버로 나가지 않습니다/);
+assert.match(guide,/계정 없이 이용할 수 있습니다/);
+/* 마이크가 언제 서버로 나가는지는 개인정보처리방침이 제대로 다룬다. 도움말에서 한 줄로
+   요약하면 어중간하다. 다만 그 문장은 방침에 반드시 남아 있어야 한다. */
+assert.match(privacy,/저장하기 전에 버린 녹음은 서버로 전송되지 않습니다/);
+/* 앱은 그 자리를 '트랙'이라 부른다. 문서만 '녹음'으로 남으면 화면과 어긋난다. */
+assert.match(indexHtml,/<button class="seg-btn" data-mode="record">트랙<\/button>/);
+for(const page of [about,privacy,terms]) assert.doesNotMatch(page,/녹음 탭|녹음 트레이너/);
 /* 잠금화면 10초 버튼은 iOS와 같은 모양이다. 원을 그리고 좌우로 뒤집어 쓴다. */
 assert.match(guide,/\.mock-skip\.fwd svg\{ transform:scaleX\(-1\); \}/);
 assert.equal((guide.match(/M13\.66 4\.17A8 8 0 1 1 8\.75 4\.69/g)||[]).length,4,
@@ -529,7 +536,9 @@ assert.match(guide,/document\.getElementById\('doneMore'\)\.hidden=Boolean\(next
 assert.match(guide,/document\.getElementById\('doneMoreGhost'\)\.hidden=!next;/);
 
 /* 마이크를 켠 뒤에는 스트로브가 무엇을 말하는지도 함께 봐야 한다. */
-assert.match(guide,/target:'#tunerStart', also:'\.strobe'/);
+/* 동그라미만이 아니라 애니메이션 칸 전체를 감싼다. */
+assert.match(guide,/target:'#tunerStart', also:'\.display'/);
+assert.match(indexHtml,/<div class="display">[\s\S]{0,80}?<div class="strobe" id="strobe">/);
 assert.match(guide,/오른쪽으로 돌면 음이 높으니 줄을 풀고/);
 assert.match(tuner,/const vel = listening \? strobeCents\*14 : 0;/,'빠르기가 어긋난 정도, 부호가 방향');
 /* 파형이 어떻게 달라지는지 보려면 되돌릴 때도 함께 보여야 한다. 마지막 단계는 뺐다. */
@@ -537,7 +546,8 @@ assert.equal((guide.match(/also:'\.tuner-monitor'/g)||[]).length,2);
 assert.doesNotMatch(guide,/무엇을 듣고 있는지/);
 
 /* 당김음과 밀도는 한 이야기다. 함께 비춘다. */
-assert.match(guide,/target:'#rhySynco', also:'#rhyDiff'/);
+/* 당김음과 밀도는 한 이야기다. 되돌리는 단계에서도 함께 보여야 한다. */
+assert.equal((guide.match(/target:'#rhySynco', also:'#rhyDiff'/g)||[]).length,2);
 
 /* 제 칸 안에서 좌우로 구르는 것까지 잠가야 코드 이름을 누르다 진행이 밀리지 않는다. */
 assert.match(guide,/let scrollLocks=\[\];/);
@@ -558,6 +568,13 @@ assert.match(practiceLinks,/if\(loop\.a!==null && position-loop\.a<MIN_LOOP_MS\)
 assert.match(practiceLinks,/loop\.enabled=loop\.a!==null && loop\.b!==null && loop\.b-loop\.a>=MIN_LOOP_MS;/);
 assert.doesNotMatch(practiceLinks,/loop\.enabled=loop\.a!==null && loop\.b!==null;/);
 assert.match(practiceLinks,/function loopBReady\(row,position\)/);
+/* B가 이미 있으면 막을 까닭이 없다. 반복이 도는 동안 재생 머리가 자꾸 A로 돌아오는데
+   그때마다 버튼을 끄면 켜졌다 꺼졌다 깜빡이는 것으로만 보인다. */
+assert.match(practiceLinks,/if\(loop\.a===null \|\| loop\.b!==null\) return true;/);
+/* 새 버전이 올라왔다고 그 자리에서 새로고침하면 연습 중이던 소리가 뚝 끊긴다. */
+assert.match(appShell,/const quiet=\(\)=>\{[\s\S]{0,220}?anySounding\(\)\) return false;/);
+assert.match(appShell,/if\(quiet\(\)\)\{ location\.reload\(\); return; \}/);
+assert.match(appShell,/const waiting=setInterval\(/,'조용해질 때까지 기다린다');
 assert.match(practiceLinks,/pointB\.disabled=!loopBReady\(row\)/,'다시 그릴 때');
 assert.match(practiceLinks,/if\(pointB\) pointB\.disabled=!loopBReady\(row,position\)/,'틱마다');
 assert.match(indexHtml,/\.record-player-tool:disabled\{ opacity:\.34/,'꺼진 모양이 앱에 있다');
