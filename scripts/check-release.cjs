@@ -33,4 +33,12 @@ for(const asset of versionedAssets){
   assert.match(worker,new RegExp(`'\\.\\/${escaped}\\?v=${release.build}'`),`${asset} cache version`);
 }
 
+/* 정보 문서의 스타일시트도 같은 규칙을 따른다. 버전이 없으면 브라우저 캐시에 묶여
+   글꼴이나 버튼 색을 고쳐도 한동안 예전 모습이 나온다. */
+for(const page of ['about.html','privacy.html','terms.html','guide.html']){
+  const html=fs.readFileSync(page,'utf8');
+  assert.match(html,new RegExp(`href="info\\.css\\?v=${release.build}"`),`${page} stylesheet version`);
+}
+assert.match(worker,new RegExp(`'\\.\\/info\\.css\\?v=${release.build}'`),'info.css cache version');
+
 console.log(`release checks passed: v${release.version} build ${release.build} schema ${release.schemaVersion}`);

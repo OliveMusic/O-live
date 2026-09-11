@@ -259,7 +259,7 @@ for(const fn of ['setLoopPoint','toggleLoop','clearLoop']){
 /* 녹음은 파일을 들고 있어 한 개마다 저장 공간을 쓰지만 링크는 영상 id와 제목뿐이다.
    같은 칸을 나눠 쓸 까닭이 없어 따로 센다 — 서버도 supabase/015부터 그렇게 센다. */
 assert.match(recorder,/const MAX_LINKS=200;/);
-assert.match(recorder,/녹음 \$\{rows\.length\}\/\$\{MAX_RECORDINGS\} · 링크 \$\{links\}\/\$\{MAX_LINKS\}/);
+assert.match(recorder,/녹음 \$\{rows\.length\}\/\$\{MAX_RECORDINGS\} · YouTube \$\{links\}\/\$\{MAX_LINKS\}/);
 assert.doesNotMatch(recorder,/rows\.length\+practiceLinkCount\(\)/);
 const linkLimits=fs.readFileSync('supabase/015_practice_link_limits.sql','utf8');
 assert.match(linkLimits,/v_limit constant integer := 200;/);

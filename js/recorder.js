@@ -2320,7 +2320,7 @@
   }
   function renderUsage(){
     const links=practiceLinkCount();
-    recordUsage.textContent=`녹음 ${rows.length}/${MAX_RECORDINGS} · 링크 ${links}/${MAX_LINKS}`;
+    recordUsage.textContent=`녹음 ${rows.length}/${MAX_RECORDINGS} · YouTube ${links}/${MAX_LINKS}`;
     /* 가득 차고 나서야 알게 되면 늦다. 다섯 자리 남았을 때부터 색으로 알린다. */
     /* 링크는 꽉 차면 즐겨찾기가 아닌 오래된 것부터 비워 자리를 만든다. 사용자가 직접
        치워야 하는 것은 녹음뿐이라 눈에 띄게 하는 것도 녹음 쪽이다. */

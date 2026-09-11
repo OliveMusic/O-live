@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css">
+<link rel="stylesheet" href="info.css?v=229">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -77,11 +77,11 @@
   .open-app{
     flex:0 0 auto; display:inline-flex; align-items:center; min-height:36px;
     margin-top:-9px; padding:0 15px;
-    border:1px solid var(--line-soft); border-radius:999px;
-    background:transparent; color:var(--ink-2); text-decoration:none;
-    font-size:.75rem; font-weight:500; white-space:nowrap;
+    border:1px solid var(--display); border-radius:999px;
+    background:var(--display); color:var(--display-ink); text-decoration:none;
+    font-size:.75rem; font-weight:600; white-space:nowrap;
   }
-  .open-app:active{ background:var(--key-press); }
+  .open-app:active{ transform:translateY(1px); }
   .sheet-foot{
     display:flex; flex-wrap:wrap; justify-content:center; gap:4px 12px;
     margin:26px 0 0; color:var(--ink-3); font-size:.6875rem;
@@ -730,7 +730,8 @@
         {screen:'jam', target:doc=>doc.querySelector('#progTimeline .prog-bar .beats')||doc.querySelector('#progTimeline'),
          title:'−와 +로 마디 길이', body:'한 코드가 몇 박 갈지 정합니다.', advance:'next'},
         {screen:'jam', target:'#stylePresets', title:'반주 스타일',
-         body:'8비트, 기본 락, 포크 스트럼, 셔플, 보사노바, 레게, 왈츠가 있습니다.', hint:'하나 골라 보세요'},
+         body:'<b>Rock·Pop·Ballad·Funk·Shuffle</b> 다섯 가지가 있습니다. 고르면 드럼과 베이스, 코드 리듬이 함께 바뀝니다.',
+         hint:'하나 골라 보세요'},
         {screen:'jam', target:'#jamStart', title:'시작',
          body:'잼도 화면을 잠가도 계속 울리고, 잠금화면에서 BPM을 ±10 바꿉니다. 다시 누르면 멈춥니다.',
          hint:'눌러서 들어 보세요', linger:4000,

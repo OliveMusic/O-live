@@ -26,7 +26,7 @@ const edge=fs.readFileSync('supabase/functions/delete-account/index.ts','utf8');
 assert.match(index,/grid-template-columns:repeat\(3,1fr\)/);
 for(const label of ['청음','리듬','트랙']) assert.match(index,new RegExp(`data-mode="[^"]+">${label}<`));
 assert.match(index,/id="pane-record"/);
-assert.match(index,/id="recordUsage">녹음 0\/50 · 링크 0\/200</);
+assert.match(index,/id="recordUsage">녹음 0\/50 · YouTube 0\/200</);
 assert.match(index,/<details class="card record-history" id="recordListCard" hidden>/);
 assert.match(index,/<summary>\s*<span class="record-history-title">목록<\/span>/);
 assert.match(index,/id="recordCloudTitle">클라우드 연결 준비 중<\/strong>/);

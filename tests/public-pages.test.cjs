@@ -22,6 +22,7 @@ const recorder=read('js/recorder.js');
 const practiceLinks=read('js/practice-links.js');
 const jam=read('js/jam-session.js');
 const appShell=read('js/app-shell.js');
+const infoCss=read('info.css');
 const worklet=read('vendor/soundtouch/soundtouch-processor.js');
 const core=read('js/core.js');
 const audioRuntime=read('js/audio-runtime.js');
@@ -523,6 +524,36 @@ assert.match(worklet,/if \(available < frameCount\) this\._underrunCount\+\+;/,'
 
 /* 눌러서 들어 보는 단계에서는 무음 모드를 한 번씩 짚어 준다 — ambient라 스위치를 따른다. */
 assert.equal((guide.match(/소리가 안 나면 <b>무음 모드<\/b>를 꺼 보세요/g)||[]).length,2,'튜너 현음과 잼 코드');
+
+/* 도움말이 앱에 없는 것을 늘어놓으면 읽는 사람이 화면과 대조하다 길을 잃는다.
+   반주 스타일은 실제로 '8비트·포크 스트럼·보사노바·레게·왈츠'라고 적혀 있었는데
+   앱에는 그런 것이 없었다. 목록을 앱에서 뽑아 그대로 맞춘다. */
+const jamStyles=[...jam.matchAll(/^\s{6}label:'([^']+)'/gm)].map(m=>m[1]);
+assert.ok(jamStyles.length>=4,'반주 스타일을 읽어 왔다');
+const styleStep=guide.match(/target:'#stylePresets'[\s\S]{0,400}?hint:/)[0];
+for(const label of jamStyles) assert.ok(styleStep.includes(label),`도움말에 없는 스타일: ${label}`);
+assert.doesNotMatch(guide,/8비트|포크 스트럼|보사노바|레게|왈츠/,'앱에 없는 스타일');
+
+/* 도움말이 말하는 나머지 목록도 앱과 같아야 한다. */
+for(const label of ['초급','중급','고급']) assert.ok(earTrainer.includes(`label:'${label}'`));
+assert.match(guide,/초급부터 고급까지 있습니다/);
+assert.match(earTrainer,/newQuestion\(true\), 1500\)/,'맞히면 1.5초 뒤');
+assert.match(guide,/맞히면 1\.5초 뒤/);
+for(const label of ['기타 표준','기타 드롭 D','베이스 4현','우쿨렐레','만돌린']) assert.ok(tuner.includes(label));
+assert.match(guide,/기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다/);
+
+/* 목록 머리는 아래 행들이 'YouTube'라고 적는 것과 같은 말을 쓴다. */
+assert.match(recorder,/· YouTube \$\{links\}\/\$\{MAX_LINKS\}/);
+assert.doesNotMatch(indexHtml,/id="recordUsage">[^<]*링크/);
+
+/* 문서를 벗어나 앱으로 가는 버튼은 어디서나 같은 올리브색이다. */
+assert.match(infoCss,/\.back-link\{[\s\S]{0,220}?background:var\(--display\)/);
+assert.match(guide,/\.open-app\{[\s\S]{0,240}?background:var\(--display\)/);
+/* 소개 글의 두 버튼은 뺐다. 머리에 이미 앱으로 가는 길이 있고, 개인정보처리방침은
+   아래 링크로 닿는다. 쓰지 않는 규칙도 함께 걷어낸다. */
+assert.doesNotMatch(about,/hero-actions/);
+assert.doesNotMatch(infoCss,/hero-actions/);
+assert.doesNotMatch(about,/데이터 사용 확인/);
 
 /* display를 정해 둔 규칙은 UA의 [hidden]{display:none}을 이긴다. .chapter가 grid라
    '다음 기능 배우기'를 hidden으로 두어도 잼 세션 뒤에 그대로 남아 있었다. */

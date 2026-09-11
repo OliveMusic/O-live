@@ -563,7 +563,7 @@ test('트랙 탭이 기존 올리브 버튼 비율과 계정 연결 흐름을 �
   await expect(page.locator('#recordGuest')).toBeVisible();
   await expect(page.locator('#recordWorkspace')).toBeHidden();
   /* 녹음과 링크는 한도가 다르다 — 녹음은 파일을 들고 있고 링크는 주소뿐이다. */
-  await expect(page.locator('#recordUsage')).toHaveText('녹음 0/50 · 링크 0/200');
+  await expect(page.locator('#recordUsage')).toHaveText('녹음 0/50 · YouTube 0/200');
 
   const olive=await page.locator('.record-olive-static').evaluate(element=>{
     const style=getComputedStyle(element);
@@ -616,7 +616,7 @@ test('목록은 접고 펼칠 수 있고 계정 상태에서 같은 관리 화�
 
   const details=page.locator('#recordListCard');
   await expect(details).not.toHaveAttribute('open','');
-  await expect(page.locator('#recordUsage')).toHaveText('녹음 1/50 · 링크 0/200');
+  await expect(page.locator('#recordUsage')).toHaveText('녹음 1/50 · YouTube 0/200');
   await expect(page.locator('#recordList')).toBeHidden();
   await details.locator('summary').click();
   await expect(details).toHaveAttribute('open','');
