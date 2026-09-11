@@ -600,8 +600,10 @@
         {screen:'trainer:record', target:'.record-loop-tools', before:openPlayer,
          title:'A · B 구간 반복', body:'A와 B를 찍으면 <b>바로 그 구간을 반복</b>합니다. A·B 없이 순환 화살표만 켜면 처음부터 끝까지 돕니다. X는 A·B를 지웁니다.',
          advance:'next'},
-        {screen:'trainer:record', target:'.record-rate-control', before:openPlayer,
-         title:'속도와 조옮김', body:'속도는 0.5–1.5배, 조옮김은 왼쪽이 플랫 오른쪽이 샵입니다. <b>두 번 탭</b>하면 1배와 원래 키로 돌아옵니다.',
+        /* .record-rate-control은 조옮김과 속도가 함께 쓰는 클래스라 위의 조옮김만 집혔다. */
+        {screen:'trainer:record', target:'.record-transpose-control', also:'.record-speed-control',
+         before:openPlayer, title:'조옮김과 속도',
+         body:'위가 <b>조옮김</b>으로 왼쪽이 플랫 오른쪽이 샵, 아래가 <b>속도</b>로 0.5–1.5배입니다. 각각 <b>두 번 탭</b>하면 원래 키와 1배로 돌아옵니다.',
          advance:'next'},
         {screen:'trainer:record', target:doc=>part(doc,'link','.record-row-favorite'),
          before:doc=>{ stopRowPlayback(doc); openList(doc); }, title:'즐겨찾기 올리브',
@@ -786,6 +788,14 @@
       const rec=doc.defaultView && doc.defaultView.OliveRecorder;
       if(rec && typeof rec.stopPlayback==='function') rec.stopPlayback();
     }catch(e){}
+  }
+  /* 구멍 안에서 위아래로 끌면 앱이 스크롤돼 방금 비춘 곳이 달아난다. 단계가 사는 동안은
+     손가락으로 굴리지 못하게 잠근다. 이벤트가 아니라 스크롤 칸을 잠그는 것이라
+     슬라이더나 파형 끌기는 그대로고, 지판의 가로 스크롤도 제 칸이라 살아 있다.
+     프로그램으로 옮기는 scrollIntoView도 그대로 된다. */
+  function lockScroll(doc,on){
+    const page=doc && doc.querySelector('main');
+    if(page) page.style.overflowY=on?'hidden':'';
   }
   function unlockLinkInputs(doc){
     if(!doc) return;
@@ -1110,8 +1120,10 @@
     };
     const GATED=['pointerdown','pointerup','mousedown','mouseup','click','touchstart','touchend'];
     GATED.forEach(type=>doc.addEventListener(type,doorman,true));
+    lockScroll(doc,true);
     pass=()=>{
       GATED.forEach(type=>{ try{ doc.removeEventListener(type,doorman,true); }catch(e){} });
+      lockScroll(doc,false);
       if(timer){ clearInterval(timer); timer=0; }
       if(onDown){ try{ doc.removeEventListener('pointerdown',onDown,true); }catch(e){} }
       if(unpress){ unpress(); unpress=null; }
@@ -1139,6 +1151,7 @@
     if(jam && jam.classList.contains('on')) jam.click();
     stopRecordingIn(doc);
     stopRowPlayback(doc);
+    lockScroll(doc,false);
     unlockInputs(doc);
   }
   function exit(){

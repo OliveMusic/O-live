@@ -517,6 +517,21 @@ assert.match(worklet,/if \(available < frameCount\) this\._underrunCount\+\+;/,'
 /* 눌러서 들어 보는 단계에서는 무음 모드를 한 번씩 짚어 준다 — ambient라 스위치를 따른다. */
 assert.equal((guide.match(/소리가 안 나면 <b>무음 모드<\/b>를 꺼 보세요/g)||[]).length,2,'튜너 현음과 잼 코드');
 
+/* 구멍 안에서 위아래로 끌면 앱이 스크롤돼 방금 비춘 곳이 달아난다.
+   이벤트가 아니라 스크롤 칸을 잠그므로 슬라이더·파형 끌기도, 지판의 가로 스크롤도 살아 있다. */
+assert.match(guide,/function lockScroll\(doc,on\)\{[\s\S]{0,200}?page\.style\.overflowY=on\?'hidden':''/);
+assert.match(guide,/lockScroll\(doc,true\);\s*\n\s*pass=\(\)=>\{/,'단계가 살면 잠근다');
+assert.match(guide,/lockScroll\(doc,false\);\s*\n\s*if\(timer\)/,'단계를 떠나면 푸다');
+assert.match(guide,/stopRowPlayback\(doc\);\s*\n\s*lockScroll\(doc,false\);/,'투어를 나갈 때도 푸다');
+assert.match(indexHtml,/main\{flex:1; overflow-y:auto;/,'앱의 스크롤 칸은 main이다');
+
+/* .record-rate-control은 조옥김과 속도가 함께 쓰는 클래스라 querySelector가 위의 조옥김만
+   집었다 — 속도는 한 번도 비춘 적이 없었다. 둘을 명시해서 함께 비춘다. */
+assert.match(recorder,/rateLabel\.className='record-rate-control record-speed-control'/);
+assert.match(recorder,/transposeLabel\.className='record-rate-control record-transpose-control'/);
+assert.match(guide,/target:'\.record-transpose-control', also:'\.record-speed-control'/);
+assert.doesNotMatch(guide,/target:'\.record-rate-control'/);
+
 /* 구멍은 네모라 대상 옆 이웃이 그 안에 함께 들어온다. 대상 위가 아니면 막는다.
    같은 노드의 다른 청취자는 그대로 받아야 하므로 stopPropagation까지만 쓴다. */
 assert.match(guide,/const doorman=event=>\{/);
