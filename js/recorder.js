@@ -2118,41 +2118,6 @@
   }
   /* 손잡이를 두 번 누르면 기준값으로 돌아간다. 배속은 1배, 조옮김은 원래 조다.
      드래그 중에는 발동하지 않는다. */
-  function bindSliderReset(slider,resetValue,apply){
-    let pointerId=null;
-    let startX=0;
-    let moved=false;
-    let lastTapAt=0;
-    let lastTapX=0;
-    let lastResetAt=0;
-    const reset=event=>{
-      const now=performance.now();
-      if(now-lastResetAt<120) return;
-      lastResetAt=now;
-      if(event) event.preventDefault();
-      slider.value=String(resetValue);
-      apply(resetValue);
-    };
-    slider.addEventListener('pointerdown',event=>{
-      if(event.isPrimary===false) return;
-      pointerId=event.pointerId;
-      startX=event.clientX;
-      moved=false;
-    });
-    slider.addEventListener('pointermove',event=>{
-      if(event.pointerId===pointerId && Math.abs(event.clientX-startX)>5) moved=true;
-    });
-    slider.addEventListener('pointerup',event=>{
-      if(event.pointerId!==pointerId) return;
-      pointerId=null;
-      if(moved){ lastTapAt=0; return; }
-      const now=performance.now();
-      if(now-lastTapAt<340 && Math.abs(event.clientX-lastTapX)<28) reset(event);
-      else{ lastTapAt=now; lastTapX=event.clientX; }
-    });
-    slider.addEventListener('pointercancel',()=>{ pointerId=null; lastTapAt=0; });
-    slider.addEventListener('dblclick',reset);
-  }
   function bindPlaybackRateReset(slider,row){
     bindSliderReset(slider,1,value=>{
       slider.setAttribute('aria-valuetext',formatPlaybackRate(value));

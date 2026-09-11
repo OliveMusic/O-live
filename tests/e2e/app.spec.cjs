@@ -2226,14 +2226,44 @@ test('리듬 트레이너 슬라이더를 두 번 누르면 기본값으로 돌�
     const slider=page.locator('#'+sliderId);
     await slider.fill('8');
     await expect(page.locator('#'+valueId)).toHaveText('8');
+    /* 되돌리기는 손을 뗄 때 판정한다 — pointerdown에서 값을 바꾸면 브라우저가 그 뒤에
+       손가락 자리로 값을 다시 옮겨, 방금 되돌린 것을 덮어 버린다. */
     await slider.evaluate(element=>{
-      element.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
-      element.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+      const box=element.getBoundingClientRect();
+      const x=box.left+box.width/2, y=box.top+box.height/2;
+      const tap=()=>{
+        element.dispatchEvent(new PointerEvent('pointerdown',
+          {bubbles:true,isPrimary:true,pointerId:1,clientX:x,clientY:y}));
+        element.dispatchEvent(new PointerEvent('pointerup',
+          {bubbles:true,isPrimary:true,pointerId:1,clientX:x,clientY:y}));
+      };
+      tap(); tap();
     });
     await expect(slider).toHaveValue('5');
     await expect(slider).toHaveAttribute('aria-valuetext','5');
     await expect(page.locator('#'+valueId)).toHaveText('5');
   }
+});
+
+/* 감도 슬라이더도 같은 구현을 쓴다. 예전에는 여기만 pointerdown에서 되돌렸다. */
+test('튜너 감도 슬라이더를 두 번 누르면 기본값으로 돌아간다',async({page})=>{
+  await preparePage(page);
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  const slider=page.locator('#tunerSens');
+  await slider.fill('90');
+  await expect(slider).toHaveValue('90');
+  await slider.evaluate(element=>{
+    const box=element.getBoundingClientRect();
+    const x=box.left+box.width/2, y=box.top+box.height/2;
+    const tap=()=>{
+      element.dispatchEvent(new PointerEvent('pointerdown',
+        {bubbles:true,isPrimary:true,pointerId:1,clientX:x,clientY:y}));
+      element.dispatchEvent(new PointerEvent('pointerup',
+        {bubbles:true,isPrimary:true,pointerId:1,clientX:x,clientY:y}));
+    };
+    tap(); tap();
+  });
+  await expect(slider).not.toHaveValue('90');
 });
 
 test('튜너 연결 중 취소하면 늦게 열린 마이크도 즉시 닫는다',async({page})=>{

@@ -570,41 +570,12 @@
     }
   }
   /* 손잡이를 두 번 누르면 원곡 속도로 돌아간다. 녹음본 슬라이더와 같은 규칙이다. */
+  /* 두 번 탭해서 원곡 속도로. 앱의 모든 슬라이더와 같은 구현을 쓴다. */
   function bindPlaybackRateReset(slider,row){
-    let pointerId=null;
-    let startX=0;
-    let moved=false;
-    let lastTapAt=0;
-    let lastTapX=0;
-    let lastResetAt=0;
-    const reset=event=>{
-      const now=performance.now();
-      if(now-lastResetAt<120) return;
-      lastResetAt=now;
-      if(event) event.preventDefault();
-      slider.value='1';
-      slider.setAttribute('aria-valuetext',formatPlaybackRate(1));
-      setPlaybackRate(row,1,true);
-    };
-    slider.addEventListener('pointerdown',event=>{
-      if(event.isPrimary===false) return;
-      pointerId=event.pointerId;
-      startX=event.clientX;
-      moved=false;
+    bindSliderReset(slider,1,value=>{
+      slider.setAttribute('aria-valuetext',formatPlaybackRate(value));
+      setPlaybackRate(row,value,true);
     });
-    slider.addEventListener('pointermove',event=>{
-      if(event.pointerId===pointerId && Math.abs(event.clientX-startX)>5) moved=true;
-    });
-    slider.addEventListener('pointerup',event=>{
-      if(event.pointerId!==pointerId) return;
-      pointerId=null;
-      if(moved){ lastTapAt=0; return; }
-      const now=performance.now();
-      if(now-lastTapAt<340 && Math.abs(event.clientX-lastTapX)<28) reset(event);
-      else{ lastTapAt=now; lastTapX=event.clientX; }
-    });
-    slider.addEventListener('pointercancel',()=>{ pointerId=null; lastTapAt=0; });
-    slider.addEventListener('dblclick',reset);
   }
   /* 플레이어가 준비되면 저장해 둔 배속을 적용한다. */
   function syncRateControl(row){

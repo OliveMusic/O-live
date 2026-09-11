@@ -141,22 +141,12 @@
     output.textContent=next;
     window.OlivePreferences.changed();
   }
-  function bindRhySliderReset(input,output){
-    let lastTap=-1e9;
-    input.addEventListener('pointerdown',()=>{
-      const now=performance.now();
-      if(now-lastTap<400){
-        setRhySlider(input,output,RHY_SLIDER_DEFAULT);
-        lastTap=-1e9;
-      }else{
-        lastTap=now;
-      }
-    });
-  }
   rhySynco.addEventListener('input', ()=>setRhySlider(rhySynco,rhySyncoVal,rhySynco.value));
   rhyDiff.addEventListener('input', ()=>setRhySlider(rhyDiff,rhyDiffVal,rhyDiff.value));
-  bindRhySliderReset(rhySynco,rhySyncoVal);
-  bindRhySliderReset(rhyDiff,rhyDiffVal);
+  /* 두 번 탭해서 기본값으로. 앱의 모든 슬라이더와 같은 구현을 쓴다 — 예전에는 여기만
+     pointerdown에서 되돌려, 브라우저가 곧바로 손가락 자리로 값을 되돌려 놓았다. */
+  bindSliderReset(rhySynco,RHY_SLIDER_DEFAULT,value=>setRhySlider(rhySynco,rhySyncoVal,value));
+  bindSliderReset(rhyDiff,RHY_SLIDER_DEFAULT,value=>setRhySlider(rhyDiff,rhyDiffVal,value));
   rhyBpm.addEventListener('input', ()=>setRhyBpm(rhyBpm.value));
   rhyGen  .addEventListener('click', ()=>{ getCtx(); generate(); });
   rhyClear.addEventListener('click', ()=>{

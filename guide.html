@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=232">
+<link rel="stylesheet" href="info.css?v=234">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -1072,19 +1072,28 @@
   /* 미뤄 둔 진행은 반드시 취소할 수 있어야 한다. 통과 판정이 이미 잡아 둔 setTimeout이
      사용자가 건너뛴 뒤에 뒤늦게 터지면 한 단계를 통째로 삼킨다. 지금 단계에서만 유효하다. */
   const SEAL_AFTER=1000;
-  function deferAdvance(ms,keepOpen){
+  /* 손이 떨어질 틈. pointerdown에서 곧바로 봉하면 방금 그 탭의 click까지 삼켜
+     버튼이 아무 일도 하지 않는다 — 청음의 올리브가 그래서 먹통이었다. */
+  const SEAL_GRACE=260;
+  let sealTimer=0;
+  function deferAdvance(ms,graceMs){
     const mine=token;
     clearTimeout(deferTimer);
+    clearTimeout(sealTimer); sealTimer=0;
     const span=Math.max(0,ms||0);
-    /* 여운이 길다는 것은 대개 들려주고 끝낸다는 뜻이라 그동안 만질 것이 없다. 다만
-       구멍을 눌러 넘어가는 길은 pointerdown에서 불린다 — 그 자리에서 봉하면 방금 그 탭의
-       click까지 함께 삼켜 버튼이 아무 일도 하지 않는다. 청음의 올리브가 그래서 먹통이었다.
-       그 길은 열어 두고, 앱 상태가 실제로 바뀐 뒤에 부르는 쪽만 봉한다. */
-    if(span>=SEAL_AFTER && !keepOpen) sealFrame(true);
+    /* 여운 동안에는 아무것도 눌리지 않게 한다. 그 사이에 슬라이더나 버튼이 움직이면
+       방금 보여 준 결과와 화면이 어긋난다. 앱 상태가 이미 바뀐 뒤에 부르는 쪽은
+       곧바로 봉하고, 탭에서 불리는 쪽만 그 탭이 끝날 틈을 두고 봉한다. */
+    if(span>=SEAL_AFTER){
+      const grace=Math.max(0,graceMs||0);
+      if(grace) sealTimer=setTimeout(()=>{ sealTimer=0; if(mine===token) sealFrame(true); },grace);
+      else sealFrame(true);
+    }
     deferTimer=setTimeout(()=>{ deferTimer=0; if(mine===token) advance(); },span);
   }
   function cancelDefer(){
     if(deferTimer){ clearTimeout(deferTimer); deferTimer=0; }
+    if(sealTimer){ clearTimeout(sealTimer); sealTimer=0; }
     sealFrame(false);
   }
 
@@ -1205,7 +1214,7 @@
         const onHit=()=>{
           hits+=1;
           /* 더 눌러도 좋다. 손을 뗀 뒤에 넘어가도록 셀 때마다 미룬다. */
-          if(hits>=step.presses) deferAdvance(step.linger||420);
+          if(hits>=step.presses) deferAdvance(step.linger||420,SEAL_GRACE);
         };
         target.addEventListener('click',onHit);
         unpress=()=>{ try{ target.removeEventListener('click',onHit); }catch(e){} };
@@ -1221,7 +1230,7 @@
            linger가 있으면 그동안 들려주고 넘어간다. 그 사이 두 번 울리지 않게 세운다. */
         clearInterval(timer); timer=0;
         announce(step.done);
-        deferAdvance(step.linger||0,step.keepOpen);
+        deferAdvance(step.linger||0);
       },160);
     }else if(step.advance!=='next'){
       onDown=event=>{
@@ -1231,7 +1240,7 @@
         const extra=step.also&&now?[...now.querySelectorAll(step.also)]:[];
         const hit=(current && (current===event.target||current.contains(event.target)))
           || extra.some(node=>node===event.target||node.contains(event.target));
-        if(hit) deferAdvance(step.linger||420,true);
+        if(hit) deferAdvance(step.linger||420,SEAL_GRACE);
       };
       doc.addEventListener('pointerdown',onDown,true);
     }

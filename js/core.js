@@ -434,6 +434,46 @@ function bindTapTempo(el, set){
   });
 }
 
+/* 슬라이더를 두 번 탭하면 기본값으로 — 앱의 모든 슬라이더가 같아야 한다.
+   pointerdown에서 곧바로 되돌리면 브라우저가 그 뒤에 손가락 자리로 값을 다시 옮겨
+   방금 되돌린 것을 덮는다. 손을 뗄 때, 그 사이 움직이지 않았을 때만 되돌리고
+   기본 동작을 막는다. 손잡이 위에서는 click이 뜨지 않으므로 포인터로 센다. */
+function bindSliderReset(slider,resetValue,apply){
+  let pointerId=null;
+  let startX=0;
+  let moved=false;
+  let lastTapAt=0;
+  let lastTapX=0;
+  let lastResetAt=0;
+  const reset=event=>{
+    const now=performance.now();
+    if(now-lastResetAt<120) return;
+    lastResetAt=now;
+    if(event) event.preventDefault();
+    slider.value=String(resetValue);
+    apply(resetValue);
+  };
+  slider.addEventListener('pointerdown',event=>{
+    if(event.isPrimary===false) return;
+    pointerId=event.pointerId;
+    startX=event.clientX;
+    moved=false;
+  });
+  slider.addEventListener('pointermove',event=>{
+    if(event.pointerId===pointerId && Math.abs(event.clientX-startX)>5) moved=true;
+  });
+  slider.addEventListener('pointerup',event=>{
+    if(event.pointerId!==pointerId) return;
+    pointerId=null;
+    if(moved){ lastTapAt=0; return; }
+    const now=performance.now();
+    if(now-lastTapAt<340 && Math.abs(event.clientX-lastTapX)<28) reset(event);
+    else{ lastTapAt=now; lastTapX=event.clientX; }
+  });
+  slider.addEventListener('pointercancel',()=>{ pointerId=null; lastTapAt=0; });
+  slider.addEventListener('dblclick',reset);
+}
+
 // 숫자를 두 번 누르면 기본값으로
 function bindResetOnDouble(el, reset){
   if(!el) return;

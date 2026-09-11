@@ -241,8 +241,8 @@ assert.match(index,/\.record-player-tools \.record-loop-tools\{ grid-row:1 \/ sp
 assert.match(index,/\.record-rate-control\.record-transpose-control\{ grid-template-columns:28px minmax\(0,1fr\) 14px 30px; \}/);
 /* 손잡이를 두 번 누르면 원곡 속도로 돌아간다. */
 assert.match(links,/function bindPlaybackRateReset\(slider,row\)/);
-assert.match(links,/slider\.addEventListener\('dblclick',reset\)/);
-assert.match(links,/setPlaybackRate\(row,1,true\)/);
+assert.match(links,/bindSliderReset\(slider,1,value=>/,'공용 구현을 쓴다');
+assert.match(links,/setPlaybackRate\(row,value,true\)/,'공용 구현이 넘겨 준 값으로 되돌린다');
 
 /* 파형이 없으므로 시간 눈금과 숫자 표시로 위치 감각을 준다. */
 assert.match(links,/function tickIntervalMs\(duration\)/);

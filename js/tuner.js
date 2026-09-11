@@ -622,14 +622,9 @@
   const sensEl = document.getElementById('tunerSens');
   if(sensEl){
     sensEl.addEventListener('input', ()=> setSens(sensEl.value));
-    // 손잡이(thumb)를 정확히 누르면 range의 click은 드래그로 취급돼 안 뜬다.
-    // 손잡이 위에서도 잡히도록 pointerdown 두 번(400ms 이내)으로 더블탭을 감지한다.
-    let sensTapLast = -1e9;   // 첫 탭이 오검출되지 않도록 먼 과거로 초기화
-    sensEl.addEventListener('pointerdown', ()=>{
-      const now = performance.now();
-      if(now - sensTapLast < 400){ setSens(SENS_DEFAULT); sensTapLast = -1e9; }
-      else sensTapLast = now;
-    });
+    // 앱의 모든 슬라이더와 같은 구현을 쓴다. 손잡이 위에서는 click이 뜨지 않으므로
+    // 포인터로 세고, 되돌린 뒤 브라우저가 손가락 자리로 다시 옮기지 못하게 막는다.
+    bindSliderReset(sensEl, SENS_DEFAULT, setSens);
     setSens(SENS_DEFAULT);
   }
 

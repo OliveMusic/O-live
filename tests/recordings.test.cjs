@@ -275,7 +275,11 @@ assert.match(recorder,/record-loop-marker start/);
 assert.match(recorder,/record-player-tool icon repeat/);
 assert.match(recorder,/rateSlider\.type='range'/);
 assert.match(recorder,/function bindPlaybackRateReset\(slider,row\)/);
-assert.match(recorder,/slider\.addEventListener\('dblclick',reset\)/);
+/* 두 번 탭해 기본값으로 되돌리는 일은 앱 전체가 한 구현을 쓴다 — 예전에는 네 곳이
+   제각각이었고, 그중 둘은 pointerdown에서 되돌려 브라우저가 곧바로 덮어썼다. */
+assert.match(core,/function bindSliderReset\(slider,resetValue,apply\)/);
+assert.match(core,/slider\.addEventListener\('dblclick',reset\)/);
+assert.doesNotMatch(recorder,/function bindSliderReset\(/);
 assert.match(recorder,/switchActivePlaybackToDirect\(row\)/);
 assert.match(recorder,/function makeCloudNativeAudio\(\)/);
 assert.match(recorder,/audio\.dataset\.oliveRecordingPlayback='true'/);

@@ -201,9 +201,16 @@ assert.doesNotMatch(index,/id="tunerSensHint"/);
 assert.doesNotMatch(index,/주변 소음을 자동으로 반영/);
 assert.doesNotMatch(index,/튜너가 실제로 분석하는 입력이며/);
 assert.match(index,/\.tuner-monitor\{margin-top:19px;\}/);
-assert.match(index,/function bindRhySliderReset\(/);
-assert.match(index,/bindRhySliderReset\(rhySynco,rhySyncoVal\)/);
-assert.match(index,/bindRhySliderReset\(rhyDiff,rhyDiffVal\)/);
+/* 두 번 탭해 기본값으로 되돌리는 일은 앱 전체가 한 구현을 쓴다. 예전에는 리듬과 튜너가
+   pointerdown에서 되돌려, 브라우저가 그 뒤에 손가락 자리로 값을 다시 옮겨 덮어썼다. */
+assert.match(index,/bindSliderReset\(rhySynco,RHY_SLIDER_DEFAULT,value=>setRhySlider\(rhySynco,rhySyncoVal,value\)\)/);
+assert.match(index,/bindSliderReset\(rhyDiff,RHY_SLIDER_DEFAULT,value=>setRhySlider\(rhyDiff,rhyDiffVal,value\)\)/);
+assert.match(index,/bindSliderReset\(sensEl, SENS_DEFAULT, setSens\)/);
+assert.doesNotMatch(index,/function bindRhySliderReset\(/);
+assert.doesNotMatch(index,/sensTapLast/);
+/* 되돌린 뒤 기본 동작이 값을 다시 옮기지 못하게 막고, 손을 뗄 때 판정한다. */
+assert.match(index,/if\(event\) event\.preventDefault\(\);/);
+assert.match(index,/if\(moved\)\{ lastTapAt=0; return; \}/);
 
 for(const degrees of ['1–3–5','1–♭3–5','1–♭3–♭5','1–3–♯5','1–3–5–7','1–♭3–5–♭7']){
   assert.match(index,new RegExp(degrees));
@@ -292,7 +299,7 @@ assert.match(cloud,/function guideRemove\(list,ids\)/);
 assert.match(cloud,/guideRemove\(guideState\(\)\.links,list\)/);
 assert.match(cloud,/guideRemove\(guideState\(\)\.recordings,rows\.map\(row=>row\.id\)\)/);
 /* 미뤄 둔 진행은 취소할 수 있어야 한다. 건너뛴 뒤 뒤늦게 터지면 한 단계를 삼킨다. */
-assert.match(guide,/function deferAdvance\(ms,keepOpen\)/);
+assert.match(guide,/function deferAdvance\(ms,graceMs\)/);
 assert.match(guide,/if\(mine===token\) advance\(\)/);
 assert.match(guide,/function stopListening\(\)\{ cancelDefer\(\); if\(pass\) pass\(\); \}/);
 assert.doesNotMatch(guide,/setTimeout\(advance,/,'진행은 반드시 취소 가능한 경로로만 미룬다');
@@ -447,7 +454,7 @@ assert.match(guide,/hint:'삭제를 눌러 보세요', linger:3000/);
 /* 상자만 비춰서는 무엇이 달라졌는지 알기 어렵다. 해야 할 일을 적던 자리에
    무엇이 달라졌는지를 한 줄로 적고, 그 글을 읽을 만큼 머문다. */
 assert.match(guide,/function announce\(text\)\{[\s\S]{0,160}?coachHint\.classList\.add\('done'\)/);
-assert.match(guide,/announce\(step\.done\);\s*\n\s*deferAdvance\(step\.linger\|\|0,step\.keepOpen\)/);
+assert.match(guide,/announce\(step\.done\);\s*\n\s*deferAdvance\(step\.linger\|\|0\)/);
 assert.match(guide,/coachHint\.classList\.remove\('done'\)/,'다음 단계에서는 다시 할 일을 적는다');
 assert.match(guide,/\.coach-hint\.done::before\{ content:'✓ '; \}/);
 /* 현 음은 소리를 들을 틈을 준다. 다만 여기서는 잠그지 않는다 — 현을 몇 개 돌아가며
@@ -459,11 +466,15 @@ assert.match(guide,/hint:'눌러서 마이크를 켜 보세요', linger:2500, do
 assert.match(guide,/button\.classList\.contains\('on'\)/,'앱이 마이크 켜짐을 표시하는 방식');
 assert.match(tuner,/tunerStart\.classList\.add\('on'\)/);
 assert.match(guide,/if\(mic && mic\.classList\.contains\('on'\)\) mic\.click\(\)/);
-assert.match(guide,/function deferAdvance\(ms,keepOpen\)/);
-assert.match(guide,/if\(span>=SEAL_AFTER && !keepOpen\) sealFrame\(true\)/);
-/* 구멍을 눌러 넘어가는 길은 pointerdown에서 불린다. 거기서 봉하면 방금 그 탭의
-   click까지 삼켜 버튼이 아무 일도 하지 않는다 — 청음의 올리브가 그래서 먹통이었다. */
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,true\)/);
+assert.match(guide,/function deferAdvance\(ms,graceMs\)/);
+assert.match(guide,/if\(span>=SEAL_AFTER\)\{/,'여운이 길면 반드시 봉한다');
+/* 여운 동안에는 아무것도 눌리지 않는다. 다만 구멍을 눌러 넘어가는 길은 pointerdown에서
+   불리므로, 그 자리에서 봉하면 방금 그 탭의 click까지 삼켜 버튼이 아무 일도 하지 않는다 —
+   청음의 올리브가 그래서 먹통이었다. 그 길만 손이 떨어질 틈을 두고 봉한다. */
+assert.match(guide,/const SEAL_GRACE=260;/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,SEAL_GRACE\)/);
+assert.match(guide,/sealTimer=setTimeout\(\(\)=>\{ sealTimer=0; if\(mine===token\) sealFrame\(true\); \},grace\)/);
+assert.match(guide,/if\(sealTimer\)\{ clearTimeout\(sealTimer\); sealTimer=0; \}/,'그만두면 봉인 예약도 거둔다');
 for(const said of ['즐겨찾기가 해제되었습니다','즐겨찾기가 다시 설정되었습니다','목록에서 삭제되었습니다']){
   assert.ok(guide.includes(`done:'${said}'`),`알림이 없다: ${said}`);
 }
@@ -644,7 +655,7 @@ assert.match(guide,/lockScroll\(doc,true,lockTarget\)/);
 /* 여운을 두는 동안과 끝맺는 동안에는 아무것도 눌리지 않는다. */
 assert.match(guide,/const SEALED_EVENTS=GATED_EVENTS\.concat\(\['touchmove','wheel','keydown'\]\)/);
 assert.match(guide,/function sealFrame\(on\)/);
-assert.match(guide,/if\(span>=SEAL_AFTER && !keepOpen\) sealFrame\(true\)/);
+assert.match(guide,/if\(span>=SEAL_AFTER\)\{/,'여운이 길면 반드시 봉한다');
 assert.match(guide,/sealFrame\(true\);\s*\n\s*setTimeout\(\(\)=>\{\s*\n\s*sealFrame\(false\);/);
 assert.match(guide,/function cancelDefer\(\)\{[\s\S]{0,140}?sealFrame\(false\);/,'중간에 그만두면 봉인도 푼다');
 
@@ -679,7 +690,7 @@ assert.match(earTrainer,/classList\.toggle\('active', x\.dataset\.mode===mode\)/
 /* 소리가 끝나기도 전에 달력으로 넘어가면 뚝 끊긴 느낌이 든다. 가장 긴 음계가 2초 남짓이니
    다 들려주고 1초를 더 둔다. 구멍을 눌러 넘어가는 길도 그 여운을 따른다. */
 assert.match(guide,/hint:'눌러서 들어 보세요', linger:3200\}/);
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,true\)/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,SEAL_GRACE\)/);
 
 /* 만들어만 놓고 끝나면 무엇을 만든 건지 모른 채 끝난다. 몇 마디 들려주고 나간다. */
 assert.match(guide,/target:'#rhyPlay', title:'들어 보기'/);
