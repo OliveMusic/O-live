@@ -320,7 +320,7 @@ assert.match(guide,/최대 5분<\/b> 중 지나온 시간/);
 assert.match(guide,/title:'••• 메뉴에서 되돌리기'/);
 /* 체크박스는 실제로 지워 본다. */
 assert.match(guide,/title:'\uc9c0\uc6b8 \ud56d\ubaa9 \uace0\ub974\uae30'/);
-assert.match(guide,/target:'#recordSelectDelete',\s*\n\s*title:'\uc0ad\uc81c'/,'삭제 버튼을 따로 강조한다');
+assert.match(guide,/const del=doc\.querySelector\('#recordSelectDelete'\);/,'삭제 버튼을 따로 강조한다');
 
 /* 녹음을 켜 둔 채 다음 단계로 가면 도움말 내내 녹음이 돈다. 그 단계를 떠나면 멈춘다. */
 assert.match(guide,/function stopRecordingIn\(doc\)/);
@@ -431,7 +431,17 @@ assert.match(recorder,/stopPlayback:stopPlaybackForOtherTool/,'도움말이 부�
 assert.match(guide,/before:doc=>\{ stopRowPlayback\(doc\); openList\(doc\); \}, title:'즐겨찾기 올리브'/);
 /* ••• 시트가 열리면 강조는 즐겨찾기 한 줄로 옮겨 간다. 시트 전체를 비추면
    어디를 눌러야 할지 알 수 없고 이름 변경·삭제까지 손이 닿는다. */
-assert.match(guide,/sheet\.querySelector\('\[id\$="MenuPin"\]'\)\) \|\| part\(doc,'link','\.record-row-more'\)/);
+/* 올리브를 떼면 그 버튼 자체가 사라진다. 대상을 잃은 채로 두면 강조가 엉뚱한 자리에
+   얼어붙으므로 행으로 옮겨 잡고, 잠시 머물러 무엇이 달라졌는지 보게 한다.
+   되돌린 뒤에도 마찬가지로 다시 붙은 올리브를 잡아 보여 준다. */
+assert.match(guide,/target:doc=>part\(doc,'link','\.record-row-favorite'\)\|\|part\(doc,'link'\)/);
+assert.match(guide,/hint:'올리브를 눌러 보세요', linger:1600/);
+assert.match(guide,/\|\| part\(doc,'link','\.record-row-favorite'\)\s*\n\s*\|\| part\(doc,'link','\.record-row-more'\)/);
+assert.match(guide,/hint:'•••을 열어 즐겨찾기를 누르세요', linger:1600/);
+/* 지우고 나면 고르기 막대가 걷히며 삭제 버튼도 사라진다. 그 자리를 계속 가리키면
+   0짜리 상자가 되므로 목록으로 옮겨 잡고, 잠시 머물러 빠진 것을 보게 한다. */
+assert.match(guide,/return \(del && bar && !bar\.hidden\) \? del : doc\.querySelector\('#recordList'\);/);
+assert.match(guide,/hint:'삭제를 눌러 보세요', linger:1600/);
 assert.doesNotMatch(guide,/also:'\.record-menu-backdrop/);
 assert.match(indexHtml,/id="linkMenuPin"/,'앱에 있는 이름이다');
 assert.match(indexHtml,/id="recordMenuPin"/,'녹음본 시트도 같은 꼬리를 쓴다');

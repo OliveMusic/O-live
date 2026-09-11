@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=229">
+<link rel="stylesheet" href="info.css?v=230">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -631,10 +631,14 @@
          before:openPlayer, title:'조옮김과 속도',
          body:'위가 <b>조옮김</b>으로 왼쪽이 플랫 오른쪽이 샵, 아래가 <b>속도</b>로 0.5–1.5배입니다. 각각 <b>두 번 탭</b>하면 원래 키와 1배로 돌아옵니다.',
          advance:'next'},
-        {screen:'trainer:record', target:doc=>part(doc,'link','.record-row-favorite'),
+        /* 올리브를 떼면 그 버튼 자체가 사라진다. 대상을 잃은 채로 두면 강조가 엉뚱한
+           자리에 얼어붙으므로 그 행으로 옮겨 잡는다. 그리고 잠시 머물러, 올리브가
+           사라지고 순서가 내려가는 것을 눈으로 보게 한다. */
+        {screen:'trainer:record',
+         target:doc=>part(doc,'link','.record-row-favorite')||part(doc,'link'),
          before:doc=>{ stopRowPlayback(doc); openList(doc); }, title:'즐겨찾기 올리브',
-         body:'올리브가 붙은 항목이 <b>목록 맨 위</b>에 옵니다. 눌러서 해제해 보세요.',
-         hint:'올리브를 눌러 보세요',
+         body:'올리브가 붙은 항목이 <b>목록 맨 위</b>에 옵니다. 눌러서 떼면 올리브가 사라지고 자리도 내려갑니다.',
+         hint:'올리브를 눌러 보세요', linger:1600,
          check:doc=>!part(doc,'link','.record-row-favorite')},
         /* 시트 전체를 비추면 어디를 눌러야 할지 여전히 알 수 없고 이름 변경·삭제까지
            손이 닿는다. 메뉴가 열리는 순간 강조를 즐겨찾기 한 줄로 옮긴다.
@@ -642,7 +646,10 @@
         {screen:'trainer:record', target:doc=>{
            const sheet=doc.querySelector('.record-menu-backdrop:not([hidden]) .record-menu-sheet');
            /* 시트는 녹음본과 링크가 서로 다른 id를 쓴다. 열린 쪽의 즐겨찾기를 집는다. */
-           return (sheet && sheet.querySelector('[id$="MenuPin"]')) || part(doc,'link','.record-row-more');
+           /* 시트가 닫힌 뒤에는 다시 붙은 올리브를 잡아, 무엇이 돌아왔는지 보여 준다. */
+           return (sheet && sheet.querySelector('[id$="MenuPin"]'))
+             || part(doc,'link','.record-row-favorite')
+             || part(doc,'link','.record-row-more');
          },
          /* 앞 단계를 건너뛰어 아직 붙어 있으면 떼어 둔다. 그래야 되돌리는 것을 배운다. */
          lockMenu:true,
@@ -654,8 +661,8 @@
            lockMenuItems(doc,true);
          },
          title:'••• 메뉴에서 되돌리기',
-         body:'이름 변경·다운로드·삭제도 여기에 있습니다. <b>즐겨찾기</b>를 눌러 다시 올려 보세요.',
-         hint:'•••을 열어 즐겨찾기를 누르세요',
+         body:'이름 변경·다운로드·삭제도 여기에 있습니다. <b>즐겨찾기</b>를 누르면 올리브가 다시 붙고 맨 위로 올라갑니다.',
+         hint:'•••을 열어 즐겨찾기를 누르세요', linger:1600,
          check:doc=>Boolean(part(doc,'link','.record-row-favorite'))},
         {screen:'trainer:record', target:'#recordLink', before:openList,
          title:'YouTube 링크 더하기', body:'노래 제목이나 가수를 <b>검색</b>해서 고르거나 주소를 붙여 넣습니다. 백킹 트랙을 A/B로 반복하며 연습할 수 있습니다.',
@@ -702,9 +709,17 @@
          title:'지울 항목 고르기', body:'행을 눌러 체크합니다. 여러 개를 한꺼번에 고를 수 있습니다.',
          hint:'하나 골라 보세요',
          check:doc=>{ const del=doc.querySelector('#recordSelectDelete'); return Boolean(del && !del.disabled); }},
-        {screen:'trainer:record', target:'#recordSelectDelete',
-         title:'삭제', body:'고른 것을 한 번에 지웁니다. 정말 지울지 물어보면 확인하세요. 여기서 지운 예시는 도움말을 다시 시작하면 돌아옵니다.',
-         hint:'삭제를 눌러 보세요',
+        /* 지우고 나면 고르기 막대가 걷히면서 삭제 버튼도 함께 사라진다. 그 자리를 계속
+           가리키면 0짜리 상자가 되므로, 걷히는 순간 목록으로 옮겨 잡는다.
+           그리고 잠시 머물러 고른 것이 목록에서 빠진 것을 눈으로 보게 한다. */
+        {screen:'trainer:record',
+         target:doc=>{
+           const del=doc.querySelector('#recordSelectDelete');
+           const bar=doc.querySelector('#recordSelectBar');
+           return (del && bar && !bar.hidden) ? del : doc.querySelector('#recordList');
+         },
+         title:'삭제', body:'고른 것을 한 번에 지웁니다. 정말 지울지 물어보면 확인하세요. 고른 항목이 목록에서 빠집니다. 여기서 지운 예시는 도움말을 다시 시작하면 돌아옵니다.',
+         hint:'삭제를 눌러 보세요', linger:1600,
          memo:doc=>doc.querySelectorAll('#recordList .record-entry').length,
          check:(doc,memo)=>doc.querySelectorAll('#recordList .record-entry').length<memo},
       ],
