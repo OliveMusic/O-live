@@ -517,6 +517,36 @@ assert.match(worklet,/if \(available < frameCount\) this\._underrunCount\+\+;/,'
 /* 눌러서 들어 보는 단계에서는 무음 모드를 한 번씩 짚어 준다 — ambient라 스위치를 따른다. */
 assert.equal((guide.match(/소리가 안 나면 <b>무음 모드<\/b>를 꺼 보세요/g)||[]).length,2,'튜너 현음과 잼 코드');
 
+/* display를 정해 둔 규칙은 UA의 [hidden]{display:none}을 이긴다. .chapter가 grid라
+   '다음 기능 배우기'를 hidden으로 두어도 잼 세션 뒤에 그대로 남아 있었다. */
+assert.match(guide,/\[hidden\]\{ display:none !important; \}/);
+assert.match(guide,/\.chapter\{[\s\S]{0,120}?display:grid/,'이 규칙이 막고 있었다');
+/* 잼 세션은 마지막 책이라 끝낸 뒤에는 그 밖에 알아둘 것으로 이어 준다. */
+assert.match(guide,/data-go="more">그 밖에 알아둘 것<\/button>\s*\n\s*<\/div>/);
+
+/* 감도를 움직이면 무엇이 달라지는지 실시간 입력에서 바로 보인다. 함께 비춘다. */
+assert.match(guide,/target:'#tunerSens', also:'\.tuner-monitor'/);
+assert.match(indexHtml,/<div class="tuner-monitor"/);
+
+/* 알약 사이의 빈 곳도 상자 안이라 눌리면 넘어갔다. 고른 것이 바뀌었는지 본다. */
+assert.match(guide,/function pillOf\(doc,selector,key\)/);
+assert.match(guide,/memo:doc=>pillOf\(doc,'#earModes','mode'\), check:\(doc,memo\)=>pillOf\(doc,'#earModes','mode'\)!==memo/);
+assert.match(guide,/memo:doc=>pillOf\(doc,'#earLevels','level'\), check:\(doc,memo\)=>pillOf\(doc,'#earLevels','level'\)!==memo/);
+assert.match(earTrainer,/classList\.toggle\('active', x\.dataset\.mode===mode\)/,'앱이 표시하는 방식이다');
+
+/* 소리가 끝나기도 전에 달력으로 넘어가면 뚝 끊긴 느낌이 든다. 가장 긴 음계가 2초 남짓이니
+   다 들려주고 1초를 더 둔다. 구멍을 눌러 넘어가는 길도 그 여운을 따른다. */
+assert.match(guide,/hint:'눌러서 들어 보세요', linger:3200\}/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420\)/);
+
+/* 만들어만 놓고 끝나면 무엇을 만든 건지 모른 채 끝난다. 몇 마디 들려주고 나간다. */
+assert.match(guide,/target:'#rhyPlay', title:'들어 보기'/);
+assert.match(guide,/hint:'눌러서 들어 보세요', linger:4000/);
+assert.match(rhythm,/rhyPlay\.classList\.add\('on'\)/,'앱이 울리는 중임을 표시하는 방식');
+/* 리듬이 울린 채로 끝나면 그 소리도 함께 줄이고, 나갈 때 끈다. */
+assert.match(guide,/if\(rhy && rhy\.classList\.contains\('on'\)\) rhy\.click\(\)/);
+assert.match(guide,/\|\| \(rhy && rhy\.classList\.contains\('on'\)\)\)/,'소리가 남았는지 셀 때도');
+
 /* 구멍 안에서 위아래로 끌면 앱이 스크롤돼 방금 비춘 곳이 달아난다.
    이벤트가 아니라 스크롤 칸을 잠그므로 슬라이더·파형 끌기도, 지판의 가로 스크롤도 살아 있다. */
 assert.match(guide,/function lockScroll\(doc,on\)\{[\s\S]{0,200}?page\.style\.overflowY=on\?'hidden':''/);
