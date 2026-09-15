@@ -83,7 +83,9 @@ for(const [label,text] of [['index.html',indexHtml],['guide.html',guide]]){
 }
 /* 버전은 이제 아무 동작도 없다. 누를 수 있게 보이면 안 된다. */
 assert.match(index,/<p class="app-version" id="appVersion"><\/p>/);
-assert.match(index,/appVersion\.textContent='버전 '\+release\.version/);
+/* 빌드까지 적는다. 버전만 적으면 같은 버전으로 여러 번 배포했을 때 지금 기기에
+   무엇이 깔렸는지 화면에서 알 수 없다. */
+assert.match(index,/appVersion\.textContent='버전 '\+release\.version\+' · '\+release\.build/);
 assert.doesNotMatch(index,/진단 기록 복사/,'진단 복사 UI는 걷어냈다');
 assert.doesNotMatch(index,/exportText/,'내보내기 경로도 남기지 않는다');
 /* 추적은 메모리에만 남고 기기에 저장하지 않는다. 예전 기록은 한 번 지운다. */
@@ -336,8 +338,15 @@ assert.match(guide,/title:'\uc9c0\uc6b8 \ud56d\ubaa9 \uace0\ub974\uae30'/);
 assert.match(guide,/const del=doc\.querySelector\('#recordSelectDelete'\);/,'삭제 버튼을 따로 강조한다');
 
 /* 녹음을 켜 둔 채 다음 단계로 가면 도움말 내내 녹음이 돈다. 그 단계를 떠나면 멈춘다. */
-assert.match(guide,/function stopRecordingIn\(doc\)/);
-assert.match(guide,/if\(!step\.recording\) stopRecordingIn\(doc\)/);
+assert.match(guide,/function stopRecordingIn\(doc,keepDraft\)/);
+assert.match(guide,/if\(!step\.recording\) stopRecordingIn\(doc,step\.draft\)/);
+/* 멈추자마자 저장되는 줄 알면 마음에 안 드는 것을 그대로 두게 된다.
+   초안을 설명하는 단계에서는 버리지 않고 남겨 둔다. */
+assert.match(guide,/if\(keepDraft\) return;/);
+assert.match(guide,/title:'저장 전에 들어 보기'/);
+assert.match(guide,/올리브 버튼으로 들어 보고<\/b>[\s\S]{0,60}버리기<\/b>/);
+/* hidden인 채로 잡으면 크기가 0이라 강조가 한 점으로 찌그러진다. */
+assert.match(guide,/return draft && !draft\.hidden \? draft : null;/);
 assert.match(guide,/target:'#recordToggle', also:'#recordMetro', recording:true/);
 
 /* ---------- 녹음 메트로놈 ----------

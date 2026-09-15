@@ -488,7 +488,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 '+RELEASE.version);
+  await expect(page.locator('#appVersion')).toHaveText('버전 '+RELEASE.version+' · '+RELEASE.build);
 }
 
 async function expandRecordList(page){
@@ -2397,6 +2397,7 @@ test('녹음 메트로놈을 켜면 한 마디를 세고 나서 녹음이 시작
 
   // 한 마디를 다 세면 녹음이 시작되고 숫자는 0:00으로 돌아온다.
   await expect(page.locator('#recordState')).toHaveText('녹음 중',{timeout:15000});
+  await page.evaluate(()=>{ window.__startedAt=performance.now(); });
   await expect(page.locator('#recordTimer')).not.toHaveClass(/counting/);
   await expect(page.locator('#recordTimer')).toHaveText('0:00');
   await expect(page.locator('#recordToggle')).toHaveClass(/on/);
@@ -2412,14 +2413,13 @@ test('녹음 메트로놈을 켜면 한 마디를 세고 나서 녹음이 시작
     .filter((text,at,all)=>at===0 || text!==all[at-1]);
   expect(steps).toEqual(['4','3','2','1']);
 
-  /* 세기 시작하는 시점도 봐야 한다. 박 리스너를 메트로놈보다 늦게 걸면 첫 박을
-     놓쳐 다음 마디까지 한 바퀴를 더 기다린다 — 숫자는 그대로 4·3·2·1이라
-     순서만 봐서는 잡히지 않는다. 120 BPM 한 마디가 2초이므로 그 안에 시작해야 한다. */
-  const startedAfter=await page.evaluate(()=>{
-    const at=window.__countAt.findIndex((_,i)=>/^[0-9]$/.test(window.__counts[i]));
-    return at<0 ? Infinity : window.__countAt[at]-window.__pressedAt;
-  });
-  expect(startedAfter).toBeLessThan(2000);
+  /* 눌린 순간부터 녹음이 시작되기까지의 길이를 본다. 첫 소리가 작게 들리는 것을
+     피하려고 1초 쉰 뒤에 세므로, 1초 + 한 마디(120 BPM에서 2초)가 최소다.
+     박 리스너를 메트로놈보다 늦게 걸면 여기에 한 마디가 더 붙는다 — 숫자는
+     그대로 4·3·2·1이라 순서만 봐서는 잡히지 않는다. */
+  const tookMs=await page.evaluate(()=>window.__startedAt-window.__pressedAt);
+  expect(tookMs).toBeGreaterThan(2400);
+  expect(tookMs).toBeLessThan(5000);
 
   /* 메트로놈을 켠 채로도 입력 레벨이 살아 있어야 한다. 캡처 그래프를 세운 뒤에
      메트로놈을 켜면 오디오 컨텍스트가 갈리면서 막대가 죽는다. */
@@ -2581,16 +2581,15 @@ test('이미 울리던 메트로놈도 녹음을 시작하면 처음부터 다�
   /* 돌던 것을 멈추고 다시 켠 흔적. 이어받았다면 이 줄이 비어 있다. */
   await expect.poll(()=>page.evaluate(()=>window.__playing.join(','))).toBe('false,true');
   await expect(page.locator('#recordState')).toHaveText('녹음 중',{timeout:15000});
+  await page.evaluate(()=>{ window.__startedAt=performance.now(); });
 
   // 한 마디만 센다. 이어받으면 이 줄이 길어지거나 늦게 시작한다.
   const counted=await page.evaluate(()=>window.__counts.filter(t=>/^[0-9]$/.test(t))
     .filter((t,i,all)=>i===0 || t!==all[i-1]));
   expect(counted).toEqual(['4','3','2','1']);
-  const startedAfter=await page.evaluate(()=>{
-    const at=window.__countAt.findIndex((_,i)=>/^[0-9]$/.test(window.__counts[i]));
-    return at<0 ? Infinity : window.__countAt[at]-window.__pressedAt;
-  });
-  expect(startedAfter).toBeLessThan(2000);
+  const tookMs=await page.evaluate(()=>window.__startedAt-window.__pressedAt);
+  expect(tookMs).toBeGreaterThan(2400);
+  expect(tookMs).toBeLessThan(5000);
 
   // 녹음을 멈추면 우리가 켠 메트로놈도 함께 멈춘다.
   await page.locator('#recordToggle').click();

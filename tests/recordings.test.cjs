@@ -83,7 +83,7 @@ assert.doesNotMatch(recorder,/new AudioContext[\s\S]{0,80}metro/i);
 
 /* 메트로놈을 마이크보다 먼저 켠다. 캡처 그래프를 세운 뒤에 켜면 메트로놈이
    오디오 컨텍스트를 갈아 끼우면서 입력 레벨이 죽고 녹음이 끊긴 스트림을 문다. */
-assert.match(recorder,/armCountIn\(token\)[\s\S]*?startRecorderMetronome\(\)[\s\S]*?ensureRecordingCtx[\s\S]*?setupCapture\(ctx\)[\s\S]*?await counting;[\s\S]*?recorder\.start\(\)/);
+assert.match(recorder,/armCountIn\(token\)[\s\S]*?startRecorderMetronome\(token\)[\s\S]*?ensureRecordingCtx[\s\S]*?setupCapture\(ctx\)[\s\S]*?await counting;[\s\S]*?recorder\.start\(\)/);
 /* drawLevel은 recording이 아니면 다음 프레임을 예약하지 않는다. 카운트인이
    붙으면서 그래프를 세운 뒤 녹음이 시작되기까지 한 마디가 비게 되었으므로,
    그림 루프는 setupLevel이 아니라 녹음이 실제로 시작될 때 건다. */
@@ -91,11 +91,18 @@ assert.doesNotMatch(recorder,/levelSink\.connect\(ctx\.destination\);\s*levelFra
 assert.match(recorder,/recording=true; startPending=false;[\s\S]{0,120}startLevelLoop\(\);/);
 
 /* 리스너는 메트로놈을 켜기 전에 건다. 켠 뒤에 걸면 첫 박을 놓쳐 한 마디를 더 기다린다. */
-assert.match(recorder,/counting=armCountIn\(token\);[\s\S]{0,120}startRecorderMetronome\(\)/);
+assert.match(recorder,/counting=armCountIn\(token\);[\s\S]{0,140}startRecorderMetronome\(token\)/);
+/* iPhone은 오디오가 막 깨어난 직후의 첫 소리를 작게 낸다. 메트로놈을 켜고 한
+   박자 쉰 뒤에 세야 첫 클릭이 온전히 들린다 — 튜너 첫 현음과 같은 일이다. */
+assert.match(recorder,/const METRO_LEAD_IN_MS=1000;/);
+assert.match(recorder,/if\(metro\.isPlaying\(\)\) metro\.stop\(\);\s*await new Promise\(resolve=>setTimeout\(resolve,METRO_LEAD_IN_MS\)\);/);
+/* 박마다 버튼이 올리브로 물든다. 테만 번지게 하면 38px 버튼에서는 안 보인다. */
+assert.match(index,/@keyframes recordMetroBeat\{[\s\S]*?background:var\(--signal\); border-color:var\(--signal\)/);
+assert.match(index,/@keyframes recordMetroRing\{/);
 /* 이미 돌고 있어도 처음부터 다시 켠다. 마디 중간에서 이어받으면 클릭이 그냥
    계속 들릴 뿐이라 어디가 카운트인인지 귀로 알 수 없고, 다음 마디 첫 박을
    기다리느라 최대 두 마디가 지나간다. */
-assert.match(recorder,/if\(metro\.isPlaying\(\)\) metro\.stop\(\);\s*try\{ await metro\.start\(\)/);
+assert.match(recorder,/if\(metro\.isPlaying\(\)\) metro\.stop\(\);[\s\S]{0,240}await metro\.start\(\)/);
 /* 그래서 마디 첫 박을 기다리는 길은 남겨 두지 않는다. */
 assert.doesNotMatch(recorder,/waitForDownbeat|mark\.beatIndex!==0/);
 /* 다시 켜려고 멈춘 것을 '남이 밀어냈다'로 오해하면 박 리스너까지 떨어진다. */

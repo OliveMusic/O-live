@@ -1784,17 +1784,24 @@
     background:var(--signal-soft); border-color:var(--signal); color:var(--signal);
   }
   .record-metro[aria-pressed="true"]:active{ background:var(--signal-soft); }
-  /* 박마다 테가 한 번 번진다 — 탭바 아이콘이 박에 맞춰 빛나는 것과 같은 방식 */
-  .record-metro.beat::after{
-    content:''; position:absolute; inset:-4px; border-radius:50%;
-    box-shadow:0 0 0 2px rgba(var(--signal-rgb),.34);
-    animation:recordMetroBeat .42s var(--ease-out) forwards;
-  }
+  /* 박마다 버튼이 올리브로 물들고 테가 번진다. 테만 번지게 했더니 38px짜리
+     버튼에서는 눈에 잡히지 않았다 — 귀로 놓친 박을 눈으로도 짚을 수 있어야 한다. */
+  .record-metro.beat{ animation:recordMetroBeat .42s var(--ease-out); }
   @keyframes recordMetroBeat{
-    from{ opacity:1; transform:scale(.94); }
-    to{ opacity:0; transform:scale(1.07); }
+    0%{ background:var(--signal); border-color:var(--signal); color:var(--on-signal); }
+    100%{ background:var(--signal-soft); border-color:var(--signal); color:var(--signal); }
+  }
+  .record-metro.beat::after{
+    content:''; position:absolute; inset:-3px; border-radius:50%;
+    box-shadow:0 0 0 2px rgba(var(--signal-rgb),.55);
+    animation:recordMetroRing .42s var(--ease-out) forwards;
+  }
+  @keyframes recordMetroRing{
+    from{ opacity:.9; transform:scale(.92); }
+    to{ opacity:0; transform:scale(1.24); }
   }
   @media (prefers-reduced-motion:reduce){
+    .record-metro.beat{ animation:none; }
     .record-metro.beat::after{ animation:none; opacity:0; }
   }
   /* 카운트인 동안에는 0:00이 아무 뜻이 없다. 그 자리에 남은 박을 센다. */
@@ -3019,23 +3026,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=244"></script>
+<script src="app-version.js?v=245"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=244"></script>
-<script src="js/audio-runtime.js?v=244"></script>
-<script src="js/core.js?v=244"></script>
-<script src="js/metronome.js?v=244"></script>
-<script src="js/tuner-engine.js?v=244"></script>
-<script src="js/tuner.js?v=244"></script>
-<script src="js/scales.js?v=244"></script>
-<script src="js/ear-trainer.js?v=244"></script>
-<script src="js/rhythm-trainer.js?v=244"></script>
-<script src="js/recording-cache.js?v=244"></script>
-<script src="js/recorder.js?v=244"></script>
-<script src="js/practice-links.js?v=244"></script>
-<script src="js/jam-session.js?v=244"></script>
-<script src="js/practice-log.js?v=244"></script>
-<script src="js/app-shell.js?v=244"></script>
+<script src="cloud-sync.js?v=245"></script>
+<script src="js/audio-runtime.js?v=245"></script>
+<script src="js/core.js?v=245"></script>
+<script src="js/metronome.js?v=245"></script>
+<script src="js/tuner-engine.js?v=245"></script>
+<script src="js/tuner.js?v=245"></script>
+<script src="js/scales.js?v=245"></script>
+<script src="js/ear-trainer.js?v=245"></script>
+<script src="js/rhythm-trainer.js?v=245"></script>
+<script src="js/recording-cache.js?v=245"></script>
+<script src="js/recorder.js?v=245"></script>
+<script src="js/practice-links.js?v=245"></script>
+<script src="js/jam-session.js?v=245"></script>
+<script src="js/practice-log.js?v=245"></script>
+<script src="js/app-shell.js?v=245"></script>
 </body>
 </html>

@@ -843,6 +843,10 @@
      입력뿐이고 메트로놈은 다른 출력 버스로 나가기 때문이다. 귀로 듣고 박에
      맞춰 칠 수는 있지만 파일에는 남지 않는다. */
   const METRO_ARMED_KEY='olive-record-metronome';
+  /* iPhone은 오디오가 막 깨어난 직후의 첫 소리를 작게 낸다. 튜너에서 첫 현음이
+     작게 들리던 것과 같은 일이라, 메트로놈을 켜고 한 박자 쉰 뒤에 센다.
+     그동안 화면은 첫 숫자를 들고 기다리므로 멈춘 것처럼 보이지 않는다. */
+  const METRO_LEAD_IN_MS=1000;
   let metroArmed=false;
   let metroStartedByRecorder=false;
   let metroBeatOff=null;
@@ -879,11 +883,13 @@
      클릭이 그냥 계속 들릴 뿐이라 어디가 카운트인인지 귀로 알 수 없고, 다음
      마디 첫 박을 기다리느라 최대 두 마디가 지나간다. 다시 켜면 첫 박이 곧
      마디 첫 박이라 세는 길이가 언제나 한 마디다. */
-  async function startRecorderMetronome(){
+  async function startRecorderMetronome(token){
     const metro=metronome();
     if(!metro) return false;
     attachMetroBeat();
     if(metro.isPlaying()) metro.stop();
+    await new Promise(resolve=>setTimeout(resolve,METRO_LEAD_IN_MS));
+    if(token!==undefined && (token!==startToken || !startPending)) return false;
     try{ await metro.start(); }catch(error){ return false; }
     if(!metro.isPlaying()) return false;
     metroStartedByRecorder=true;
@@ -954,7 +960,7 @@
         showCountIn(beats-counted+1);
       });
       // 박이 오지 않으면(오디오가 막히는 등) 무한정 기다리지 않는다.
-      guard=setTimeout(finish,(beats+2)*metro.secondsPerBeat()*1000+2500);
+      guard=setTimeout(finish,METRO_LEAD_IN_MS+(beats+2)*metro.secondsPerBeat()*1000+2500);
     });
   }
 
@@ -1287,7 +1293,7 @@
       let counting=null;
       if(metroArmed){
         counting=armCountIn(token);
-        const beating=await startRecorderMetronome();
+        const beating=await startRecorderMetronome(token);
         if(!beating){ cancelCountIn(); counting=null; }
         if(token!==startToken || !startPending){
           cancelCountIn(); finishAudioSession(); return;

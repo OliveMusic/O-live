@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=244">
+<link rel="stylesheet" href="info.css?v=245">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -667,6 +667,15 @@
          title:'남은 시간과 입력 크기',
          body:'위 막대가 <b>최대 5분</b> 중 지나온 시간이고, 아래 막대는 지금 들어오는 <b>소리의 크기</b>입니다. 소리를 내면 함께 움직입니다.',
          advance:'next'},
+        /* 멈추자마자 저장되는 줄 알면 마음에 안 드는 것을 그대로 두게 된다.
+           초안이 실제로 화면에 남은 뒤에 비춘다 — hidden인 채로 잡으면 크기가
+           0이라 강조가 한 점으로 찌그러진다. */
+        {screen:'trainer:record', draft:true,
+         target:doc=>{ const draft=doc.querySelector('#recordDraft');
+           return draft && !draft.hidden ? draft : null; },
+         also:'#recordToggle', title:'저장 전에 들어 보기',
+         body:'멈춰도 아직 저장되지 않습니다. <b>올리브 버튼으로 들어 보고</b>, 마음에 들지 않으면 <b>버리기</b>로 지웁니다. 이름을 적고 <b>저장</b>을 눌러야 목록에 올라갑니다.',
+         advance:'next'},
         {screen:'trainer:record', target:'#recordListCard', title:'목록 펼치기',
          body:'여기 두 항목은 도움말용 예시입니다. 여기서 바꾼 것은 저장되지 않습니다.',
          hint:'펼쳐 보세요', before:doc=>{ const d=doc.querySelector('#recordListCard'); if(d) d.hidden=false; },
@@ -867,7 +876,7 @@
     el.dispatchEvent(new doc.defaultView.Event('input',{bubbles:true}));
   }
   /* 녹음을 켜 둔 채 다음 단계로 가면 도움말 내내 녹음이 돈다. 그 단계를 떠나면 멈춘다. */
-  function stopRecordingIn(doc){
+  function stopRecordingIn(doc,keepDraft){
     if(!doc) return;
     let recording=false;
     try{
@@ -878,6 +887,8 @@
       const toggle=doc.querySelector('#recordToggle');
       if(toggle) toggle.click();
     }
+    /* 초안을 설명하는 단계에서는 남겨 둔다. 그 단계가 보여 줘야 할 바로 그것이다. */
+    if(keepDraft) return;
     /* 멈추면 확인용 초안이 남는다. 도움말에서는 저장하지 않으니 버린다. */
     const draft=doc.querySelector('#recordDraft');
     if(draft && !draft.hidden){
@@ -1325,7 +1336,7 @@
         return;
       }
       goScreen(doc,step.screen);
-      if(!step.recording) stopRecordingIn(doc);
+      if(!step.recording) stopRecordingIn(doc,step.draft);
       if(!step.log) closePracticeLog(doc);
       if(!step.lockMenu) lockMenuItems(doc,false);
       if(!step.lockLink) unlockLinkInputs(doc);
