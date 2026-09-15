@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=237">
+<link rel="stylesheet" href="info.css?v=238">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -378,6 +378,12 @@
       </div>
 
       <div class="note">
+        <h3>연습 기록</h3>
+        <p>화면 <b>오른쪽 위 달력</b>을 누르면 날짜별로 무엇을 얼마나 연습했는지 볼 수 있습니다. 날짜 칸의 세로 막대는 <b>키가 그날 총 시간</b>, 마디가 무엇을 했는지입니다. 날짜를 누르고 <b>자세히</b>를 열면 몇 BPM에서 쳤는지, 어떤 키로 잼을 돌렸는지, 어느 구간을 몇 배속으로 반복했는지까지 나옵니다.</p>
+        <p>시간은 화면을 켜 둔 시간이 아니라 <b>실제로 소리가 난 시간</b>만 셉니다. 튜너는 세지 않고, 청음은 시간 대신 문제 수로 셉니다. 이 기록은 아직 <b>이 기기에만</b> 남습니다.</p>
+      </div>
+
+      <div class="note">
         <h3>계정과 개인정보</h3>
         <p>계정 없이 이용할 수 있습니다. Google 계정을 연결하면 녹음·연습 링크·청음 기록이 기기 사이에서 이어집니다.</p>
       </div>
@@ -480,7 +486,7 @@
         {screen:null, target:'.tab-btn[data-tab="metronome"]',
          title:'메트로놈으로 갑니다', body:'화면 아래 탭으로 다섯 기능을 오갑니다.', hint:'여기를 누르세요'},
         {screen:'metronome', target:'#metroStart',
-         title:'올리브를 누르면 시작', body:'박마다 올리브가 빛납니다. 메트로놈과 잼은 동시에 울리지 않지만, <b>녹음과는 함께</b> 쓸 수 있습니다.',
+         title:'올리브를 누르면 시작', body:'박마다 올리브가 빛납니다. 메트로놈과 잼은 동시에 울리지 않지만, <b>녹음과는 함께</b> 쓸 수 있습니다. 녹음하면서 박을 들으려면 트랙 화면의 메트로놈 버튼이 더 가깝습니다.',
          hint:'눌러서 시작해 보세요', check:doc=>doc.querySelector('#metroStart').classList.contains('running')},
         {screen:'metronome', target:'#tapTempoBtn',
          title:'TAP으로 박자 잡기', body:'원하는 박자에 맞춰 <b>여러 번</b> 누르면 그 속도로 맞춰집니다. 누른 간격의 평균을 씁니다.',
@@ -608,8 +614,15 @@
         {screen:'trainer', target:'#trainerSeg', title:'트랙을 고릅니다',
          body:'녹음한 것, 올린 파일, YouTube 링크가 <b>한 목록</b>에 모입니다.', hint:'트랙을 누르세요',
          check:doc=>seg(doc)==='record'},
-        {screen:'trainer:record', target:'#recordToggle', recording:true, title:'눌러서 녹음',
-         body:'메트로놈이나 잼을 켜 둔 채로 녹음할 수 있습니다. 녹음 중에는 화면을 <b>직접 잠그지 마세요.</b> 자동으로 꺼지는 것은 막아 줍니다.',
+        /* 그냥 누르면 켜고 꺼지는 것은 보이는 버튼이라 알아서 찾는다. 길게 누르면
+           설정이 열린다는 것만 화면에 아무 힌트가 없어 여기서 가르친다. */
+        {screen:'trainer:record', target:'#recordMetro', title:'길게 누르면 메트로놈 설정',
+         body:'빠르기·박자·세분화를 여기서 바꿉니다. <b>메트로놈 탭과 같은 설정</b>이라 한쪽에서 바꾸면 양쪽이 같이 바뀝니다.',
+         hint:'길게 눌러 보세요', linger:3000, done:'메트로놈 설정이 열렸습니다',
+         check:doc=>{ const sheet=doc.querySelector('#recordMetroSheet'); return Boolean(sheet && !sheet.hidden); }},
+        {screen:'trainer:record', target:'#recordToggle', also:'#recordMetro', recording:true, title:'눌러서 녹음',
+         before:closeMetroSheet,
+         body:'왼쪽 <b>메트로놈 버튼</b>을 켜 두면 한 마디를 세고 시작하고, 녹음하는 내내 박이 들립니다. 클릭음은 녹음 파일에는 담기지 않습니다. 녹음 중에는 화면을 <b>직접 잠그지 마세요.</b> 자동으로 꺼지는 것은 막아 줍니다.',
          hint:'눌러서 녹음해 보세요',
          check:doc=>{
            try{
@@ -914,6 +927,18 @@
     if(!doc) return;
     lockMenuItems(doc,false);
     unlockLinkInputs(doc);
+  }
+  /* 길게 눌러 연 메트로놈 설정은 다음 단계로 넘어가기 전에 닫는다. 열어 둔 채로
+     두면 시트가 녹음 버튼을 덮어 강조 박스가 가려진 자리를 가리킨다. */
+  function closeMetroSheet(doc){
+    if(!doc) return;
+    const close=doc.querySelector('#recordMetroClose');
+    if(close) close.click();
+    const sheet=doc.querySelector('#recordMetroSheet');
+    if(sheet){ sheet.classList.remove('open'); sheet.hidden=true; }
+    const shell=doc.querySelector('#app');
+    if(shell) shell.removeAttribute('inert');
+    doc.body.classList.remove('cloud-sheet-open');
   }
   /* 목록과 재생기는 앞 단계에서 열리지만, 건너뛴 사람에게도 보여 줘야 한다. */
   function openList(doc){

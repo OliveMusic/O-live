@@ -334,7 +334,27 @@ assert.match(guide,/const del=doc\.querySelector\('#recordSelectDelete'\);/,'삭
 /* 녹음을 켜 둔 채 다음 단계로 가면 도움말 내내 녹음이 돈다. 그 단계를 떠나면 멈춘다. */
 assert.match(guide,/function stopRecordingIn\(doc\)/);
 assert.match(guide,/if\(!step\.recording\) stopRecordingIn\(doc\)/);
-assert.match(guide,/target:'#recordToggle', recording:true/);
+assert.match(guide,/target:'#recordToggle', also:'#recordMetro', recording:true/);
+
+/* ---------- 녹음 메트로놈 ----------
+   그냥 누르면 켜고 꺼지는 것은 보이는 버튼이라 알아서 찾는다. 길게 누르면
+   설정이 열린다는 것만 화면에 아무 힌트가 없어 스텝을 받을 자격이 있다. */
+assert.match(guide,/title:'길게 누르면 메트로놈 설정'/);
+assert.match(guide,/#recordMetroSheet'\); return Boolean\(sheet && !sheet\.hidden\)/);
+/* 열어 둔 채 다음으로 넘어가면 시트가 녹음 버튼을 덮어 강조가 가려진 자리를 가리킨다. */
+assert.match(guide,/function closeMetroSheet\(doc\)/);
+assert.match(guide,/before:closeMetroSheet,/);
+/* 강조 박스가 녹음 버튼만 비추면 새 메트로놈 버튼이 어둠에 남는다. */
+assert.doesNotMatch(guide,/메트로놈이나 잼을 켜 둔 채로 녹음할 수 있습니다/);
+
+/* ---------- 연습 기록 ----------
+   상단바에 보이는 버튼이라 투어 스텝은 쓰지 않는다. 눌러서 알게 되는 것에
+   스텝을 쓰면 정말 숨어 있는 것에 쓸 주의가 줄어든다. 대신 '눌러서 배울 수
+   없는 것들' 자리에 적는다. */
+assert.match(guide,/<h3>연습 기록<\/h3>/);
+assert.match(guide,/실제로 소리가 난 시간<\/b>만 셉니다/);
+assert.match(guide,/이 기기에만<\/b> 남습니다/);
+assert.doesNotMatch(guide,/target:'#practiceLogBtn'/);
 /* 파형만 뚫으면 재생을 시작할 수 없다. 왼쪽 올리브 버튼과 한 짝으로 묶는다. */
 assert.match(guide,/target:'\.record-waveform', also:'\.record-player-play'/);
 assert.match(guide,/function holeBox\(el,also\)/);
