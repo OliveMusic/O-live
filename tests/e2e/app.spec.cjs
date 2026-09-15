@@ -2429,3 +2429,58 @@ test('메트로놈 버튼을 길게 누르면 설정이 열리고 메트로놈 �
   await page.locator('#recordMetroClose').click();
   await expect(page.locator('#recordMetroSheet')).toBeHidden();
 });
+
+/* 연습 기록은 실제로 소리가 난 시간을 센다. 메트로놈이 울려야 하므로
+   여기도 시계가 흐르는 하네스를 쓴다. */
+test('연습 기록은 소리가 난 시간만 세고 튜너는 세지 않는다',async({page})=>{
+  await preparePage(page,{microphone:'meter-signal',advanceClock:true});
+
+  // 시작 전에는 오늘 기록이 없다.
+  expect(await page.evaluate(()=>Object.keys(window.OlivePracticeLog.snapshot()).length)).toBe(0);
+
+  await page.locator('#metroStart').click();
+  await expect.poll(()=>page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeTruthy();
+  await page.waitForTimeout(4200);
+  await page.locator('#metroStart').click();
+  await expect.poll(()=>page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeFalsy();
+
+  const today=await page.evaluate(()=>{
+    const now=new Date();
+    const key=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    return window.OlivePracticeLog.snapshot()[key]||null;
+  });
+  expect(today).not.toBeNull();
+  // 4초 넘게 울렸으니 그만큼은 쌓여 있어야 하고, 터무니없이 크면 안 된다.
+  expect(today.met).toBeGreaterThan(3);
+  expect(today.met).toBeLessThan(30);
+  // 무엇을 하고 있었는지도 함께 남는다 — 새로 만든 숫자가 아니라 읽어 온 값이다.
+  expect(today.meter).toBe('4/4');
+  expect(today.bpmLo).toBeGreaterThan(0);
+  // 튜너는 세지 않는다.
+  expect(today.tuner).toBeUndefined();
+
+  // 상단바 달력을 누르면 그날 기록이 보인다. 하단 탭은 다섯 개 그대로다.
+  await expect(page.locator('.tabbar .tab-btn')).toHaveCount(5);
+  await page.locator('#practiceLogBtn').click();
+  await expect(page.locator('#practiceLogSheet')).toBeVisible();
+  await expect(page.locator('#practiceLogBtn')).toHaveAttribute('aria-expanded','true');
+  await expect(page.locator('#practiceLogGrid .log-day.today')).toHaveCount(1);
+  await expect(page.locator('#practiceLogTotal')).toContainText('분');
+  await expect(page.locator('#practiceLogBrief')).toContainText('메트로놈');
+
+  // 접힌 상태에서는 도구별 시간만, 펼치면 어떻게 연습했는지가 나온다.
+  await expect(page.locator('#practiceLogFull')).toBeHidden();
+  await page.locator('#practiceLogMore').click();
+  await expect(page.locator('#practiceLogFull')).toBeVisible();
+  await expect(page.locator('#practiceLogFull')).toContainText('BPM');
+  await expect(page.locator('#practiceLogFull')).toContainText('4/4');
+
+  // 연습한 날은 막대가 서고, 아직 오지 않은 날은 바닥선만 남는다.
+  const bars=await page.locator('#practiceLogGrid .log-day.today .log-col i').count();
+  expect(bars).toBeGreaterThan(0);
+  expect(await page.locator('#practiceLogGrid .log-rest').count()).toBeGreaterThan(0);
+
+  await page.locator('#practiceLogClose').click();
+  await expect(page.locator('#practiceLogSheet')).toBeHidden();
+  await expect(page.locator('#practiceLogBtn')).toHaveAttribute('aria-expanded','false');
+});

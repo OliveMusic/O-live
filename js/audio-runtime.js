@@ -829,6 +829,14 @@ async function keepAwake(on){
 
 /* ===== 소리 나는 탭과 재생 기능 관리 ===== */
 const __sounding = {};
+
+/* 연습 기록이 '지금 무엇이 울리는가'를 받아 가는 자리. 연습 시간은 화면을
+   켜 둔 시간이 아니라 실제로 소리가 난 시간으로 세야 믿을 수 있는 숫자가 된다. */
+const __soundingListeners = [];
+function onSoundingChange(listener){ __soundingListeners.push(listener); }
+function notifySounding(tab,key,on){
+  __soundingListeners.forEach(listener=>{ try{ listener(tab,key,on); }catch(error){} });
+}
 function pulseTab(tab){
   const btn=document.querySelector('.tab-btn[data-tab="'+tab+'"]');
   if(!btn || !btn.classList.contains('sounding')) return;
@@ -959,7 +967,10 @@ function setBackgroundTransportContext(ctx){
 function setTabSounding(tab,on,source){
   const key=source||tab;
   if(!__sounding[tab]) __sounding[tab]=new Set();
+  const had=__sounding[tab].has(key);
   on ? __sounding[tab].add(key) : __sounding[tab].delete(key);
+  // 같은 상태로 다시 불러도 연습 기록에는 한 번만 알린다.
+  if(had!==Boolean(on)) notifySounding(tab,key,Boolean(on));
   const btn=document.querySelector('.tab-btn[data-tab="'+tab+'"]');
   if(btn) btn.classList.toggle('sounding',__sounding[tab].size>0);
   keepAwake(anySounding());

@@ -180,8 +180,12 @@
     .startup-splash{transition:opacity .12s linear, visibility 0s linear .12s;}
   }
 
+  /* 헤더는 지금까지 내용만큼만 줄어들어 화면 가운데 놓였다. 로고와 화면 이름이
+     앉는 자리는 그대로 두고, 폭만 프레임 전체로 늘려 오른쪽 끝을 쓸 수 있게 한다.
+     justify-content:center가 예전의 가운데 정렬을 그대로 재현한다. */
   header.topbar{
     padding:15px 18px 13px; display:flex; align-items:center; gap:9px; flex-shrink:0;
+    position:relative; width:100%; justify-content:center;
   }
   header.topbar .logo{
     width:19px; height:19px; flex-shrink:0;
@@ -192,6 +196,23 @@
     font-size:0.6562rem; margin:0; font-weight:500;
     text-transform:uppercase; letter-spacing:0.1909em; color:var(--ink-2);
   }
+  /* 상단바 오른쪽 끝은 지금까지 비어 있었다. 연습 기록은 어느 탭에서나
+     열 수 있어야 하는데 하단 탭을 여섯 개로 늘릴 만큼 자주 쓰지는 않는다. */
+  .topbar-log{
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    width:44px; height:44px; padding:0;
+    border:0; border-radius:50%; background:transparent; color:var(--ink-3);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition:color .14s var(--ease-out);
+  }
+  .topbar-log svg{
+    width:17px; height:17px; display:block;
+    fill:none; stroke:currentColor; stroke-width:1.3;
+    stroke-linecap:round; stroke-linejoin:round;
+  }
+  .topbar-log:active{ background:var(--key-press); }
+  /* 세이지는 '지금 작동 중'일 때만 쓴다. 기록 창이 열려 있는 동안만이다. */
+  .topbar-log[aria-expanded="true"]{ color:var(--signal); }
 
   /* 손에 쥐는 앱이다. 모니터에서 화면 폭만큼 늘어나면 버튼이 우스꽝스럽게 길어진다. */
   main{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:4px 14px 106px;}
@@ -845,6 +866,95 @@
     color:var(--ink-3); font-size:1.25rem; cursor:pointer;
   }
   .cloud-sheet-close:active{background:var(--key-press);}
+  /* ---------- 연습 기록 ----------
+     날짜 칸은 청음 기록 달력(.ear-day)을 그대로 쓴다. 다른 것은 칸 안에
+     세로 막대가 하나 선다는 점뿐이다.
+
+     활동 링을 쓰지 않은 이유: 링은 세 가지 색으로 세 지표를 나눈다. 이 앱에는
+     색이 하나뿐이고, 세이지는 '작동 중'일 때만 쓴다는 규칙이 화면 전체를
+     지탱한다. 그래서 색 대신 높이와 농도로 바꿨다. 막대가 칸 아래쪽 같은
+     바닥선에 정렬되므로 한 주가 한 줄의 막대그래프로도 읽힌다. */
+  .log-sheet{ max-height:calc(100dvh - 56px); overflow-y:auto; }
+  .log-sheet > h2{ margin-top:6px; }
+  .log-grid{ margin-top:0; }
+  .log-day{ min-height:48px; justify-content:flex-start; gap:4px; }
+  .log-col-wrap{
+    width:17px; height:25px; margin-top:auto;
+    display:flex; align-items:flex-end;
+  }
+  .log-col{
+    width:100%; display:flex; flex-direction:column-reverse;
+    border-radius:3px; overflow:hidden;
+  }
+  .log-col i{ display:block; width:100%; }
+  /* 한 가지 색의 농도만으로 나눈다. 진할수록 오래 잡고 있는 도구다. */
+  .log-seg-met{ background:rgba(var(--signal-rgb),1); }
+  .log-seg-jam{ background:rgba(var(--signal-rgb),.66); }
+  .log-seg-trk{ background:rgba(var(--signal-rgb),.42); }
+  .log-seg-rhy{ background:rgba(var(--signal-rgb),.24); }
+  .log-seg-rec{ background:rgba(var(--signal-rgb),.84); }
+  /* 쉰 날은 빈칸이 아니라 바닥선으로 남긴다. 달력이 구멍 뚫린 표가 아니라
+     바닥이 있는 그래프로 읽히고, 쉰 날을 나무라지 않으면서 사실만 적는다. */
+  .log-rest{ background:var(--line); height:2px; border-radius:1px; }
+  .log-day.log-future{ opacity:.32; }
+
+  .log-legend{
+    display:flex; flex-wrap:wrap; gap:5px 12px; margin:12px 0 0;
+    justify-content:center;
+  }
+  .log-legend span{
+    display:flex; align-items:center; gap:5px;
+    font-size:0.5938rem; font-weight:500; color:var(--ink-3);
+  }
+  .log-legend i{ width:9px; height:9px; border-radius:2px; display:block; }
+
+  .log-detail{ margin-top:12px; padding-top:11px; border-top:1px solid var(--line-soft); }
+  .log-detail-head{
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+    min-height:22px;
+  }
+  .log-total{
+    color:var(--ink); font-size:0.7188rem; font-weight:600;
+    font-variant-numeric:tabular-nums;
+  }
+  .log-total.log-empty{ color:var(--ink-3); font-weight:500; font-size:0.625rem; }
+  .log-more{
+    flex:0 0 auto; border:0; background:transparent; padding:4px 0 4px 8px;
+    color:var(--ink-3); font-size:0.625rem; font-weight:500; cursor:pointer;
+    display:flex; align-items:center; gap:5px;
+  }
+  /* 정해 둔 display는 UA의 [hidden]{display:none}을 이긴다. 숨기라고 했는데
+     그대로 보이던 자리가 예전에도 있었다. */
+  .log-more[hidden], .log-full[hidden]{ display:none; }
+  .log-more::after{
+    content:''; width:5px; height:5px;
+    border-right:1.4px solid var(--ink-3); border-bottom:1.4px solid var(--ink-3);
+    transform:rotate(45deg) translate(-1px,-1px);
+    transition:transform .18s var(--ease-out);
+  }
+  .log-more[aria-expanded="true"]::after{ transform:rotate(225deg) translate(-1px,-1px); }
+  .log-brief{
+    display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:5px; margin-top:9px; color:var(--ink-2);
+    font-size:0.625rem; font-weight:500; font-variant-numeric:tabular-nums;
+  }
+  .log-brief:empty{ display:none; }
+  .log-brief span{ white-space:nowrap; }
+  .log-brief b{ margin-right:3px; color:var(--ink-3); font-weight:500; }
+
+  .log-full{
+    margin-top:11px; padding-top:10px; border-top:1px solid var(--line-soft);
+    display:flex; flex-direction:column; gap:9px;
+  }
+  .log-row{ display:grid; grid-template-columns:12px 52px 1fr; gap:8px; align-items:baseline; }
+  .log-row .log-sw{ width:9px; height:9px; border-radius:2px; align-self:center; }
+  .log-row .log-who{ font-size:0.625rem; font-weight:600; color:var(--ink); }
+  .log-row .log-what{
+    font-size:0.625rem; font-weight:500; color:var(--ink-2); line-height:1.5;
+    font-variant-numeric:tabular-nums;
+  }
+  .log-row .log-what em{ font-style:normal; color:var(--ink-3); }
+
   /* ---------- 녹음 화면의 메트로놈 설정 창 ---------- */
   .metro-sheet{ max-height:calc(100dvh - 56px); overflow-y:auto; }
   .metro-sheet-display{
@@ -2254,6 +2364,13 @@
                M8.5 8 A 1.7 1.7 0 1 0 11.9 8 A 1.7 1.7 0 1 0 8.5 8 Z"/>
     </svg>
     <h1 id="pageTitle">메트로놈</h1>
+    <button class="topbar-log" id="practiceLogBtn" type="button" aria-label="연습 기록">
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="2.8" y="4.2" width="14.4" height="13" rx="2.6"/>
+        <path d="M2.8 8.2h14.4M6.6 2.6v3M13.4 2.6v3"/>
+        <circle cx="10" cy="12.4" r="1.5" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
   </header>
 
   <main>
@@ -2770,6 +2887,39 @@
   </div>
 </div>
 
+<!-- 연습 기록. 상단바의 달력을 누르면 열린다. 날짜 칸의 세로 막대는
+     키가 그날 총 연습 시간, 마디가 무엇을 했는지다. -->
+<div class="cloud-sheet-backdrop" id="practiceLogSheet" hidden>
+  <section class="cloud-sheet log-sheet" role="dialog" aria-modal="true" aria-labelledby="practiceLogTitle">
+    <div class="cloud-sheet-handle" aria-hidden="true"></div>
+    <button class="cloud-sheet-close" id="practiceLogClose" type="button" aria-label="닫기">×</button>
+    <h2 id="practiceLogTitle">연습 기록</h2>
+    <p class="cloud-sheet-lead" id="practiceLogLead"></p>
+
+    <div class="ear-calendar-head">
+      <button class="ear-month-btn" id="practiceLogPrev" type="button" aria-label="이전 달">‹</button>
+      <strong id="practiceLogMonth"></strong>
+      <button class="ear-month-btn" id="practiceLogNext" type="button" aria-label="다음 달">›</button>
+    </div>
+    <div class="ear-weekdays" aria-hidden="true">
+      <span>일</span><span>월</span><span>화</span><span>수</span>
+      <span>목</span><span>금</span><span>토</span>
+    </div>
+    <div class="ear-calendar-grid log-grid" id="practiceLogGrid"></div>
+
+    <div class="log-legend" id="practiceLogLegend" aria-hidden="true"></div>
+
+    <div class="log-detail">
+      <div class="log-detail-head">
+        <span class="log-total" id="practiceLogTotal">날짜를 누르면 그날 기록을 볼 수 있습니다</span>
+        <button class="log-more" id="practiceLogMore" type="button" aria-expanded="false" hidden>자세히</button>
+      </div>
+      <div class="log-brief" id="practiceLogBrief"></div>
+      <div class="log-full" id="practiceLogFull" hidden></div>
+    </div>
+  </section>
+</div>
+
 <!-- 녹음 화면에서 메트로놈 버튼을 길게 누르면 열린다.
      여기서 고치는 값은 메트로놈 탭과 같은 값이다. 따로 두면 왜 아까와
      빠르기가 다른지 아무도 설명할 수 없게 된다. -->
@@ -2866,22 +3016,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=236"></script>
+<script src="app-version.js?v=237"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=236"></script>
-<script src="js/audio-runtime.js?v=236"></script>
-<script src="js/core.js?v=236"></script>
-<script src="js/metronome.js?v=236"></script>
-<script src="js/tuner-engine.js?v=236"></script>
-<script src="js/tuner.js?v=236"></script>
-<script src="js/scales.js?v=236"></script>
-<script src="js/ear-trainer.js?v=236"></script>
-<script src="js/rhythm-trainer.js?v=236"></script>
-<script src="js/recording-cache.js?v=236"></script>
-<script src="js/recorder.js?v=236"></script>
-<script src="js/practice-links.js?v=236"></script>
-<script src="js/jam-session.js?v=236"></script>
-<script src="js/app-shell.js?v=236"></script>
+<script src="cloud-sync.js?v=237"></script>
+<script src="js/audio-runtime.js?v=237"></script>
+<script src="js/core.js?v=237"></script>
+<script src="js/metronome.js?v=237"></script>
+<script src="js/tuner-engine.js?v=237"></script>
+<script src="js/tuner.js?v=237"></script>
+<script src="js/scales.js?v=237"></script>
+<script src="js/ear-trainer.js?v=237"></script>
+<script src="js/rhythm-trainer.js?v=237"></script>
+<script src="js/recording-cache.js?v=237"></script>
+<script src="js/recorder.js?v=237"></script>
+<script src="js/practice-links.js?v=237"></script>
+<script src="js/jam-session.js?v=237"></script>
+<script src="js/practice-log.js?v=237"></script>
+<script src="js/app-shell.js?v=237"></script>
 </body>
 </html>
