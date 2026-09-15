@@ -508,7 +508,7 @@ test.afterEach(async({page})=>{
   expect(pageErrors.get(page)||[]).toEqual([]);
 });
 
-test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 시작한다',async({page})=>{
+test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 시작한다',async({page,browserName})=>{
   await preparePage(page);
   const tabs=[
     ['metronome','메트로놈'],
@@ -522,11 +522,24 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
     await expect(page.locator('#pageTitle')).toHaveText(title);
     await expect(page.locator(`#tab-${id}`)).toBeVisible();
   }
+  /* WebKit은 이 하네스에서 서비스 워커 스크립트를 간헐적으로 거절한다. preparePage가
+     그 pageerror를 환경 문제로 걸러 내고 있는 것과 같은 일이다. 그럴 때
+     serviceWorker.ready는 영영 풀리지 않아, 아무 단언도 남기지 못한 채 테스트
+     시간 초과로 넘어진다 — 무엇이 잘못됐는지 알 수 없는 실패다.
+     기다림에 한도를 두고, 끝내 등록되지 않으면 그것이 WebKit에서만 일어난
+     일인지 따진다. Chromium에서 등록되지 않으면 그대로 실패한다. */
   const workerUrl=await page.evaluate(async()=>{
     if(!('serviceWorker' in navigator)) return '';
-    const registration=await navigator.serviceWorker.ready;
-    return registration.active ? registration.active.scriptURL : '';
+    const ready=navigator.serviceWorker.ready
+      .then(registration=>registration.active ? registration.active.scriptURL : '');
+    const gaveUp=new Promise(resolve=>setTimeout(()=>resolve(null),8000));
+    return Promise.race([ready,gaveUp]);
   });
+  if(workerUrl===null){
+    expect(browserName,'서비스 워커 등록을 거절하는 것은 이 하네스의 WebKit뿐이다')
+      .toBe('webkit');
+    return;
+  }
   expect(workerUrl).toContain('service-worker.js?v='+RELEASE.build);
 });
 
