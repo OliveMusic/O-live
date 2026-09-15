@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=243">
+<link rel="stylesheet" href="info.css?v=244">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -587,9 +587,19 @@
          body:'다시 듣고 싶으면 <b>다시 듣기</b>를 누릅니다.', hint:'눌러서 들어 보세요', linger:3200},
         /* 달력은 청음 안에 따로 두지 않고 상단바의 연습 기록 하나로 모았다.
            두 군데에서 같은 값을 그리던 때는 숫자가 서로 어긋났다. */
-        {screen:'trainer:ear', target:'#practiceLogBtn', title:'기록은 여기에 쌓입니다',
-         body:'맞힌 문제는 <b>오른쪽 위 달력</b>에 날짜별로 쌓입니다. 날짜를 누르고 자세히를 열면 그날의 음정·화음·음계를 나눠서 보여 줍니다.',
-         advance:'next'},
+        /* 창이 열리면 강조도 창으로 옮겨 간다. 작은 아이콘만 계속 비추면
+           정작 무엇이 열렸는지 어두워서 보이지 않는다. */
+        {screen:'trainer:ear', log:true,
+         target:doc=>{
+           const sheet=doc.querySelector('#practiceLogSheet');
+           if(sheet && !sheet.hidden) return sheet.querySelector('.cloud-sheet');
+           return doc.querySelector('#practiceLogBtn');
+         },
+         title:'기록은 여기에 쌓입니다',
+         body:'맞힌 문제는 <b>오른쪽 위 달력</b>에 날짜별로 쌓입니다. 날짜를 누르고 <b>자세히</b>를 열면 그날의 음정·화음·음계를 나눠서 보여 줍니다.',
+         hint:'달력을 눌러 보세요', linger:3200, done:'연습 기록이 열렸습니다',
+         check:doc=>{ const sheet=doc.querySelector('#practiceLogSheet');
+           return Boolean(sheet && !sheet.hidden); }},
       ],
     },
     {
@@ -951,17 +961,26 @@
     lockMenuItems(doc,false);
     unlockLinkInputs(doc);
   }
-  /* 길게 눌러 연 메트로놈 설정은 다음 단계로 넘어가기 전에 닫는다. 열어 둔 채로
-     두면 시트가 녹음 버튼을 덮어 강조 박스가 가려진 자리를 가리킨다. */
-  function closeMetroSheet(doc){
+  /* 열어 둔 창은 그 단계를 떠날 때 닫는다. 남겨 두면 다음 단계의 강조가
+     창에 가려진 자리를 가리키고, 챕터가 끝난 화면 뒤에도 그대로 떠 있다. */
+  function closeSheetIn(doc,sheetId,closeId){
     if(!doc) return;
-    const close=doc.querySelector('#recordMetroClose');
+    const sheet=doc.querySelector(sheetId);
+    if(!sheet || sheet.hidden) return;
+    const close=doc.querySelector(closeId);
     if(close) close.click();
-    const sheet=doc.querySelector('#recordMetroSheet');
-    if(sheet){ sheet.classList.remove('open'); sheet.hidden=true; }
+    sheet.classList.remove('open'); sheet.hidden=true;
     const shell=doc.querySelector('#app');
     if(shell) shell.removeAttribute('inert');
     doc.body.classList.remove('cloud-sheet-open');
+  }
+  function closePracticeLog(doc){
+    closeSheetIn(doc,'#practiceLogSheet','#practiceLogClose');
+  }
+  /* 길게 눌러 연 메트로놈 설정은 다음 단계로 넘어가기 전에 닫는다. 열어 둔 채로
+     두면 시트가 녹음 버튼을 덮어 강조 박스가 가려진 자리를 가리킨다. */
+  function closeMetroSheet(doc){
+    closeSheetIn(doc,'#recordMetroSheet','#recordMetroClose');
   }
   /* 목록과 재생기는 앞 단계에서 열리지만, 건너뛴 사람에게도 보여 줘야 한다. */
   function openList(doc){
@@ -1307,6 +1326,7 @@
       }
       goScreen(doc,step.screen);
       if(!step.recording) stopRecordingIn(doc);
+      if(!step.log) closePracticeLog(doc);
       if(!step.lockMenu) lockMenuItems(doc,false);
       if(!step.lockLink) unlockLinkInputs(doc);
       if(step.before){ try{ step.before(doc); }catch(e){} }
@@ -1436,6 +1456,10 @@
     /* 도움말에서 켠 마이크를 그대로 두고 나가지 않는다. */
     const mic=doc.querySelector('#tunerStart');
     if(mic && mic.classList.contains('on')) mic.click();
+    /* 열어 둔 창부터 닫는다. 창이 #app에 inert를 걸어 두므로, 아래 정리들이
+       화면을 만지기 전에 그것을 먼저 풀어야 한다. */
+    closePracticeLog(doc);
+    closeMetroSheet(doc);
     stopRecordingIn(doc);
     stopRowPlayback(doc);
     lockScroll(doc,false);

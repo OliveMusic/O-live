@@ -358,12 +358,20 @@ assert.doesNotMatch(guide,/메트로놈이나 잼을 켜 둔 채로 녹음할 �
 assert.match(guide,/<h3>연습 기록<\/h3>/);
 assert.match(guide,/실제로 소리가 난 시간<\/b>만 셉니다/);
 assert.match(guide,/이 기기에만<\/b> 남습니다/);
-/* 달력 버튼 자체를 누르는 법은 가르치지 않는다 — 보이는 버튼이다. 청음 챕터가
-   한 번 가리키는 것은 조작법이 아니라 '맞힌 문제가 어디로 갔는지'다. 청음 안의
-   달력을 걷어낸 지금은 그게 눈에 보이지 않는 사실이라 한마디가 필요하다. */
+/* 연습 기록은 제 챕터를 갖지 않는다. 청음 챕터가 한 번 가리키는 것은 조작법이
+   아니라 '맞힌 문제가 어디로 갔는지'다 — 청음 안의 달력을 걷어낸 지금은 그게
+   눈에 보이지 않는 사실이라 한마디가 필요하다. */
 assert.doesNotMatch(guide,/key:'log'|key:'practice'/);
-assert.doesNotMatch(guide,/#practiceLogBtn'[\s\S]{0,200}hint:/);
-assert.match(guide,/target:'#practiceLogBtn', title:'기록은 여기에 쌓입니다'/);
+assert.match(guide,/title:'기록은 여기에 쌓입니다'/);
+/* 창이 열리면 강조도 창으로 옮겨 간다. 작은 아이콘만 계속 비추면 정작 무엇이
+   열렸는지 어두워서 보이지 않는다. */
+assert.match(guide,/if\(sheet && !sheet\.hidden\) return sheet\.querySelector\('\.cloud-sheet'\);[\s\S]{0,120}#practiceLogBtn/);
+/* 열어 둔 창은 그 단계를 떠날 때 닫는다. 남겨 두면 다음 단계의 강조가 창에
+   가려진 자리를 가리키고, 챕터가 끝난 화면 뒤에도 그대로 떠 있다. */
+assert.match(guide,/function closePracticeLog\(doc\)/);
+assert.match(guide,/if\(!step\.log\) closePracticeLog\(doc\);/);
+assert.match(guide,/closePracticeLog\(doc\);\s*closeMetroSheet\(doc\);\s*stopRecordingIn\(doc\);/,
+  '투어를 나갈 때 열어 둔 창도 닫는다');
 /* 파형만 뚫으면 재생을 시작할 수 없다. 왼쪽 올리브 버튼과 한 짝으로 묶는다. */
 assert.match(guide,/target:'\.record-waveform', also:'\.record-player-play'/);
 assert.match(guide,/function holeBox\(el,also\)/);
