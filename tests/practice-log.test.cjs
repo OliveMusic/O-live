@@ -102,7 +102,8 @@ assert.equal((index.match(/<button class="tab-btn/g)||[]).length,5,'하단 탭�
    몇 BPM에서 몇으로 옮겼는지, 어떤 곡을 걸었는지까지 적으면 하루를 훑어보려고
    연 화면이 읽을거리가 된다. 화면에 쓰지 않는 값은 모으지도 않는다 — 아무도
    읽지 않는 기록은 조용히 썩는다. */
-assert.doesNotMatch(log,/sampleMeta|bpmLo|jamPreset|day\.tracks/);
+assert.doesNotMatch(log,/sampleMeta|bpmLo|jamPreset|day\.tracks|noteRecordingSaved/);
+assert.doesNotMatch(recorder,/OlivePracticeLog/);
 assert.doesNotMatch(jam,/OliveJam/);
 assert.doesNotMatch(recorder,/nowPlayingTrack/);
 assert.doesNotMatch(links,/nowPlaying/);
@@ -115,8 +116,6 @@ for(const member of ['count','entries','deleteMany','isPlaying','stopPlayback','
 /* 값이 두 줄이 되어도 색 표와 이름은 첫 줄에 맞는다. */
 assert.match(index,/\.log-row\{[^}]*align-items:start;/);
 assert.match(index,/\.log-row \.log-sw\{[^}]*margin-top:3px/);
-/* 녹음을 저장한 개수는 저장이 성공한 자리에서만 센다. */
-assert.match(recorder,/window\.OlivePracticeLog\.noteRecordingSaved\(\);/);
 
 /* ---------- 배포에 실려야 한다 ---------- */
 assert.match(index,/<script src="js\/practice-log\.js\?v=\d+"><\/script>/);

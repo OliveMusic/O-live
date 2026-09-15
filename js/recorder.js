@@ -2899,7 +2899,6 @@
       await window.OliveCloud.uploadRecording(saved);
       rememberCloudBlob(saved,saved.blob);
       await cacheRowBlob(saved,saved.blob);
-      if(window.OlivePracticeLog) window.OlivePracticeLog.noteRecordingSaved();
       discardDraft(); await loadRecordings(true); recordListCard.open=true; setMessage('클라우드에 저장했습니다');
     }catch(error){
       const message=/count limit/i.test(error&&error.message||'') ? '녹음은 최대 50개까지 저장할 수 있습니다'

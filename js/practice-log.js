@@ -217,15 +217,6 @@
     return source ? source.days() : [];
   }
 
-  /* ---------- 저장한 녹음 ---------- */
-  function noteRecordingSaved(){
-    const key=todayKey();
-    const day=dayFor(key);
-    day.saved=(Number(day.saved)||0)+1;
-    saveNow();
-    if(!sheet.hidden) render();
-  }
-
   /* ---------- 달력 ---------- */
   let shownMonth=new Date();
   shownMonth=new Date(shownMonth.getFullYear(),shownMonth.getMonth(),1);
@@ -311,7 +302,7 @@
       cell.type='button';
       cell.className='ear-day log-day';
       cell.dataset.key=key;
-      if(totalSeconds(day)>0 || Number(day&&day.saved) || earFor(key)) cell.classList.add('has-record');
+      if(totalSeconds(day)>0 || earFor(key)) cell.classList.add('has-record');
       if(key===todayKey()) cell.classList.add('today');
       if(key===selectedKey) cell.classList.add('selected');
       if(key>todayKey()) cell.classList.add('log-future');
@@ -354,12 +345,6 @@
     const lines=TOOL_ORDER
       .filter(tool=>Number(day[tool]))
       .map(tool=>({tool,name:TOOL_NAMES[tool],text:formatSpan(day[tool])}));
-    if(Number(day.saved)){
-      const at=lines.findIndex(line=>line.tool==='rec');
-      const saved=`${day.saved}개 저장`;
-      if(at>=0) lines[at].text+=` · ${saved}`;
-      else lines.push({tool:'rec',name:'녹음',text:saved});
-    }
     if(ear){
       const accuracy=Math.round(ear.correct/ear.total*100);
       const counted=earModes().reduce((sum,item)=>{
@@ -391,7 +376,7 @@
     const total=totalSeconds(day);
     const [year,month,date]=selectedKey.split('-').map(Number);
 
-    if(!total && !ear && !Number(day&&day.saved)){
+    if(!total && !ear){
       totalEl.textContent=`${month}월 ${date}일 · 기록 없음`;
       totalEl.classList.add('log-empty');
       moreEl.hidden=true;
@@ -487,7 +472,6 @@
   moreEl.addEventListener('click',()=>{ expanded=!expanded; renderDetail(); });
 
   window.OlivePracticeLog={
-    noteRecordingSaved,
     /* 청음 트레이너가 답을 적을 때마다 부른다. 창이 닫혀 있으면 할 일이 없다. */
     refresh(){ if(!sheet.hidden) render(); },
     open:openSheet,
