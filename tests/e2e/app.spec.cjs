@@ -2543,3 +2543,56 @@ test('계정을 연결하면 상단바가 달력으로 바뀐다',async({page})=
   await expect(page.locator('#topbarSignIn')).toBeHidden();
   await expect(page.locator('#practiceLogBtn')).toBeVisible();
 });
+
+/* 메트로놈 탭에서 이미 울리고 있을 때 녹음을 시작하는 경우. 마디 중간에서
+   그대로 이어받으면 클릭이 계속 들릴 뿐이라 어디가 카운트인인지 귀로 알 수
+   없고, 다음 마디 첫 박을 기다리느라 최대 두 마디가 지나간다. */
+test('이미 울리던 메트로놈도 녹음을 시작하면 처음부터 다시 센다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal',advanceClock:true});
+
+  await page.evaluate(()=>{
+    window.OliveMetronome.setMeter('4/4');
+    window.OliveMetronome.setBpm(120);      // 한 마디 = 2초
+  });
+  await page.locator('#metroStart').click();
+  await expect.poll(()=>page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeTruthy();
+  // 마디 중간까지 흘려보낸다.
+  await page.waitForTimeout(1100);
+
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await page.locator('#recordMetro').click();
+  await expect(page.locator('#recordMetro')).toHaveAttribute('aria-pressed','true');
+
+  await page.evaluate(()=>{
+    window.__counts=[]; window.__countAt=[];
+    window.__pressedAt=performance.now();
+    window.__playing=[];
+    window.OliveMetronome.onPlaying(on=>window.__playing.push(on));
+    const timer=document.getElementById('recordTimer');
+    new MutationObserver(()=>{
+      window.__counts.push(timer.textContent);
+      window.__countAt.push(performance.now());
+    }).observe(timer,{childList:true,characterData:true,subtree:true});
+  });
+  await page.locator('#recordToggle').click();
+
+  await expect(page.locator('#recordState')).toHaveText('카운트인');
+  /* 돌던 것을 멈추고 다시 켠 흔적. 이어받았다면 이 줄이 비어 있다. */
+  await expect.poll(()=>page.evaluate(()=>window.__playing.join(','))).toBe('false,true');
+  await expect(page.locator('#recordState')).toHaveText('녹음 중',{timeout:15000});
+
+  // 한 마디만 센다. 이어받으면 이 줄이 길어지거나 늦게 시작한다.
+  const counted=await page.evaluate(()=>window.__counts.filter(t=>/^[0-9]$/.test(t))
+    .filter((t,i,all)=>i===0 || t!==all[i-1]));
+  expect(counted).toEqual(['4','3','2','1']);
+  const startedAfter=await page.evaluate(()=>{
+    const at=window.__countAt.findIndex((_,i)=>/^[0-9]$/.test(window.__counts[i]));
+    return at<0 ? Infinity : window.__countAt[at]-window.__pressedAt;
+  });
+  expect(startedAfter).toBeLessThan(2000);
+
+  // 녹음을 멈추면 우리가 켠 메트로놈도 함께 멈춘다.
+  await page.locator('#recordToggle').click();
+  await expect.poll(()=>page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeFalsy();
+});

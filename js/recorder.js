@@ -875,11 +875,15 @@
     if(metroBeatOff){ metroBeatOff(); metroBeatOff=null; }
     if(recordMetro) recordMetro.classList.remove('beat');
   }
+  /* 이미 돌고 있어도 처음부터 다시 켠다. 마디 중간에서 그대로 이어받으면
+     클릭이 그냥 계속 들릴 뿐이라 어디가 카운트인인지 귀로 알 수 없고, 다음
+     마디 첫 박을 기다리느라 최대 두 마디가 지나간다. 다시 켜면 첫 박이 곧
+     마디 첫 박이라 세는 길이가 언제나 한 마디다. */
   async function startRecorderMetronome(){
     const metro=metronome();
     if(!metro) return false;
     attachMetroBeat();
-    if(metro.isPlaying()) return true;
+    if(metro.isPlaying()) metro.stop();
     try{ await metro.start(); }catch(error){ return false; }
     if(!metro.isPlaying()) return false;
     metroStartedByRecorder=true;
@@ -922,9 +926,8 @@
      리스너는 메트로놈을 켜기 '전에' 건다. 켠 뒤에 걸면 첫 박을 놓쳐 다음 마디
      첫 박까지 한 바퀴를 더 기다리게 된다 — 카운트인이 네 박 늦게 시작하던 원인이다.
 
-     우리가 켜는 경우 첫 박이 곧 마디 첫 박이므로 바로 센다. 이미 돌고 있던
-     메트로놈에만 다음 마디 첫 박을 기다린다. 마디 중간에서 세기 시작하면
-     클릭의 강세와 화면의 숫자가 어긋난다.
+     녹음을 시작할 때 메트로놈을 언제나 다시 켜므로, 처음 듣는 박이 곧 마디
+     첫 박이다. 그래서 기다리지 않고 바로 센다.
 
      세는 기준은 예약 시각이 아니라 실제로 소리가 난 박이라, 화면의 숫자와
      귀에 들리는 클릭이 어긋나지 않는다. */
@@ -932,10 +935,9 @@
     const metro=metronome();
     if(!metro) return null;
     const beats=Math.max(1,metro.beatsPerBar());
-    const waitForDownbeat=metro.isPlaying();
     showCountIn(beats);
     return new Promise(resolve=>{
-      let counted=0, armed=!waitForDownbeat, done=false, off=null, guard=0;
+      let counted=0, done=false, off=null, guard=0;
       const finish=()=>{
         if(done) return;
         done=true;
@@ -945,18 +947,14 @@
         resolve();
       };
       countInAbort=finish;
-      off=metro.onBeat(mark=>{
+      off=metro.onBeat(()=>{
         if(token!==startToken || !startPending){ finish(); return; }
-        if(!armed){
-          if(mark.beatIndex!==0) return;
-          armed=true;
-        }
         counted++;
         if(counted>beats){ finish(); return; }
         showCountIn(beats-counted+1);
       });
       // 박이 오지 않으면(오디오가 막히는 등) 무한정 기다리지 않는다.
-      guard=setTimeout(finish,(beats*2+2)*metro.secondsPerBeat()*1000+2500);
+      guard=setTimeout(finish,(beats+2)*metro.secondsPerBeat()*1000+2500);
     });
   }
 
@@ -3027,6 +3025,9 @@
   if(window.OliveMetronome && typeof window.OliveMetronome.onPlaying==='function'){
     window.OliveMetronome.onPlaying(on=>{
       if(on) return;
+      /* 녹음을 시작하는 중이라면 우리가 카운트인을 위해 방금 멈춘 것이다.
+         여기서 거두면 걸어 둔 박 리스너까지 떨어져 세지 못한다. */
+      if(startPending) return;
       metroStartedByRecorder=false;
       detachMetroBeat();
       cancelCountIn();

@@ -81,8 +81,6 @@ assert.match(index,/메트로놈 탭과 같은 설정입니다/);
 assert.match(recorder,/function metronome\(\)\{ return window\.OliveMetronome\|\|null; \}/);
 assert.doesNotMatch(recorder,/new AudioContext[\s\S]{0,80}metro/i);
 
-/* 마디 중간이 아니라 다음 마디 첫 박부터 센다. */
-assert.match(recorder,/if\(mark\.beatIndex!==0\) return;/);
 /* 메트로놈을 마이크보다 먼저 켠다. 캡처 그래프를 세운 뒤에 켜면 메트로놈이
    오디오 컨텍스트를 갈아 끼우면서 입력 레벨이 죽고 녹음이 끊긴 스트림을 문다. */
 assert.match(recorder,/armCountIn\(token\)[\s\S]*?startRecorderMetronome\(\)[\s\S]*?ensureRecordingCtx[\s\S]*?setupCapture\(ctx\)[\s\S]*?await counting;[\s\S]*?recorder\.start\(\)/);
@@ -93,8 +91,15 @@ assert.doesNotMatch(recorder,/levelSink\.connect\(ctx\.destination\);\s*levelFra
 assert.match(recorder,/recording=true; startPending=false;[\s\S]{0,120}startLevelLoop\(\);/);
 
 /* 리스너는 메트로놈을 켜기 전에 건다. 켠 뒤에 걸면 첫 박을 놓쳐 한 마디를 더 기다린다. */
-assert.match(recorder,/const waitForDownbeat=metro\.isPlaying\(\);/);
-assert.match(recorder,/let counted=0, armed=!waitForDownbeat/);
+assert.match(recorder,/counting=armCountIn\(token\);[\s\S]{0,120}startRecorderMetronome\(\)/);
+/* 이미 돌고 있어도 처음부터 다시 켠다. 마디 중간에서 이어받으면 클릭이 그냥
+   계속 들릴 뿐이라 어디가 카운트인인지 귀로 알 수 없고, 다음 마디 첫 박을
+   기다리느라 최대 두 마디가 지나간다. */
+assert.match(recorder,/if\(metro\.isPlaying\(\)\) metro\.stop\(\);\s*try\{ await metro\.start\(\)/);
+/* 그래서 마디 첫 박을 기다리는 길은 남겨 두지 않는다. */
+assert.doesNotMatch(recorder,/waitForDownbeat|mark\.beatIndex!==0/);
+/* 다시 켜려고 멈춘 것을 '남이 밀어냈다'로 오해하면 박 리스너까지 떨어진다. */
+assert.match(recorder,/if\(on\) return;[\s\S]{0,200}if\(startPending\) return;/);
 /* 짧게 누르면 켜고 끄기, 길게 누르면 설정. */
 assert.match(recorder,/bindLongPress\(recordMetro,\(\)=>setMetroArmed\(!metroArmed\),openMetroSheet\)/);
 /* 사용자가 탭에서 직접 켜 둔 메트로놈은 녹음이 끝나도 두고 나온다. */
