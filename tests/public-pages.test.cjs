@@ -540,7 +540,7 @@ assert.match(guide,/\.coach-hint\.done::before\{ content:'✓ '; \}/);
    시한이 계속 밀리고 손을 멈추면 넘어간다. */
 assert.match(guide,/hint:'현을 몇 개 눌러 보세요', linger:1800, keepOpen:true/);
 assert.match(guide,/const SEAL_NEVER=-1;/);
-assert.match(guide,/if\(span>=SEAL_AFTER && graceMs!==SEAL_NEVER\)\{/);
+assert.match(guide,/if\(holds && graceMs!==SEAL_NEVER\)\{/);
 /* 마이크가 꺼져 있으면 뒤따르는 감도 단계에서 파형이 죽은 선으로만 보인다.
    여기서 실제로 켜게 하고, 도움말을 나갈 때는 반드시 끈다. */
 assert.match(guide,/hint:'눌러서 마이크를 켜 보세요', linger:2500, done:'마이크가 켜졌습니다'/);
@@ -548,7 +548,7 @@ assert.match(guide,/button\.classList\.contains\('on'\)/,'앱이 마이크 켜�
 assert.match(tuner,/tunerStart\.classList\.add\('on'\)/);
 assert.match(guide,/if\(mic && mic\.classList\.contains\('on'\)\) mic\.click\(\)/);
 assert.match(guide,/function deferAdvance\(ms,graceMs\)/);
-assert.match(guide,/if\(span>=SEAL_AFTER && graceMs!==SEAL_NEVER\)\{/,'여운이 길면 봉한다 — 견줘 봐야 하는 단계만 뺀다');
+assert.match(guide,/if\(holds && graceMs!==SEAL_NEVER\)\{/,'여운이 길면 봉한다 — 견줘 봐야 하는 단계만 뺀다');
 /* 여운 동안에는 아무것도 눌리지 않는다. 다만 구멍을 눌러 넘어가는 길은 pointerdown에서
    불리므로, 그 자리에서 봉하면 방금 그 탭의 click까지 삼켜 버튼이 아무 일도 하지 않는다 —
    청음의 올리브가 그래서 먹통이었다. 그 길만 손이 떨어질 틈을 두고 봉한다. */
@@ -736,7 +736,7 @@ assert.match(guide,/lockScroll\(doc,true,lockTarget\)/);
 /* 여운을 두는 동안과 끝맺는 동안에는 아무것도 눌리지 않는다. */
 assert.match(guide,/const SEALED_EVENTS=GATED_EVENTS\.concat\(\['touchmove','wheel','keydown'\]\)/);
 assert.match(guide,/function sealFrame\(on\)/);
-assert.match(guide,/if\(span>=SEAL_AFTER && graceMs!==SEAL_NEVER\)\{/,'여운이 길면 봉한다 — 견줘 봐야 하는 단계만 뺀다');
+assert.match(guide,/if\(holds && graceMs!==SEAL_NEVER\)\{/,'여운이 길면 봉한다 — 견줘 봐야 하는 단계만 뺀다');
 assert.match(guide,/sealFrame\(true\);\s*\n\s*setTimeout\(\(\)=>\{\s*\n\s*sealFrame\(false\);/);
 assert.match(guide,/function cancelDefer\(\)\{[\s\S]{0,140}?sealFrame\(false\);/,'중간에 그만두면 봉인도 푼다');
 

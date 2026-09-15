@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=247">
+<link rel="stylesheet" href="info.css?v=248">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -1232,6 +1232,10 @@
   let queue=[], at=0, running=false, pass=null, token=0, retry=null, deferTimer=0;
   /* 미뤄 둔 진행은 반드시 취소할 수 있어야 한다. 통과 판정이 이미 잡아 둔 setTimeout이
      사용자가 건너뛴 뒤에 뒤늦게 터지면 한 단계를 통째로 삼킨다. 지금 단계에서만 유효하다. */
+  /* 이만큼 이상 머무르는 단계는 '읽고 보라고 세워 둔' 단계다. 그런 곳은 저절로
+     넘어가지 않고 '다음'을 기다린다 — 글 읽는 속도는 사람마다 달라서 어떤
+     시간을 골라도 누군가에게는 짧다. 서두르는 사람은 곧바로 누르면 된다.
+     그 버튼은 도움말 쪽에 있어 아래 봉인과 무관하게 늘 눌린다. */
   const SEAL_AFTER=1000;
   /* 손이 떨어질 틈. pointerdown에서 곧바로 봉하면 방금 그 탭의 click까지 삼켜
      버튼이 아무 일도 하지 않는다 — 청음의 올리브가 그래서 먹통이었다. */
@@ -1248,12 +1252,21 @@
     /* 여운 동안에는 아무것도 눌리지 않게 한다. 그 사이에 슬라이더나 버튼이 움직이면
        방금 보여 준 결과와 화면이 어긋난다. 앱 상태가 이미 바뀐 뒤에 부르는 쪽은
        곧바로 봉하고, 탭에서 불리는 쪽만 그 탭이 끝날 틈을 두고 봉한다. */
-    if(span>=SEAL_AFTER && graceMs!==SEAL_NEVER){
+    const holds=span>=SEAL_AFTER;
+    if(holds && graceMs!==SEAL_NEVER){
       const grace=Math.max(0,graceMs||0);
       if(grace) sealTimer=setTimeout(()=>{ sealTimer=0; if(mine===token) sealFrame(true); },grace);
       else sealFrame(true);
     }
+    /* 보여 줄 것이 있는 단계는 시간이 아니라 사람이 넘긴다. 소리는 그동안
+       계속 나고 앱은 봉해진 채라, 방금 보여 준 결과가 화면에 그대로 남는다. */
+    if(holds){ offerNext(); return; }
     deferTimer=setTimeout(()=>{ deferTimer=0; if(mine===token) advance(); },span);
+  }
+  /* 해냈으니 '건너뛰기'가 아니라 '다음'이다. */
+  function offerNext(){
+    coachNext.textContent='다음';
+    coachNext.classList.remove('quiet');
   }
   function cancelDefer(){
     if(deferTimer){ clearTimeout(deferTimer); deferTimer=0; }
