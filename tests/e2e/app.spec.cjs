@@ -2483,9 +2483,10 @@ test('연습 기록은 소리가 난 시간만 세고 튜너는 세지 않는다
   // 4초 넘게 울렸으니 그만큼은 쌓여 있어야 하고, 터무니없이 크면 안 된다.
   expect(today.met).toBeGreaterThan(3);
   expect(today.met).toBeLessThan(30);
-  // 무엇을 하고 있었는지도 함께 남는다 — 새로 만든 숫자가 아니라 읽어 온 값이다.
-  expect(today.meter).toBe('4/4');
-  expect(today.bpmLo).toBeGreaterThan(0);
+  /* 도구별로는 시간만 남긴다. 몇 BPM에서 몇으로 옮겼는지까지 쌓아 두면
+     화면에 쓰지도 않는 값이 저장소에서 조용히 썩는다. */
+  expect(today.meter).toBeUndefined();
+  expect(today.bpmLo).toBeUndefined();
   // 튜너는 세지 않는다.
   expect(today.tuner).toBeUndefined();
 
@@ -2502,8 +2503,8 @@ test('연습 기록은 소리가 난 시간만 세고 튜너는 세지 않는다
   await expect(page.locator('#practiceLogFull')).toBeHidden();
   await page.locator('#practiceLogMore').click();
   await expect(page.locator('#practiceLogFull')).toBeVisible();
-  await expect(page.locator('#practiceLogFull')).toContainText('BPM');
-  await expect(page.locator('#practiceLogFull')).toContainText('4/4');
+  await expect(page.locator('#practiceLogFull')).toContainText('메트로놈');
+  await expect(page.locator('#practiceLogFull')).not.toContainText('BPM');
 
   // 연습한 날은 막대가 서고, 아직 오지 않은 날은 바닥선만 남는다.
   const bars=await page.locator('#practiceLogGrid .log-day.today .log-col i').count();

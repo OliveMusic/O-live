@@ -1158,12 +1158,6 @@
     isPlaying,
     stopPlayback,
     collapse,
-    /* 연습 기록이 '무엇을 연습했는지' 적으려고 읽어 가는, 지금 울리고 있는 링크. */
-    nowPlaying(){
-      if(!playing) return null;
-      const row=rows.find(item=>item.id===expandedId);
-      return row ? {title:String(row.title||'무제')} : null;
-    },
   };
   if(window.OliveCloud && typeof window.OliveCloud.subscribeSession==='function'){
     window.OliveCloud.subscribeSession(applySession);

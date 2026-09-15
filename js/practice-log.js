@@ -79,10 +79,6 @@
     const rest=minutes%60;
     return rest ? `${hours}시간 ${rest}분` : `${hours}시간`;
   }
-  function formatClock(seconds){
-    const total=Math.max(0,Math.round(Number(seconds)||0));
-    return `${Math.floor(total/60)}:${String(total%60).padStart(2,'0')}`;
-  }
 
   /* ---------- 저장 ---------- */
   let store=load();
@@ -94,16 +90,35 @@
     }catch(error){ return {}; }
   }
   let saveTimer=0;
+  /* 손에 든 것을 통째로 덮어쓰지 않는다. 앱을 두 군데 열어 두면 먼저 열어 둔
+     쪽이 닫힐 때 그 사이 쌓인 기록을 자기가 읽었던 옛 상태로 지워 버린다.
+     값은 늘기만 하므로 저장 직전에 다시 읽어 큰 쪽을 남긴다. */
+  function merge(stored){
+    if(!stored || typeof stored!=='object') return store;
+    Object.keys(stored).forEach(key=>{
+      const theirs=stored[key];
+      if(!theirs || typeof theirs!=='object') return;
+      const ours=store[key];
+      if(!ours){ store[key]=theirs; return; }
+      Object.keys(theirs).forEach(field=>{
+        const a=Number(ours[field]), bv=Number(theirs[field]);
+        if(Number.isFinite(bv) && (!Number.isFinite(a) || bv>a)) ours[field]=bv;
+      });
+    });
+    return store;
+  }
+  function write(){
+    try{
+      localStorage.setItem(STORE_KEY,JSON.stringify(merge(load())));
+    }catch(error){}
+  }
   function save(){
     clearTimeout(saveTimer);
-    saveTimer=setTimeout(()=>{
-      saveTimer=0;
-      try{ localStorage.setItem(STORE_KEY,JSON.stringify(store)); }catch(error){}
-    },400);
+    saveTimer=setTimeout(()=>{ saveTimer=0; write(); },400);
   }
   function saveNow(){
     clearTimeout(saveTimer); saveTimer=0;
-    try{ localStorage.setItem(STORE_KEY,JSON.stringify(store)); }catch(error){}
+    write();
   }
   function prune(){
     const keys=Object.keys(store).sort();
@@ -132,49 +147,6 @@
     day[tool]=(Number(day[tool])||0)+seconds;
   }
 
-  /* 무엇을 어떻게 연습했는지도 함께 남긴다. 값은 전부 다른 기능이 이미 들고
-     있는 것을 읽어 온 것이고, 여기서 새로 만들어 내는 숫자는 없다. */
-  function sampleMeta(tool,day){
-    if(tool==='met'){
-      const metro=window.OliveMetronome;
-      if(!metro) return;
-      const bpm=Number(metro.getBpm());
-      if(Number.isFinite(bpm)){
-        day.bpmLo=Number.isFinite(day.bpmLo) ? Math.min(day.bpmLo,bpm) : bpm;
-        day.bpmHi=Number.isFinite(day.bpmHi) ? Math.max(day.bpmHi,bpm) : bpm;
-      }
-      day.meter=metro.meterLabel();
-      return;
-    }
-    if(tool==='jam'){
-      const jam=window.OliveJam && window.OliveJam.snapshot();
-      if(!jam) return;
-      day.jamKey=jam.key;
-      day.jamPreset=jam.preset;
-      day.jamStyle=jam.style;
-      const bpm=Number(jam.bpm);
-      if(Number.isFinite(bpm)){
-        day.jamBpmLo=Number.isFinite(day.jamBpmLo) ? Math.min(day.jamBpmLo,bpm) : bpm;
-        day.jamBpmHi=Number.isFinite(day.jamBpmHi) ? Math.max(day.jamBpmHi,bpm) : bpm;
-      }
-      return;
-    }
-    if(tool==='trk'){
-      const track=(window.OliveRecorder && window.OliveRecorder.nowPlaying())
-        || (window.OlivePracticeLinks && window.OlivePracticeLinks.nowPlaying());
-      if(!track || !track.title) return;
-      const seen=Array.isArray(day.tracks) ? day.tracks : (day.tracks=[]);
-      const note={
-        title:track.title,
-        rate:Number.isFinite(track.rate)&&track.rate!==1 ? track.rate : null,
-        loop:track.loop ? [Math.round(track.loop.a),Math.round(track.loop.b)] : null,
-      };
-      const at=seen.findIndex(item=>item.title===note.title);
-      if(at>=0) seen[at]=note;
-      else if(seen.length<6) seen.push(note);
-    }
-  }
-
   function accumulate(now){
     let touched=false;
     openSources.forEach((since,id)=>{
@@ -184,7 +156,6 @@
       openSources.set(id,now);
       const key=todayKey();
       addSeconds(tool,span,key);
-      sampleMeta(tool,dayFor(key));
       touched=true;
     });
     if(touched) save();
@@ -215,7 +186,6 @@
       if(span>=MIN_SESSION_SECONDS){
         const dayAt=todayKey();
         addSeconds(TOOLS[id],span,dayAt);
-        sampleMeta(TOOLS[id],dayFor(dayAt));
         saveNow();
       }
     }
@@ -375,51 +345,22 @@
       : `${shownMonth.getMonth()+1}월에는 아직 기록이 없습니다`;
   }
 
-  function trackLine(note){
-    const parts=[];
-    if(note.loop) parts.push(`${formatClock(note.loop[0])}–${formatClock(note.loop[1])} 반복`);
-    if(note.rate) parts.push(`${String(note.rate.toFixed(2)).replace(/0+$/,'').replace(/\.$/,'')}×`);
-    return note.title+(parts.length?` <em>${parts.join(' · ')}</em>`:'');
-  }
+  /* 도구별로는 얼마나 붙잡고 있었는지만 적는다. 몇 BPM에서 몇으로 옮겼는지,
+     어떤 곡을 걸었는지까지 적으면 하루를 훑어보려고 연 화면이 읽을거리가 된다.
 
+     청음만 예외다. 나머지 도구는 시간이 곧 연습의 양이지만, 청음은 몇 문제를
+     어느 모드에서 몇 개 맞혔는지가 곧 연습의 내용이다. */
   function detailLines(day,ear){
-    const lines=[];
-    if(Number(day.met)){
-      const extra=[];
-      if(Number.isFinite(day.bpmLo)){
-        extra.push(day.bpmLo===day.bpmHi ? `${day.bpmLo} BPM` : `${day.bpmLo}→${day.bpmHi} BPM`);
-      }
-      if(day.meter) extra.push(day.meter);
-      lines.push({tool:'met',name:'메트로놈',
-        text:formatSpan(day.met)+(extra.length?` <em>· ${extra.join(' · ')}</em>`:'')});
-    }
-    if(Number(day.jam)){
-      const extra=[day.jamKey,day.jamPreset,day.jamStyle].filter(Boolean);
-      if(Number.isFinite(day.jamBpmLo)){
-        extra.push(day.jamBpmLo===day.jamBpmHi
-          ? `${day.jamBpmLo} BPM` : `${day.jamBpmLo}→${day.jamBpmHi} BPM`);
-      }
-      lines.push({tool:'jam',name:'잼',
-        text:formatSpan(day.jam)+(extra.length?` <em>· ${extra.join(' · ')}</em>`:'')});
-    }
-    if(Number(day.trk)){
-      const titles=Array.isArray(day.tracks)?day.tracks:[];
-      lines.push({tool:'trk',name:'트랙',
-        text:formatSpan(day.trk)+(titles.length?` · ${titles.map(trackLine).join(' · ')}`:'')});
-    }
-    if(Number(day.rec) || Number(day.saved)){
-      const extra=[];
-      if(Number(day.rec)) extra.push(formatSpan(day.rec)+' 녹음');
-      if(Number(day.saved)) extra.push(`${day.saved}개 저장`);
-      lines.push({tool:'rec',name:'녹음',text:extra.join(' · ')});
-    }
-    if(Number(day.rhy)){
-      lines.push({tool:'rhy',name:'리듬',text:formatSpan(day.rhy)});
+    const lines=TOOL_ORDER
+      .filter(tool=>Number(day[tool]))
+      .map(tool=>({tool,name:TOOL_NAMES[tool],text:formatSpan(day[tool])}));
+    if(Number(day.saved)){
+      const at=lines.findIndex(line=>line.tool==='rec');
+      const saved=`${day.saved}개 저장`;
+      if(at>=0) lines[at].text+=` · ${saved}`;
+      else lines.push({tool:'rec',name:'녹음',text:saved});
     }
     if(ear){
-      /* 청음만 시간이 아니라 문제 수로 센다. 나머지 도구는 얼마나 붙잡고
-         있었는지가 전부지만, 청음은 몇 문제를 어느 모드에서 몇 개 맞혔는지가
-         곧 연습의 내용이다. 그래서 여기만 한 줄 더 쓴다. */
       const accuracy=Math.round(ear.correct/ear.total*100);
       const counted=earModes().reduce((sum,item)=>{
         const part=ear.byMode[item.key];
@@ -444,7 +385,6 @@
     }
     return lines;
   }
-
   function renderDetail(){
     const day=store[selectedKey];
     const ear=earFor(selectedKey);

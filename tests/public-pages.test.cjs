@@ -373,7 +373,12 @@ assert.match(guide,/function holeBox\(el,also\)/);
    비추면 버튼 바깥의 네 모서리가 훤히 드러나 무엇을 누르라는 것인지 흐려진다. */
 assert.match(guide,/function roundShape\(el,also\)/);
 assert.match(guide,/if\(also \|\| !el\) return null;/,'여러 곳을 묶는 단계는 그대로 네모다');
-assert.match(guide,/transform:style\.transform==='none' \? '' : style\.transform,/);
+/* 변형에서 이동 성분은 떼어낸다. 자리는 이미 바깥 상자의 가운데로 잡았으므로
+   translate가 남으면 그만큼 한 번 더 밀린다 — 상단바의 달력 버튼은
+   translateY(-50%)로 세로를 맞추고 있어 강조가 위로 떠올랐다. */
+assert.match(guide,/function spinOnly\(transform\)/);
+assert.match(guide,/transform:spinOnly\(style\.transform\),/);
+assert.match(guide,/return 'matrix\('\+n\[0\]\+','\+n\[1\]\+','\+n\[2\]\+','\+n\[3\]\+',0,0\)';/);
 assert.match(guide,/\.mask-shape\{[\s\S]*?box-shadow:0 0 0 2000px/);
 /* 두 겹으로 어둡게 하면 겹치는 자리만 짙어져 구멍 둘레에 밝은 테가 생긴다. */
 assert.match(guide,/parts\.top\.style\.background=shape\?'transparent':'';/);

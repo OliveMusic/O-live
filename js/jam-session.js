@@ -832,18 +832,4 @@
       renderTimeline();
     }
   );
-  /* 연습 기록이 '무엇을 연습했는지' 적으려고 읽어 가는 현재 상태.
-     이름표는 정의된 자리에서 가져온다 — 기록 쪽에 베껴 두면 진행을 고칠 때 어긋난다. */
-  window.OliveJam={
-    snapshot(){
-      const preset=PRESETS[jamPresetKey];
-      return {
-        key:pcName(jamRoot)+(jamModeVal==='minor'?' minor':' major'),
-        preset:preset ? preset.label.split(/\s{2,}/)[0] : '직접 만든 진행',
-        bpm:jamBpm,
-        style:(STYLES[styleKey]&&STYLES[styleKey].label)||styleKey,
-        bars:progression.length,
-      };
-    },
-  };
 })();

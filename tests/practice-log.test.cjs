@@ -30,6 +30,11 @@ assert.match(log,/'trainer:recorder':'rec'/);
 /* 너무 짧은 소리는 연습이 아니다. 코드 하나 눌러 본 것까지 쌓이면
    '1분 연습함'이 달력을 채운다. */
 assert.match(log,/const MIN_SESSION_SECONDS=3;/);
+/* 손에 든 것을 통째로 덮어쓰지 않는다. 앱을 두 군데 열어 두면 먼저 열어 둔
+   쪽이 닫힐 때 그 사이 쌓인 기록을 자기가 읽었던 옛 상태로 지워 버린다. */
+assert.match(log,/function merge\(stored\)/);
+assert.match(log,/localStorage\.setItem\(STORE_KEY,JSON\.stringify\(merge\(load\(\)\)\)\)/);
+assert.equal((log.match(/localStorage\.setItem\(STORE_KEY/g)||[]).length,1,'저장하는 자리는 하나뿐');
 /* 탭을 닫거나 화면을 끄면 세던 것을 잃지 않게 그 자리에서 적는다. */
 assert.match(log,/visibilitychange[\s\S]{0,140}accumulate\(Date\.now\(\)\); saveNow\(\);/);
 assert.match(log,/pagehide[\s\S]{0,90}accumulate\(Date\.now\(\)\); saveNow\(\);/);
@@ -93,20 +98,23 @@ assert.match(index,/\.topbar-log\[aria-expanded="true"\]\{ color:var\(--signal\)
 assert.doesNotMatch(index,/data-tab="log"|data-tab="practice"/);
 assert.equal((index.match(/<button class="tab-btn/g)||[]).length,5,'하단 탭은 다섯 개 그대로');
 
-/* ---------- 값은 다른 기능이 이미 들고 있는 것을 읽어 온다 ----------
-   이름표를 기록 쪽에 베껴 두면 진행이나 스타일을 고칠 때 어긋난다. */
-assert.match(jam,/window\.OliveJam=\{\s*snapshot\(\)\{/);
-assert.match(jam,/preset\.label\.split/);
-assert.match(recorder,/nowPlaying:nowPlayingTrack,/);
+/* ---------- 도구별로는 시간만 적는다 ----------
+   몇 BPM에서 몇으로 옮겼는지, 어떤 곡을 걸었는지까지 적으면 하루를 훑어보려고
+   연 화면이 읽을거리가 된다. 화면에 쓰지 않는 값은 모으지도 않는다 — 아무도
+   읽지 않는 기록은 조용히 썩는다. */
+assert.doesNotMatch(log,/sampleMeta|bpmLo|jamPreset|day\.tracks/);
+assert.doesNotMatch(jam,/OliveJam/);
+assert.doesNotMatch(recorder,/nowPlayingTrack/);
+assert.doesNotMatch(links,/nowPlaying/);
 /* 목록의 YouTube 기능이 전부 이 객체를 통해 오간다. 연습 기록을 붙이면서
    통째로 덮어써 목록에서 링크가 사라진 적이 있다 — 더하되 지우지 않는다. */
 assert.equal((links.match(/window\.OlivePracticeLinks=/g)||[]).length,1,'링크 창구는 하나뿐');
-for(const member of ['count','entries','deleteMany','isPlaying','stopPlayback','collapse','nowPlaying']){
+for(const member of ['count','entries','deleteMany','isPlaying','stopPlayback','collapse']){
   assert.match(links,new RegExp(`\\n\\s+${member}[,(:]`),`OlivePracticeLinks.${member} 보존`);
 }
-assert.match(log,/window\.OliveJam && window\.OliveJam\.snapshot\(\)/);
-assert.match(log,/window\.OliveRecorder\.nowPlaying\(\)/);
-assert.match(log,/window\.OlivePracticeLinks\.nowPlaying\(\)/);
+/* 값이 두 줄이 되어도 색 표와 이름은 첫 줄에 맞는다. */
+assert.match(index,/\.log-row\{[^}]*align-items:start;/);
+assert.match(index,/\.log-row \.log-sw\{[^}]*margin-top:3px/);
 /* 녹음을 저장한 개수는 저장이 성공한 자리에서만 센다. */
 assert.match(recorder,/window\.OlivePracticeLog\.noteRecordingSaved\(\);/);
 

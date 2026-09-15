@@ -3080,28 +3080,11 @@
     if(cloudPlayingId || cloudMediaId) stopCloudPlayback(false);
   }
   document.addEventListener('olive-practice-links-change',renderList);
-  /* 연습 기록이 '무엇을 연습했는지' 적으려고 읽어 가는, 지금 울리고 있는 트랙.
-     배속과 반복 구간은 이 세션에서 바꾼 값이 있으면 그것을 따른다. */
-  function nowPlayingTrack(){
-    const id=cloudPlayingId||cloudMediaId;
-    if(!id) return null;
-    const row=rows.find(item=>item.id===id);
-    if(!row) return null;
-    const region=loopRegionFor(row);
-    return {
-      title:String(row.title||'무제'),
-      rate:rowPlaybackRate(row),
-      transpose:rowTranspose(row),
-      loop:region.enabled && region.a!==null && region.b!==null
-        ? {a:region.a,b:region.b} : null,
-    };
-  }
   window.OliveRecorder={
     isRecording:()=>recording || startPending,
     stopPlayback:stopPlaybackForOtherTool,
     collapse:collapseExpandedRow,
     resumeAfterVisibility,
-    nowPlaying:nowPlayingTrack,
   };
   window.OliveCloud.subscribeSession(applySession);
   renderIdle(); renderList();

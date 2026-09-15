@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=239">
+<link rel="stylesheet" href="info.css?v=240">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -1078,8 +1078,30 @@
       radius:style.borderRadius,
       /* 회전한 올리브는 바깥 상자만 보면 실제보다 크다. 상자 가운데는 회전해도
          그대로이므로 회전 전 크기를 그 가운데에 놓고 같은 변형을 건다. */
-      transform:style.transform==='none' ? '' : style.transform,
+      transform:spinOnly(style.transform),
     };
+  }
+  /* 변형에서 이동 성분은 떼어낸다. 자리는 이미 바깥 상자의 가운데로 잡았으므로
+     translate가 남아 있으면 그만큼 한 번 더 밀린다 — 상단바의 달력 버튼은
+     translateY(-50%)로 세로 가운데를 맞추고 있어서 강조가 위로 떠올랐다.
+     회전·기울임만 남기면 올리브는 그대로, 이동만 쓰는 것은 제자리가 된다. */
+  function spinOnly(transform){
+    if(!transform || transform==='none') return '';
+    const flat=/^matrix\(([^)]+)\)$/.exec(transform);
+    if(flat){
+      const n=flat[1].split(',').map(v=>parseFloat(v));
+      if(n.length!==6 || n.some(v=>!Number.isFinite(v))) return '';
+      if(n[0]===1 && n[1]===0 && n[2]===0 && n[3]===1) return '';
+      return 'matrix('+n[0]+','+n[1]+','+n[2]+','+n[3]+',0,0)';
+    }
+    const deep=/^matrix3d\(([^)]+)\)$/.exec(transform);
+    if(deep){
+      const n=deep[1].split(',').map(v=>parseFloat(v));
+      if(n.length!==16 || n.some(v=>!Number.isFinite(v))) return '';
+      n[12]=n[13]=n[14]=0;
+      return 'matrix3d('+n.join(',')+')';
+    }
+    return '';
   }
   function paint(el,also){
     if(!el || !el.isConnected) return;
