@@ -2329,6 +2329,10 @@ test('긴 잼 진행의 활성 코드를 가운데로 따라간다',async({page}
   await expect(page.locator('#progTimeline .prog-bar')).toHaveCount(8);
   await page.locator('#jamStart').click();
   await expect(page.locator('#jamStart')).toHaveClass(/on/);
+  /* 가운데로 끌어오는 스크롤은 애니메이션이라, 표본을 찍은 순간이 아직 가는
+     중일 수 있다. 코드가 바뀌면 스크롤이 다시 시작되므로 느린 기기에서는 몇
+     번 더 기다려야 자리 잡은 프레임을 만난다. 기준(12px)은 그대로 두고
+     기다림만 늘린다 — 느슨하게 하면 검사할 것이 남지 않는다. */
   await expect.poll(()=>page.locator('#progTimeline').evaluate(view=>{
     const active=view.querySelector('.prog-bar.now');
     if(!active) return Number.POSITIVE_INFINITY;
@@ -2337,7 +2341,7 @@ test('긴 잼 진행의 활성 코드를 가운데로 따라간다',async({page}
     const vr=view.getBoundingClientRect();
     const ar=active.getBoundingClientRect();
     return Math.abs((vr.left+vr.width/2)-(ar.left+ar.width/2));
-  })).toBeLessThan(12);
+  }),{timeout:15000}).toBeLessThan(12);
   await page.locator('#jamStart').click();
 });
 
