@@ -29,10 +29,9 @@ assert.match(index,/id="pane-record"/);
 assert.match(index,/id="recordUsage">녹음 0\/50 · YouTube 0\/200</);
 assert.match(index,/<details class="card record-history" id="recordListCard" hidden>/);
 assert.match(index,/<summary>\s*<span class="record-history-title">목록<\/span>/);
-assert.match(index,/id="recordCloudTitle">클라우드 연결 준비 중<\/strong>/);
-assert.match(index,/id="recordCloudAction"[^>]*aria-label="계정 연결"/);
-assert.match(index,/id="recordCloudAvatar"/);
-assert.match(index,/id="recordCloudAvatarFallback"/);
+/* 목록 아래의 클라우드 줄은 걷어냈다. 계정은 상단바의 연습 기록으로 들어간다 —
+   같은 줄이 두 군데 있으면 어느 쪽을 봐야 하는지 알 수 없다. */
+assert.doesNotMatch(index,/recordCloud/);
 assert.match(index,/id="recordMenuRename"[^>]*>이름 변경</);
 assert.match(index,/id="recordMenuDownload"[^>]*>다운로드</);
 assert.match(index,/id="recordMenuDelete"[^>]*>삭제</);
@@ -349,7 +348,7 @@ assert.match(cloud,/p_waveform:Array\.isArray/);
 assert.match(cloud,/p_recorded_at:String\(recording&&recording\.recordedAt/);
 assert.match(cloud,/p_playback_gain:Number\(recording&&recording\.playbackGain\)/);
 assert.match(cloud,/p_source_type:String\(recording&&recording\.sourceType\|\|'recording'\)/);
-assert.match(cloud,/ui\.accountViews=\['earCloud','recordCloud'\]/);
+assert.match(cloud,/ui\.accountViews=\['earCloud'\]/);
 assert.match(cloud,/ui\.accountViews\.forEach\(view=>\{/);
 assert.match(cloud,/rpc\('save_practice_recording_waveform'/);
 assert.match(recorder,/const result=await window\.OliveCloud\.downloadRecording\(row\)/);

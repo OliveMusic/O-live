@@ -772,6 +772,7 @@
     getTempo:()=>jamBpm,
     adjustTempo:adjustJamTempo,
     background:true,
+    clicks:true,
     label:'잼 세션',
   });
 

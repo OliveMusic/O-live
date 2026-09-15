@@ -630,16 +630,23 @@ test('목록은 접고 펼칠 수 있고 계정 상태에서 같은 관리 화�
   await expect(details).toHaveAttribute('open','');
   await expect(page.locator('#recordUpload')).toBeVisible();
   await expect(page.locator('.record-row-duration')).toHaveText('0:04');
-  await expect(page.locator('#recordCloudTitle')).toHaveText('클라우드에 저장됨');
-  await expect(page.locator('#recordCloudAction')).toHaveClass(/has-account/);
-  await expect(page.locator('#recordCloudAvatarFallback')).toHaveText('R');
-  await page.locator('#recordCloudAction').click();
+  /* 목록 아래의 클라우드 줄은 걷어냈다. 계정은 상단바의 연습 기록으로 들어간다 —
+     같은 줄이 두 군데 있으면 어느 쪽을 봐야 하는지 알 수 없다. */
+  await expect(page.locator('#recordCloudTitle')).toHaveCount(0);
+  await page.locator('#practiceLogBtn').click();
+  await expect(page.locator('#earCloudTitle')).toHaveText('클라우드에 저장됨');
+  await expect(page.locator('#earCloudAction')).toHaveClass(/has-account/);
+  await expect(page.locator('#earCloudAvatarFallback')).toHaveText('R');
+  await page.locator('#earCloudAction').click();
   await expect(page.locator('#cloudAuthSheet')).toBeVisible();
   await expect(page.locator('#cloudSyncNow')).toBeVisible();
   await expect(page.locator('#cloudSyncNow')).toHaveText('동기화');
   await expect(page.locator('#cloudLogout')).toBeVisible();
   await page.locator('#cloudAuthClose').click();
   await expect(page.locator('#cloudAuthSheet')).toBeHidden();
+  await page.locator('#practiceLogClose').click();
+  await expect(page.locator('#practiceLogSheet')).toBeHidden();
+
   await details.locator('summary').click();
   await expect(details).not.toHaveAttribute('open','');
   await expect(page.locator('#recordList')).toBeHidden();
@@ -2463,7 +2470,7 @@ test('메트로놈 버튼을 길게 누르면 설정이 열리고 메트로놈 �
 /* 연습 기록은 실제로 소리가 난 시간을 센다. 메트로놈이 울려야 하므로
    여기도 시계가 흐르는 하네스를 쓴다. */
 test('연습 기록은 소리가 난 시간만 세고 튜너는 세지 않는다',async({page})=>{
-  await preparePage(page,{microphone:'meter-signal',advanceClock:true});
+  await preparePage(page,{cloudClient:true,microphone:'meter-signal',advanceClock:true});
 
   // 시작 전에는 오늘 기록이 없다.
   expect(await page.evaluate(()=>Object.keys(window.OlivePracticeLog.snapshot()).length)).toBe(0);
@@ -2514,4 +2521,25 @@ test('연습 기록은 소리가 난 시간만 세고 튜너는 세지 않는다
   await page.locator('#practiceLogClose').click();
   await expect(page.locator('#practiceLogSheet')).toBeHidden();
   await expect(page.locator('#practiceLogBtn')).toHaveAttribute('aria-expanded','false');
+});
+
+/* 계정을 연결하기 전에는 기록이 쌓일 곳이 없다. 빈 달력을 열어 주는 대신
+   그 자리에서 바로 연결하게 한다. */
+test('로그인 전에는 상단바에 달력 대신 로그인 버튼이 있다',async({page})=>{
+  await preparePage(page);
+  await expect(page.locator('#practiceLogBtn')).toBeHidden();
+  await expect(page.locator('#topbarSignIn')).toBeVisible();
+  await expect(page.locator('#topbarSignIn')).toHaveText('로그인');
+  await page.locator('#topbarSignIn').click();
+  await expect(page.locator('#cloudAuthSheet')).toBeVisible();
+  await page.locator('#cloudAuthClose').click();
+  await expect(page.locator('#cloudAuthSheet')).toBeHidden();
+  // 계정이 있으면 반대가 된다.
+  await expect(page.locator('#practiceLogSheet')).toBeHidden();
+});
+
+test('계정을 연결하면 상단바가 달력으로 바뀐다',async({page})=>{
+  await preparePage(page,{cloudClient:true});
+  await expect(page.locator('#topbarSignIn')).toBeHidden();
+  await expect(page.locator('#practiceLogBtn')).toBeVisible();
 });

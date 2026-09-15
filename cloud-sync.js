@@ -285,7 +285,9 @@
       setupHint:document.getElementById('cloudSetupHint'),
       message:document.getElementById('cloudAuthMessage'),
     };
-    ui.accountViews=['earCloud','recordCloud'].map(prefix=>({
+    /* 계정 줄은 이제 연습 기록 창에 하나뿐이다. 아이디의 ear- 접두사는 청음
+       기록 카드에 살던 시절의 이름이고, 바꾸면 얻는 것 없이 세 파일이 흔들린다. */
+    ui.accountViews=['earCloud'].map(prefix=>({
       title:document.getElementById(prefix+'Title'),
       status:document.getElementById(prefix+'Status'),
       dot:document.getElementById(prefix+'Dot'),

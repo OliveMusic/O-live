@@ -44,6 +44,7 @@ class FakeAudioContext{
 let sounding=false;
 let stopCalls=0;
 let stopForegroundCalls=0;
+const clickSourceStops=[];
 const sandbox={
   window:{AudioContext:FakeAudioContext},
   navigator:{audioSession:{type:'auto'}},
@@ -60,6 +61,7 @@ const sandbox={
   stopAllTransports:()=>{ stopCalls++; },
   stopForegroundTransports:()=>{ stopForegroundCalls++; },
   stopCompetingBackgroundTransports:()=>{},
+  stopOtherClickSources:label=>{ clickSourceStops.push(label); },
   setBackgroundTransportContext:()=>{},
 };
 sandbox.globalThis=sandbox;
@@ -141,6 +143,9 @@ vm.runInContext(
   assert.equal(runtime.getMode(),'playback');
   assert.equal(sandbox.navigator.audioSession.type,'playback');
   assert.equal(stopForegroundCalls,1,'background playback stops only foreground transports');
+  /* 박을 치는 기능은 한 번에 하나만 울린다. 서로 다른 빠르기의 클릭이 포개지면
+     어느 박에 맞춰야 하는지 알 수 없다. */
+  assert.deepEqual(clickSourceStops,['메트로놈'],'다른 클릭 소리를 먼저 멈춘다');
 
   /* iOS는 사용자 제스처가 살아 있는 동안 부른 resume()만 받아 준다. 마이크로태스크로
      한 번만 미뤄도 자격을 잃으므로 제스처 안에서 곧바로 불러야 한다. */

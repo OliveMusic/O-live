@@ -373,6 +373,9 @@ assert.match(guide,/function holeBox\(el,also\)/);
    비추면 버튼 바깥의 네 모서리가 훤히 드러나 무엇을 누르라는 것인지 흐려진다. */
 assert.match(guide,/function roundShape\(el,also\)/);
 assert.match(guide,/if\(also \|\| !el\) return null;/,'여러 곳을 묶는 단계는 그대로 네모다');
+/* 버튼을 비출 때는 반지름이 얼마든 그 버튼의 테두리를 따라간다. */
+assert.match(guide,/const button=el\.tagName==='BUTTON' \|\| el\.getAttribute\('role'\)==='button';/);
+assert.match(guide,/if\(!button && !round\) return null;/);
 /* 변형에서 이동 성분은 떼어낸다. 자리는 이미 바깥 상자의 가운데로 잡았으므로
    translate가 남으면 그만큼 한 번 더 밀린다 — 상단바의 달력 버튼은
    translateY(-50%)로 세로를 맞추고 있어 강조가 위로 떠올랐다. */

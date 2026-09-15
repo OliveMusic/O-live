@@ -386,6 +386,7 @@
       metroStart.classList.add('running');
       metroStart.setAttribute('aria-busy','false');
       setTabSounding('metronome',true);
+      notifyPlaying();
       scheduler();
       visualLoop(++visualGen);
     }catch(error){
@@ -418,6 +419,7 @@
     rollRight = false; parkOlive();    // 왼쪽 끝에 멈춰 쉰다
     setTabSounding('metronome', false);
     beatDotsEl.querySelectorAll('.beat-dot').forEach(d=>d.classList.remove('on','mid-on','accent-on'));
+    notifyPlaying();
   }
   function setMediaPaused(paused){
     if(!isPlaying) return;
@@ -458,6 +460,7 @@
     getTempo:()=>bpm,
     adjustTempo,
     background:true,
+    clicks:true,
     label:'메트로놈',
   });
 
@@ -498,6 +501,13 @@
   function notifyChange(){
     changeListeners.forEach(fn=>{ try{ fn(); }catch(error){} });
   }
+  /* 울리기 시작하고 멈추는 것을 알린다. 잼이나 리듬이 메트로놈을 밀어냈을 때
+     녹음 화면의 버튼만 계속 켜진 듯 빛나고 있으면 무엇이 도는지 알 수 없다. */
+  const playingListeners=new Set();
+  function notifyPlaying(){
+    const on=isPlaying || startPending;
+    playingListeners.forEach(fn=>{ try{ fn(on); }catch(error){} });
+  }
 
   window.OlivePreferences.register('metronome',
     ()=>({bpm,meter:meter.label,subdivision:sub.key,accent:accentOn}),
@@ -537,6 +547,7 @@
       window.OlivePreferences.changed(); notifyChange(); return next; },
     onBeat:fn=>{ beatListeners.add(fn); return ()=>beatListeners.delete(fn); },
     onChange:fn=>{ changeListeners.add(fn); return ()=>changeListeners.delete(fn); },
+    onPlaying:fn=>{ playingListeners.add(fn); return ()=>playingListeners.delete(fn); },
   };
   window.__metronome=window.OliveMetronome;
 })();

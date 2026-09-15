@@ -735,6 +735,7 @@ function ensurePlaybackCtx(){
    play-and-record 컨텍스트를 보존하고, 그 밖에는 playback 세션을 쓴다. */
 function ensureBackgroundPlaybackCtx(label){
   stopCompetingBackgroundTransports(label);
+  stopOtherClickSources(label);
   const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
   if(__backgroundMediaPaused){
     __backgroundMediaPaused=false;
@@ -946,6 +947,16 @@ function hasPlaybackSessionTransportPlaying(){
 function stopBackgroundTransports(){
   __transports.forEach(transport=>{
     try{ if(transport.background && transport.isPlaying()) transport.stop(); }catch(e){}
+  });
+}
+/* 박을 치는 기능은 한 번에 하나만 울린다. 메트로놈·잼·리듬이 저마다 클릭을
+   내므로 둘이 겹치면 서로 다른 빠르기의 클릭이 포개져 아무 도움이 안 된다.
+   녹음 중이라도 마찬가지다 — 오히려 그때 제일 헷갈린다. */
+function stopOtherClickSources(label){
+  __transports.forEach(transport=>{
+    try{
+      if(transport.clicks && transport.label!==label && transport.isPlaying()) transport.stop();
+    }catch(e){}
   });
 }
 function stopCompetingBackgroundTransports(label){

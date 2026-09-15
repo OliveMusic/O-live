@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=241">
+<link rel="stylesheet" href="info.css?v=242">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -1069,10 +1069,14 @@
     const width=el.offsetWidth, height=el.offsetHeight;
     if(!width || !height) return null;
     const radius=style.borderTopLeftRadius||'';
+    /* 버튼을 비출 때는 반지름이 얼마든 그 버튼의 테두리를 그대로 따라간다.
+       상자를 비출 때만 넉넉한 네모를 쓴다 — 여러 컨트롤을 담은 칸은 그 안의
+       어느 하나가 아니라 칸 전체를 가리키는 것이 맞다. */
+    const button=el.tagName==='BUTTON' || el.getAttribute('role')==='button';
     const round=radius.indexOf('%')>=0
       ? parseFloat(radius)>=35
       : parseFloat(radius)>=Math.min(width,height)/2-0.5;
-    if(!round) return null;
+    if(!button && !round) return null;
     return {
       width, height,
       radius:style.borderRadius,

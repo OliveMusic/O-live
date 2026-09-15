@@ -259,6 +259,9 @@
     if(pattern.length===0) generate();
     const token=++startToken;
     startPending=true;
+    /* 메트로놈이나 잼이 울리고 있으면 먼저 멈춘다. 리듬은 포그라운드라
+       ensurePlaybackCtx가 잠금화면용 재생을 건드리지 않기 때문이다. */
+    if(typeof stopOtherClickSources==='function') stopOtherClickSources('리듬');
     rhyPlay.setAttribute('aria-label','시작 중');
     rhyPlay.setAttribute('aria-busy','true');
     try{
@@ -301,7 +304,7 @@
     beatGrid.querySelectorAll('.gcell').forEach(c=>c.classList.remove('cursor'));
   }
   rhyPlay.addEventListener('click', ()=> (playing || startPending)?stop():start());
-  registerTransport({ isPlaying:()=>playing || startPending, stop });
+  registerTransport({ isPlaying:()=>playing || startPending, stop, clicks:true, label:'리듬' });
 
   // 초기 패턴: 기본 락
   setPattern(PRESETS.rock.p.slice(), 4);

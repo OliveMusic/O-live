@@ -23,6 +23,7 @@
   const sheet=document.getElementById('practiceLogSheet');
   if(!logButton || !sheet) return;
 
+  const signInButton=document.getElementById('topbarSignIn');
   const sheetClose=document.getElementById('practiceLogClose');
   const leadEl=document.getElementById('practiceLogLead');
   const monthEl=document.getElementById('practiceLogMonth');
@@ -446,6 +447,69 @@
       sheetTrigger=null;
     },220);
   }
+
+  /* 계정을 연결하기 전에는 달력 대신 로그인 버튼을 둔다. 기록이 쌓일 곳이
+     없는데 빈 달력을 열어 주면 무엇이 잘못됐는지 알 수 없다.
+     도움말은 가상의 계정으로 도니 그쪽에서는 늘 달력이 뜬다. */
+  function showFor(user){
+    const signedIn=Boolean(user);
+    logButton.hidden=!signedIn;
+    if(signInButton) signInButton.hidden=signedIn;
+    if(!signedIn) closeSheet();
+  }
+  showFor(null);
+  if(window.OliveCloud && typeof window.OliveCloud.subscribeSession==='function'){
+    window.OliveCloud.subscribeSession(showFor);
+  }else{
+    showFor(true);
+  }
+  if(signInButton){
+    signInButton.addEventListener('click',()=>{
+      if(window.OliveCloud && typeof window.OliveCloud.openAccount==='function'){
+        window.OliveCloud.openAccount();
+      }
+    });
+  }
+
+  /* 위를 잡고 아래로 끌면 닫힌다. 손이 닿는 곳이 화면 위쪽이라 ×까지
+     올라가는 것보다 가깝다. 달력을 옆으로 넘기려다 닫히지 않도록 세로로
+     확실히 끌었을 때만 받는다. */
+  (function bindDragToClose(){
+    const card=sheet.querySelector('.cloud-sheet');
+    if(!card) return;
+    let pointerId=null, startY=0, startX=0, dragging=false;
+    const reset=()=>{
+      pointerId=null; dragging=false;
+      card.style.transition='';
+      card.style.transform='';
+    };
+    card.addEventListener('pointerdown',event=>{
+      if(event.isPrimary===false || event.button>0) return;
+      // 달력이나 버튼을 누르는 중이면 끌기로 보지 않는다.
+      if(event.target.closest('button, input, a, .ear-cloud')) return;
+      // 창 안을 스크롤해 내려간 상태에서는 스크롤이 먼저다.
+      if(card.scrollTop>0) return;
+      pointerId=event.pointerId; startY=event.clientY; startX=event.clientX;
+    });
+    card.addEventListener('pointermove',event=>{
+      if(event.pointerId!==pointerId) return;
+      const dy=event.clientY-startY, dx=event.clientX-startX;
+      if(!dragging){
+        if(dy<10 || Math.abs(dx)>Math.abs(dy)) return;
+        dragging=true;
+        card.style.transition='none';
+      }
+      card.style.transform='translateY('+Math.max(0,dy)+'px)';
+    });
+    card.addEventListener('pointerup',event=>{
+      if(event.pointerId!==pointerId) return;
+      const dy=event.clientY-startY;
+      const far=dragging && dy>90;
+      reset();
+      if(far) closeSheet();
+    });
+    card.addEventListener('pointercancel',reset);
+  })();
 
   logButton.setAttribute('aria-expanded','false');
   logButton.addEventListener('click',openSheet);

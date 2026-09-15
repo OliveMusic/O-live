@@ -3021,6 +3021,17 @@
   }
   metroArmed=loadMetroArmed();
   renderMetroButton();
+  /* 잼이나 리듬이 메트로놈을 밀어내면 박도 끊긴다. 버튼만 계속 빛나고 있으면
+     무엇이 도는지 알 수 없으므로, 멈춘 것을 듣고 흔적을 거둔다.
+     켜 둔 표시(aria-pressed)는 그대로다 — 그건 '다음에 녹음할 때 들을지'다. */
+  if(window.OliveMetronome && typeof window.OliveMetronome.onPlaying==='function'){
+    window.OliveMetronome.onPlaying(on=>{
+      if(on) return;
+      metroStartedByRecorder=false;
+      detachMetroBeat();
+      cancelCountIn();
+    });
+  }
 
   recordDiscard.addEventListener('click',discardDraft);
   recordSave.addEventListener('click',saveDraft);

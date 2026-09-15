@@ -213,6 +213,18 @@
   .topbar-log:active{ background:var(--key-press); }
   /* 세이지는 '지금 작동 중'일 때만 쓴다. 기록 창이 열려 있는 동안만이다. */
   .topbar-log[aria-expanded="true"]{ color:var(--signal); }
+  .topbar-log[hidden]{ display:none; }
+  /* 계정을 연결하기 전에는 기록이 쌓일 곳이 없다. 빈 달력을 열어 주는 대신
+     그 자리에서 바로 연결하게 한다. */
+  .topbar-signin{
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    min-height:30px; padding:0 12px; border-radius:var(--r-pill);
+    border:1px solid var(--line); background:var(--key); color:var(--ink-2);
+    font-family:inherit; font-size:0.625rem; font-weight:600;
+    letter-spacing:0.0273em; cursor:pointer;
+  }
+  .topbar-signin:active{ background:var(--key-press); }
+  .topbar-signin[hidden]{ display:none; }
 
   /* 손에 쥐는 앱이다. 모니터에서 화면 폭만큼 늘어나면 버튼이 우스꽝스럽게 길어진다. */
   main{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:4px 14px 106px;}
@@ -951,7 +963,9 @@
      가운데에 오도록 내려 준다. */
   .log-row{ display:grid; grid-template-columns:12px 52px 1fr; gap:8px; align-items:start; }
   .log-row .log-sw{ width:9px; height:9px; border-radius:2px; margin-top:3px; }
-  .log-row .log-who{ font-size:0.625rem; font-weight:600; color:var(--ink); }
+  /* 셋이 같은 줄 높이를 써야 색 표·이름·값이 한 줄에 앉는다. 이름에만
+     line-height가 없으면 줄 상자가 짧아 글자가 1.5px쯤 위로 뜬다. */
+  .log-row .log-who{ font-size:0.625rem; font-weight:600; color:var(--ink); line-height:1.5; }
   .log-row .log-what{
     font-size:0.625rem; font-weight:500; color:var(--ink-2); line-height:1.5;
     font-variant-numeric:tabular-nums;
@@ -986,6 +1000,10 @@
     margin:16px 0 8px; font-size:0.6562rem; color:var(--ink-3);
     font-weight:500; letter-spacing:0.0545em;
   }
+  /* 박자는 줄바꿈에 맡기면 5+3으로 어중간하게 끊긴다. x/4 한 줄, x/8 한 줄로
+     나누면 무엇끼리 한 갈래인지가 배열로 읽힌다. */
+  .metro-sheet .pill-group.meter-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+  .metro-sheet .meter-row .pill{ padding:8px 0; text-align:center; }
   .metro-sheet .note-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
   .metro-sheet .note-btn{ padding:6px 2px 4px; min-height:42px; }
   .metro-sheet-accent{ margin-top:17px; font-size:0.7188rem; font-weight:500; }
@@ -2377,13 +2395,14 @@
                M8.5 8 A 1.7 1.7 0 1 0 11.9 8 A 1.7 1.7 0 1 0 8.5 8 Z"/>
     </svg>
     <h1 id="pageTitle">메트로놈</h1>
-    <button class="topbar-log" id="practiceLogBtn" type="button" aria-label="연습 기록">
+    <button class="topbar-log" id="practiceLogBtn" type="button" aria-label="연습 기록" hidden>
       <svg viewBox="0 0 20 20" aria-hidden="true">
         <rect x="2.8" y="4.2" width="14.4" height="13" rx="2.6"/>
         <path d="M2.8 8.2h14.4M6.6 2.6v3M13.4 2.6v3"/>
         <circle cx="10" cy="12.4" r="1.5" fill="currentColor" stroke="none"/>
       </svg>
     </button>
+    <button class="topbar-signin" id="topbarSignIn" type="button" hidden>로그인</button>
   </header>
 
   <main>
@@ -2748,23 +2767,10 @@
               <div class="link-results" id="linkResults"></div>
             </div>
             <div class="record-list" id="recordList"></div>
-            <div class="ear-cloud record-cloud" id="recordCloud">
-              <div class="ear-cloud-copy">
-                <span class="ear-cloud-dot" id="recordCloudDot" data-state="unconfigured" aria-hidden="true"></span>
-                <span>
-                  <strong id="recordCloudTitle">클라우드 연결 준비 중</strong>
-                  <small id="recordCloudStatus" aria-live="polite">설정을 확인하고 있습니다</small>
-                </span>
-              </div>
-              <button class="ear-cloud-action" id="recordCloudAction" type="button" aria-label="계정 연결">
-                <span id="recordCloudActionLabel">계정 연결</span>
-                <img class="ear-cloud-avatar" id="recordCloudAvatar" alt="" referrerpolicy="no-referrer" hidden>
-                <span class="ear-cloud-avatar-fallback" id="recordCloudAvatarFallback" aria-hidden="true" hidden></span>
-              </button>
-            </div>
           </div>
         </details>
       </div>
+
     </section>
 
     <!-- JAM -->
@@ -2944,7 +2950,7 @@
     </div>
 
     <h3 class="metro-sheet-label">박자</h3>
-    <div class="pill-group" id="recordMetroMeters"></div>
+    <div class="pill-group meter-row" id="recordMetroMeters"></div>
 
     <h3 class="metro-sheet-label">세분화</h3>
     <div class="pill-group note-row" id="recordMetroSubs"></div>
@@ -3013,23 +3019,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=241"></script>
+<script src="app-version.js?v=242"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=241"></script>
-<script src="js/audio-runtime.js?v=241"></script>
-<script src="js/core.js?v=241"></script>
-<script src="js/metronome.js?v=241"></script>
-<script src="js/tuner-engine.js?v=241"></script>
-<script src="js/tuner.js?v=241"></script>
-<script src="js/scales.js?v=241"></script>
-<script src="js/ear-trainer.js?v=241"></script>
-<script src="js/rhythm-trainer.js?v=241"></script>
-<script src="js/recording-cache.js?v=241"></script>
-<script src="js/recorder.js?v=241"></script>
-<script src="js/practice-links.js?v=241"></script>
-<script src="js/jam-session.js?v=241"></script>
-<script src="js/practice-log.js?v=241"></script>
-<script src="js/app-shell.js?v=241"></script>
+<script src="cloud-sync.js?v=242"></script>
+<script src="js/audio-runtime.js?v=242"></script>
+<script src="js/core.js?v=242"></script>
+<script src="js/metronome.js?v=242"></script>
+<script src="js/tuner-engine.js?v=242"></script>
+<script src="js/tuner.js?v=242"></script>
+<script src="js/scales.js?v=242"></script>
+<script src="js/ear-trainer.js?v=242"></script>
+<script src="js/rhythm-trainer.js?v=242"></script>
+<script src="js/recording-cache.js?v=242"></script>
+<script src="js/recorder.js?v=242"></script>
+<script src="js/practice-links.js?v=242"></script>
+<script src="js/jam-session.js?v=242"></script>
+<script src="js/practice-log.js?v=242"></script>
+<script src="js/app-shell.js?v=242"></script>
 </body>
 </html>
