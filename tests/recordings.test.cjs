@@ -54,10 +54,42 @@ assert.match(index,/id="recordState">녹음 준비</);
 assert.match(index,/id="recordState">녹음 준비<\/span>[\s\S]*?id="recordToggle"[\s\S]*?id="recordTimeProgress"[\s\S]*?id="recordLevelRow"/);
 assert.match(index,/\.record-olive\{[^}]*margin:20px auto 0/);
 assert.match(index,/\.record-time-progress\{[^}]*margin:16px auto 0/);
-/* 녹음 시간과 올리브 버튼은 좌우로 배치해 세로 공간을 아낀다. */
-assert.match(index,/<div class="record-head">[\s\S]*?id="recordTimer"[\s\S]*?id="recordState"[\s\S]*?id="recordToggle"[\s\S]*?<\/div>/);
-assert.match(index,/\.record-head\{[^}]*display:flex;[^}]*justify-content:space-between/);
+/* 녹음 시간과 올리브 버튼은 좌우로 배치해 세로 공간을 아낀다.
+   가운데에 메트로놈 버튼이 들어오면서 space-between 대신 왼쪽 글씨 덩어리가
+   남은 자리를 밀어내는 방식이 되었다. 좌우로 벌어진다는 뜻은 그대로다. */
+assert.match(index,/<div class="record-head">[\s\S]*?id="recordTimer"[\s\S]*?id="recordState"[\s\S]*?id="recordMetro"[\s\S]*?id="recordToggle"[\s\S]*?<\/div>/);
+assert.match(index,/\.record-head\{[^}]*display:flex;/);
+assert.match(index,/\.record-head-copy\{[^}]*margin-right:auto/);
 assert.match(index,/\.record-head \.record-olive\{ margin:0/);
+
+/* ---------- 녹음할 때 함께 울리는 메트로놈 ----------
+   버튼은 올리브 왼쪽에 있고, 켜짐은 세이지로 옅게 빛난다. 올리브 버튼은
+   녹음 중 세이지로 꽉 차므로 이쪽까지 채우면 두 덩어리가 서로를 가린다. */
+assert.match(index,/id="recordMetro"[^>]*aria-pressed="false"/);
+assert.match(index,/\.record-metro\[aria-pressed="true"\]\{[^}]*background:var\(--signal-soft\)[^}]*border-color:var\(--signal\)/);
+assert.doesNotMatch(index,/\.record-metro\[aria-pressed="true"\]\{[^}]*background:var\(--signal\);/);
+/* 보이는 원은 38px이지만 눌리는 자리는 44px이다. */
+assert.match(index,/\.record-metro::before\{[^}]*width:44px; height:44px/);
+/* 카운트인 숫자는 세이지, 녹음이 시작되면 원래 먹색 0:00으로 돌아온다. */
+assert.match(index,/\.record-timer\.counting\{ color:var\(--signal\)/);
+assert.match(recorder,/recordTimer\.classList\.add\('counting'\)/);
+assert.match(recorder,/function clearCountIn\(\)\{\s*recordTimer\.classList\.remove\('counting'\);/);
+
+/* 설정 창은 메트로놈 탭과 같은 값을 고친다. 창이 스스로 값을 들고 있으면
+   어느 쪽이 진짜인지 알 수 없게 된다. */
+assert.match(index,/id="recordMetroSheet"/);
+assert.match(index,/메트로놈 탭과 같은 설정입니다/);
+assert.match(recorder,/function metronome\(\)\{ return window\.OliveMetronome\|\|null; \}/);
+assert.doesNotMatch(recorder,/new AudioContext[\s\S]{0,80}metro/i);
+
+/* 마디 중간이 아니라 다음 마디 첫 박부터 센다. */
+assert.match(recorder,/if\(mark\.beatIndex!==0\) return;/);
+/* 마이크가 준비된 다음에 센다 — 연결을 기다리며 세면 0에 닿아도 녹음이 없다. */
+assert.match(recorder,/startRecorderMetronome\(\)[\s\S]*?countInOneBar\(token\)[\s\S]*?recorder\.start\(\)/);
+/* 짧게 누르면 켜고 끄기, 길게 누르면 설정. */
+assert.match(recorder,/bindLongPress\(recordMetro,\(\)=>setMetroArmed\(!metroArmed\),openMetroSheet\)/);
+/* 사용자가 탭에서 직접 켜 둔 메트로놈은 녹음이 끝나도 두고 나온다. */
+assert.match(recorder,/if\(metro && metroStartedByRecorder\) metro\.stop\(\);/);
 assert.match(index,/\.record-stage\{ text-align:center; padding:14px 0 10px; \}/);
 assert.match(index,/\.record-level-row\{[^}]*margin:12px auto 8px/);
 assert.match(index,/id="recordTimeTrack"/);

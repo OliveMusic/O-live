@@ -845,6 +845,32 @@
     color:var(--ink-3); font-size:1.25rem; cursor:pointer;
   }
   .cloud-sheet-close:active{background:var(--key-press);}
+  /* ---------- 녹음 화면의 메트로놈 설정 창 ---------- */
+  .metro-sheet{ max-height:calc(100dvh - 56px); overflow-y:auto; }
+  .metro-sheet-display{
+    margin:0 0 10px;              /* .display의 카드용 음수 여백을 되돌린다 */
+    padding:18px 18px 15px; text-align:center;
+  }
+  .metro-sheet-bpm{
+    font-size:2.75rem; font-weight:200; line-height:1; letter-spacing:-.04em;
+    color:var(--display-ink); font-variant-numeric:tabular-nums;
+  }
+  .metro-sheet-unit{
+    margin-top:8px; font-size:0.5938rem; font-weight:500;
+    letter-spacing:0.1909em; text-transform:uppercase; color:var(--display-dim);
+  }
+  .metro-sheet-label{
+    margin:16px 0 8px; font-size:0.6562rem; color:var(--ink-3);
+    font-weight:500; letter-spacing:0.0545em;
+  }
+  .metro-sheet .note-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+  .metro-sheet .note-btn{ padding:6px 2px 4px; min-height:42px; }
+  .metro-sheet-accent{ margin-top:17px; font-size:0.7188rem; font-weight:500; }
+  .metro-sheet-accent .btn{ min-width:72px; }
+  .metro-sheet-accent .btn[aria-pressed="true"]{
+    background:var(--signal); border-color:var(--signal); color:var(--on-signal);
+  }
+
   .cloud-mark{
     width:42px; height:42px; margin:10px auto 12px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
@@ -1588,9 +1614,50 @@
      아래 진행바·레벨바와 같은 폭에 맞춰 시선이 한 줄로 정렬되게 한다. */
   .record-head{
     width:min(276px,84%); margin:0 auto;
-    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    display:flex; align-items:center; gap:12px;
   }
-  .record-head-copy{ min-width:0; text-align:left; }
+  .record-head-copy{ min-width:0; text-align:left; margin-right:auto; }
+
+  /* 녹음할 때 박을 들을지 정하는 버튼. 올리브 버튼은 녹음 중 세이지로 꽉 차므로
+     이쪽은 옅게 둔다 — 둘 다 채우면 덩어리 둘이 서로를 가린다. */
+  .record-metro{
+    position:relative; width:38px; height:38px; flex:0 0 auto; padding:0;
+    border-radius:50%; background:var(--key); border:1px solid var(--line);
+    color:var(--ink-3); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:background .14s var(--ease-out), border-color .14s var(--ease-out),
+               color .14s var(--ease-out);
+  }
+  /* 보이는 원은 38px이지만 실제로 눌리는 자리는 44px이다. */
+  .record-metro::before{
+    content:''; position:absolute; top:50%; left:50%;
+    width:44px; height:44px; transform:translate(-50%,-50%);
+  }
+  .record-metro svg{
+    width:19px; height:19px; display:block;
+    fill:none; stroke:currentColor; stroke-width:1.35;
+    stroke-linecap:round; stroke-linejoin:round;
+  }
+  .record-metro:active{ background:var(--key-press); }
+  .record-metro[aria-pressed="true"]{
+    background:var(--signal-soft); border-color:var(--signal); color:var(--signal);
+  }
+  .record-metro[aria-pressed="true"]:active{ background:var(--signal-soft); }
+  /* 박마다 테가 한 번 번진다 — 탭바 아이콘이 박에 맞춰 빛나는 것과 같은 방식 */
+  .record-metro.beat::after{
+    content:''; position:absolute; inset:-4px; border-radius:50%;
+    box-shadow:0 0 0 2px rgba(var(--signal-rgb),.34);
+    animation:recordMetroBeat .42s var(--ease-out) forwards;
+  }
+  @keyframes recordMetroBeat{
+    from{ opacity:1; transform:scale(.94); }
+    to{ opacity:0; transform:scale(1.07); }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .record-metro.beat::after{ animation:none; opacity:0; }
+  }
+  /* 카운트인 동안에는 0:00이 아무 뜻이 없다. 그 자리에 남은 박을 센다. */
+  .record-timer.counting{ color:var(--signal); letter-spacing:-.02em; }
   .record-head .record-timer{ font-size:3.1rem; }
   .record-head .record-state{ min-height:18px; margin-top:3px; justify-content:center; }
   .record-head .record-olive{ margin:0; flex:0 0 auto; }
@@ -2491,6 +2558,12 @@
                   <span id="recordState">녹음 준비</span>
                 </div>
               </div>
+              <button class="record-metro" id="recordMetro" type="button" aria-pressed="false"
+                      aria-label="녹음할 때 메트로놈 함께 · 길게 눌러 설정">
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M7.2 2.5h5.6l2.7 15H4.5z"/><path d="M13.8 6.2 6.2 13.4"/>
+                </svg>
+              </button>
               <button class="record-olive" id="recordToggle" type="button" data-mode="idle" aria-label="녹음 시작">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <rect x="9" y="4" width="6" height="11" rx="3"/>
@@ -2697,6 +2770,45 @@
   </div>
 </div>
 
+<!-- 녹음 화면에서 메트로놈 버튼을 길게 누르면 열린다.
+     여기서 고치는 값은 메트로놈 탭과 같은 값이다. 따로 두면 왜 아까와
+     빠르기가 다른지 아무도 설명할 수 없게 된다. -->
+<div class="cloud-sheet-backdrop" id="recordMetroSheet" hidden>
+  <section class="cloud-sheet metro-sheet" role="dialog" aria-modal="true" aria-labelledby="recordMetroTitle">
+    <div class="cloud-sheet-handle" aria-hidden="true"></div>
+    <button class="cloud-sheet-close" id="recordMetroClose" type="button" aria-label="닫기">×</button>
+    <div class="cloud-mark" aria-hidden="true">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7.2 2.5h5.6l2.7 15H4.5z"/><path d="M13.8 6.2 6.2 13.4"/>
+      </svg>
+    </div>
+    <h2 id="recordMetroTitle">메트로놈</h2>
+    <p class="cloud-sheet-lead">메트로놈 탭과 같은 설정입니다.</p>
+
+    <div class="display metro-sheet-display">
+      <div class="metro-sheet-bpm" id="recordMetroBpm">90</div>
+      <div class="metro-sheet-unit">BPM</div>
+    </div>
+    <div class="switch-row">
+      <button class="btn" id="recordMetroMinus" type="button" style="flex:1;" aria-label="느리게">−</button>
+      <button class="btn" id="recordMetroTap" type="button" style="flex:1;">TAP</button>
+      <button class="btn" id="recordMetroPlus" type="button" style="flex:1;" aria-label="빠르게">+</button>
+    </div>
+
+    <h3 class="metro-sheet-label">박자</h3>
+    <div class="pill-group" id="recordMetroMeters"></div>
+
+    <h3 class="metro-sheet-label">세분화</h3>
+    <div class="pill-group note-row" id="recordMetroSubs"></div>
+
+    <div class="row metro-sheet-accent">
+      <span>첫박 강세</span>
+      <button class="btn" id="recordMetroAccent" type="button" aria-pressed="true">ON</button>
+    </div>
+  </section>
+</div>
+
 <div class="cloud-sheet-backdrop" id="cloudAuthSheet" hidden>
   <section class="cloud-sheet" role="dialog" aria-modal="true" aria-labelledby="cloudAuthTitle">
     <div class="cloud-sheet-handle" aria-hidden="true"></div>
@@ -2754,22 +2866,22 @@
   </section>
 </div>
 
-<script src="app-version.js?v=235"></script>
+<script src="app-version.js?v=236"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=235"></script>
-<script src="js/audio-runtime.js?v=235"></script>
-<script src="js/core.js?v=235"></script>
-<script src="js/metronome.js?v=235"></script>
-<script src="js/tuner-engine.js?v=235"></script>
-<script src="js/tuner.js?v=235"></script>
-<script src="js/scales.js?v=235"></script>
-<script src="js/ear-trainer.js?v=235"></script>
-<script src="js/rhythm-trainer.js?v=235"></script>
-<script src="js/recording-cache.js?v=235"></script>
-<script src="js/recorder.js?v=235"></script>
-<script src="js/practice-links.js?v=235"></script>
-<script src="js/jam-session.js?v=235"></script>
-<script src="js/app-shell.js?v=235"></script>
+<script src="cloud-sync.js?v=236"></script>
+<script src="js/audio-runtime.js?v=236"></script>
+<script src="js/core.js?v=236"></script>
+<script src="js/metronome.js?v=236"></script>
+<script src="js/tuner-engine.js?v=236"></script>
+<script src="js/tuner.js?v=236"></script>
+<script src="js/scales.js?v=236"></script>
+<script src="js/ear-trainer.js?v=236"></script>
+<script src="js/rhythm-trainer.js?v=236"></script>
+<script src="js/recording-cache.js?v=236"></script>
+<script src="js/recorder.js?v=236"></script>
+<script src="js/practice-links.js?v=236"></script>
+<script src="js/jam-session.js?v=236"></script>
+<script src="js/app-shell.js?v=236"></script>
 </body>
 </html>

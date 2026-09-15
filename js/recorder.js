@@ -46,6 +46,16 @@
   const recordLevelRow=document.getElementById('recordLevelRow');
   const recordLevel=document.getElementById('recordLevelFill');
   const recordHint=document.getElementById('recordHint');
+  const recordMetro=document.getElementById('recordMetro');
+  const metroSheet=document.getElementById('recordMetroSheet');
+  const metroSheetClose=document.getElementById('recordMetroClose');
+  const metroSheetBpm=document.getElementById('recordMetroBpm');
+  const metroSheetMinus=document.getElementById('recordMetroMinus');
+  const metroSheetPlus=document.getElementById('recordMetroPlus');
+  const metroSheetTap=document.getElementById('recordMetroTap');
+  const metroSheetMeters=document.getElementById('recordMetroMeters');
+  const metroSheetSubs=document.getElementById('recordMetroSubs');
+  const metroSheetAccent=document.getElementById('recordMetroAccent');
   const recordDraft=document.getElementById('recordDraft');
   const recordTitle=document.getElementById('recordTitle');
   const recordDiscard=document.getElementById('recordDiscard');
@@ -821,11 +831,208 @@
     inputActivityLastAt=0;
     recordLevelRow.classList.remove('input-active');
   }
+  /* ---------- 녹음할 때 함께 울리는 메트로놈 ----------
+     버튼을 켜 두면 녹음을 누를 때 한 마디를 세고 시작하고, 녹음하는 동안
+     박이 계속 들린다. 꺼 두면 예전과 똑같이 바로 녹음만 한다.
+
+     소리를 내는 주체는 메트로놈 탭과 같은 하나뿐이다. 여기서는 켜고 끄기와
+     마디 세기만 맡는다. 두 벌의 메트로놈이 따로 돌면 왜 아까와 빠르기가
+     다른지 아무도 설명할 수 없게 된다.
+
+     클릭음은 녹음 파일에 들어가지 않는다. setupCapture가 잇는 것은 마이크
+     입력뿐이고 메트로놈은 다른 출력 버스로 나가기 때문이다. 귀로 듣고 박에
+     맞춰 칠 수는 있지만 파일에는 남지 않는다. */
+  const METRO_ARMED_KEY='olive-record-metronome';
+  let metroArmed=false;
+  let metroStartedByRecorder=false;
+  let metroBeatOff=null;
+  let countInAbort=null;
+
+  function metronome(){ return window.OliveMetronome||null; }
+  function loadMetroArmed(){
+    try{ return localStorage.getItem(METRO_ARMED_KEY)==='1'; }
+    catch(error){ return false; }
+  }
+  function saveMetroArmed(){
+    try{ localStorage.setItem(METRO_ARMED_KEY,metroArmed?'1':'0'); }
+    catch(error){}
+  }
+  function renderMetroButton(){
+    if(!recordMetro) return;
+    recordMetro.setAttribute('aria-pressed',metroArmed?'true':'false');
+  }
+  function attachMetroBeat(){
+    const metro=metronome();
+    if(!metro || metroBeatOff || !recordMetro) return;
+    metroBeatOff=metro.onBeat(()=>{
+      if(!recordMetro) return;
+      recordMetro.classList.remove('beat');
+      void recordMetro.offsetWidth;           // 애니메이션을 처음부터 다시
+      recordMetro.classList.add('beat');
+    });
+  }
+  function detachMetroBeat(){
+    if(metroBeatOff){ metroBeatOff(); metroBeatOff=null; }
+    if(recordMetro) recordMetro.classList.remove('beat');
+  }
+  async function startRecorderMetronome(){
+    const metro=metronome();
+    if(!metro) return false;
+    attachMetroBeat();
+    if(metro.isPlaying()) return true;
+    try{ await metro.start(); }catch(error){ return false; }
+    if(!metro.isPlaying()) return false;
+    metroStartedByRecorder=true;
+    return true;
+  }
+  function stopRecorderMetronome(){
+    detachMetroBeat();
+    const metro=metronome();
+    // 사용자가 메트로놈 탭에서 직접 켜 둔 것이라면 녹음이 끝나도 두고 나온다.
+    if(metro && metroStartedByRecorder) metro.stop();
+    metroStartedByRecorder=false;
+  }
+  function setMetroArmed(on){
+    metroArmed=Boolean(on);
+    saveMetroArmed();
+    renderMetroButton();
+    if(!metroArmed) stopRecorderMetronome();
+    else if(recording) startRecorderMetronome();
+    /* 안내 문구가 곧바로 따라와야 한다. 켜 두고도 "메트로놈과 함께 녹음할 수
+       있습니다"가 남아 있으면 무엇이 달라졌는지 알 수 없다. 대기 중일 때만
+       다시 그린다 — 확인 화면에서 부르면 들어 보던 녹음이 사라진다. */
+    if(recordToggle.dataset.mode==='idle') renderIdle();
+  }
+  function showCountIn(left){
+    recordTimer.textContent=String(left);
+    recordTimer.classList.add('counting');
+    recordState.textContent='카운트인';
+    recordStateDot.hidden=true;
+  }
+  function clearCountIn(){
+    recordTimer.classList.remove('counting');
+  }
+  function cancelCountIn(){
+    if(countInAbort){ const abort=countInAbort; countInAbort=null; abort(); }
+    clearCountIn();
+  }
+  /* 다음 마디 첫 박부터 한 마디를 세고 나서 녹음을 시작한다. 마디 중간에서
+     시작하면 세는 길이가 매번 달라져 언제 들어가야 할지 알 수 없다.
+     세는 기준은 예약 시각이 아니라 실제로 소리가 난 순간이라, 화면의 숫자와
+     귀에 들리는 클릭이 어긋나지 않는다. */
+  function countInOneBar(token){
+    const metro=metronome();
+    if(!metro) return Promise.resolve();
+    const beats=Math.max(1,metro.beatsPerBar());
+    return new Promise(resolve=>{
+      let counted=0, armed=false, done=false, off=null, guard=0;
+      const finish=()=>{
+        if(done) return;
+        done=true;
+        if(off){ off(); off=null; }
+        if(guard){ clearTimeout(guard); guard=0; }
+        if(countInAbort===finish) countInAbort=null;
+        resolve();
+      };
+      countInAbort=finish;
+      off=metro.onBeat(mark=>{
+        if(token!==startToken || !startPending){ finish(); return; }
+        if(!armed){
+          if(mark.beatIndex!==0) return;      // 마디 첫 박을 기다린다
+          armed=true;
+        }
+        counted++;
+        if(counted>beats){ finish(); return; }
+        showCountIn(beats-counted+1);
+      });
+      // 박이 오지 않으면(오디오가 막히는 등) 무한정 기다리지 않는다.
+      guard=setTimeout(finish,(beats+2)*metro.secondsPerBeat()*1000+2000);
+    });
+  }
+
+  /* ---------- 메트로놈 설정 창 ----------
+     창은 스스로 상태를 갖지 않는다. 열 때마다 OliveMetronome에서 값을 읽어
+     그리고, 탭에서 값이 바뀌면 onChange로 다시 그린다. */
+  let metroSheetTrigger=null;
+  let metroSheetOff=null;
+
+  function renderMetroSheet(){
+    const metro=metronome();
+    if(!metro || !metroSheet) return;
+    metroSheetBpm.textContent=String(metro.getBpm());
+    const meterNow=metro.meterLabel();
+    metroSheetMeters.querySelectorAll('.pill').forEach(pill=>{
+      pill.classList.toggle('active',pill.dataset.meter===meterNow);
+    });
+    const subNow=metro.subKey();
+    metroSheetSubs.querySelectorAll('.note-btn').forEach(button=>{
+      button.classList.toggle('active',button.dataset.sub===subNow);
+    });
+    const on=metro.accent();
+    metroSheetAccent.textContent=on?'ON':'OFF';
+    metroSheetAccent.setAttribute('aria-pressed',on?'true':'false');
+  }
+  function buildMetroSheet(){
+    const metro=metronome();
+    if(!metro || !metroSheetMeters || metroSheetMeters.childElementCount) return;
+    metro.meters().forEach(label=>{
+      const pill=document.createElement('button');
+      pill.type='button'; pill.className='pill'; pill.dataset.meter=label;
+      pill.textContent=label;
+      pill.addEventListener('click',()=>metro.setMeter(label));
+      metroSheetMeters.appendChild(pill);
+    });
+    metro.subs().forEach(item=>{
+      const button=document.createElement('button');
+      button.type='button'; button.className='note-btn'; button.dataset.sub=item.key;
+      button.innerHTML=item.glyph;
+      button.setAttribute('aria-label',item.name);
+      button.title=item.name;
+      button.addEventListener('click',()=>metro.setSub(item.key));
+      metroSheetSubs.appendChild(button);
+    });
+    // 탭의 조작과 같은 것들 — 길게 누르면 ±10, 숫자를 두 번 누르면 기본값.
+    bindTempoKeys(metroSheetMinus,metroSheetPlus,()=>metro.getBpm(),v=>metro.setBpm(v));
+    bindTapTempo(metroSheetTap,v=>metro.setBpm(v));
+    bindResetOnDouble(metroSheetBpm,()=>metro.setBpm(metro.defaultBpm()));
+    metroSheetAccent.addEventListener('click',()=>metro.setAccent(!metro.accent()));
+  }
+  function openMetroSheet(){
+    const metro=metronome();
+    if(!metro || !metroSheet) return;
+    buildMetroSheet();
+    metroSheetTrigger=document.activeElement && typeof document.activeElement.focus==='function'
+      ? document.activeElement : null;
+    if(app) app.setAttribute('inert','');
+    metroSheet.hidden=false;
+    requestAnimationFrame(()=>metroSheet.classList.add('open'));
+    document.body.classList.add('cloud-sheet-open');
+    if(!metroSheetOff) metroSheetOff=metro.onChange(renderMetroSheet);
+    renderMetroSheet();
+    setTimeout(()=>{ try{ metroSheetClose.focus(); }catch(error){} },50);
+  }
+  function closeMetroSheet(){
+    if(!metroSheet || metroSheet.hidden) return;
+    metroSheet.classList.remove('open');
+    document.body.classList.remove('cloud-sheet-open');
+    if(metroSheetOff){ metroSheetOff(); metroSheetOff=null; }
+    setTimeout(()=>{
+      if(metroSheet.classList.contains('open')) return;
+      metroSheet.hidden=true;
+      if(app) app.removeAttribute('inert');
+      if(metroSheetTrigger && metroSheetTrigger.isConnected) metroSheetTrigger.focus();
+      metroSheetTrigger=null;
+    },220);
+  }
+
   function renderIdle(){
+    clearCountIn();
     setTimer(0);
     recordState.textContent='녹음 준비';
     recordStateDot.hidden=true;
-    recordHint.textContent='최대 5분 · 메트로놈 또는 잼 세션과 함께 녹음할 수 있습니다';
+    recordHint.textContent=metroArmed
+      ? '최대 5분 · 한 마디 세고 시작합니다 · 길게 눌러 메트로놈 설정'
+      : '최대 5분 · 메트로놈 또는 잼 세션과 함께 녹음할 수 있습니다';
     recordDraft.hidden=true;
     clearInputActivity();
     recordLevel.style.transform='scaleX(0)';
@@ -833,6 +1040,7 @@
   }
   function renderDraft(){
     if(!draft){ renderIdle(); return; }
+    clearCountIn();
     setTimer(draft.durationMs);
     recordState.textContent=draftIsPlaying() ? '재생 중' : '녹음 확인';
     recordStateDot.hidden=true;
@@ -1098,6 +1306,18 @@
           if(recording) stopRecording();
         },{once:true});
       });
+      /* 마이크가 준비된 다음에 센다. 연결을 기다리는 동안 세면 숫자가 0에
+         닿았는데도 녹음이 시작되지 않는다. 클릭음은 마이크로만 들어가므로
+         여기서 세는 한 마디는 파일 앞에 붙지 않는다. */
+      if(metroArmed){
+        recordState.textContent='카운트인';
+        const beating=await startRecorderMetronome();
+        if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
+        if(beating){
+          await countInOneBar(token);
+          if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
+        }
+      }
       /* iPhone Safari의 MP4 MediaRecorder는 timeslice로 잘게 나눈 조각을
          다시 합쳤을 때 긴 녹음이 재생 불가능해지는 경우가 있다.
          최대 5분·96kbps면 메모리 부담이 작으므로 stop 때 한 파일로 받는다. */
@@ -1106,6 +1326,7 @@
         processedStream:recordingStream!==stream,
       });
       recording=true; startPending=false; startedAt=performance.now(); recordedAt=new Date().toISOString();
+      clearCountIn();
       setTimer(0);
       timerId=setInterval(updateTimer,200);
       setTabSounding('trainer',true,'recorder');
@@ -1115,7 +1336,9 @@
       setButtonMode('recording');
     }catch(error){
       if(token!==startToken) return;
-      startPending=false; recording=false; finishAudioSession(); renderIdle();
+      startPending=false; recording=false;
+      cancelCountIn(); stopRecorderMetronome();
+      finishAudioSession(); renderIdle();
       const message=error && error.name==='NotAllowedError' ? '마이크 권한이 필요합니다'
         : error && error.name==='NotReadableError' ? '마이크가 다른 앱에서 사용 중입니다'
         : error && error.name==='NotFoundError' ? '사용할 수 있는 마이크가 없습니다'
@@ -1125,9 +1348,12 @@
   }
   function stopRecording(){
     if(startPending){
-      startPending=false; ++startToken; finishAudioSession(); renderIdle(); return;
+      startPending=false; ++startToken;
+      cancelCountIn(); stopRecorderMetronome();
+      finishAudioSession(); renderIdle(); return;
     }
     if(!recording || !recorder) return;
+    stopRecorderMetronome();
     const elapsed=Math.min(MAX_DURATION_MS,performance.now()-startedAt);
     recording=false;
     clearInputActivity();
@@ -2751,6 +2977,21 @@
     else if(mode==='preview') toggleDraftPlayback();
     else startRecording();
   });
+  /* 짧게 누르면 켜고 끄기, 누르고 있으면 설정. 길게 누른 뒤에 켜짐이
+     같이 뒤집히면 설정을 열 때마다 원하지 않는 상태가 된다. */
+  bindLongPress(recordMetro,()=>setMetroArmed(!metroArmed),openMetroSheet);
+  if(metroSheetClose) metroSheetClose.addEventListener('click',closeMetroSheet);
+  if(metroSheet){
+    metroSheet.addEventListener('click',event=>{
+      if(event.target===metroSheet) closeMetroSheet();
+    });
+    metroSheet.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){ event.preventDefault(); closeMetroSheet(); }
+    });
+  }
+  metroArmed=loadMetroArmed();
+  renderMetroButton();
+
   recordDiscard.addEventListener('click',discardDraft);
   recordSave.addEventListener('click',saveDraft);
   recordTitle.addEventListener('input',()=>{ if(draft) draft.title=recordTitle.value; });

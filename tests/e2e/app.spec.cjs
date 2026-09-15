@@ -12,7 +12,7 @@ const pageErrors=new WeakMap();
 
 async function preparePage(page,{
   cloudClient=false,preferences=null,microphone='native',recordings=[],practiceLinks=[],cloudUploadError='',
-  mediaActionFailOnce='',recordingListFailOnce=false,youtube=false,
+  mediaActionFailOnce='',recordingListFailOnce=false,youtube=false,advanceClock=false,
 }={}){
   const errors=[];
   pageErrors.set(page,errors);
@@ -30,7 +30,7 @@ async function preparePage(page,{
   }));
   await page.addInitScript(({
     withCloud,storedPreferences,micMode,recordingRows,practiceRows,recordingUploadError,failMediaActionOnce,
-    failRecordingListOnce,stubYouTube,
+    failRecordingListOnce,stubYouTube,runClock,
   })=>{
     sessionStorage.setItem('olive-startup-state-v2','shown');
     /* YouTube IFrame API를 대신한다. loadApi는 window.YT가 이미 있으면 그대로 쓴다.
@@ -286,7 +286,15 @@ async function preparePage(page,{
         constructor(){
           harness.contexts++;
           this.state='suspended';
-          this.currentTime=0;
+          /* 기본은 멈춘 시계다. 차가운 AudioContext를 흉내내는 기존 검사들이
+             currentTime이 0에 머무는 것에 기대고 있으므로 건드리지 않는다.
+             메트로놈처럼 시계가 흘러야 하는 검사만 이 옵션을 켠다. */
+          if(runClock){
+            const origin=performance.now();
+            Object.defineProperty(this,'currentTime',{get:()=>(performance.now()-origin)/1000});
+          }else{
+            this.currentTime=0;
+          }
           this.sampleRate=48000;
           this.destination=new FakeNode();
           this.listeners=new Map();
@@ -476,7 +484,7 @@ async function preparePage(page,{
     withCloud:cloudClient,storedPreferences:preferences,micMode:microphone,
     recordingRows:recordings,practiceRows:practiceLinks,recordingUploadError:cloudUploadError,
     failMediaActionOnce:mediaActionFailOnce,failRecordingListOnce:recordingListFailOnce,
-    stubYouTube:youtube,
+    stubYouTube:youtube,runClock:advanceClock,
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
@@ -2334,4 +2342,90 @@ test('클라우드 스키마가 오래되면 저장 대신 구체적인 업데�
   await page.locator('#earCloudAction').evaluate(element=>element.click());
   await page.locator('#cloudSyncNow').click();
   await expect(page.locator('#cloudAuthMessage')).toContainText('오류 코드 DB-014');
+});
+
+/* 카운트인은 실제로 소리가 난 박을 세므로 오디오 시계가 흘러야 한다.
+   그래서 이 검사만 advanceClock을 켠다. */
+test('녹음 메트로놈을 켜면 한 마디를 세고 나서 녹음이 시작된다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal',advanceClock:true});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+
+  const metro=page.locator('#recordMetro');
+  await expect(metro).toHaveAttribute('aria-pressed','false');
+  await expect(page.locator('#recordHint'))
+    .toHaveText('최대 5분 · 메트로놈 또는 잼 세션과 함께 녹음할 수 있습니다');
+
+  await metro.click();
+  await expect(metro).toHaveAttribute('aria-pressed','true');
+  // 켜자마자 안내 문구가 따라온다. 무엇이 달라졌는지 바로 읽혀야 한다.
+  await expect(page.locator('#recordHint'))
+    .toHaveText('최대 5분 · 한 마디 세고 시작합니다 · 길게 눌러 메트로놈 설정');
+  // 켜 두기만 해서는 울리지 않는다 — 녹음할 때 들을지를 정하는 버튼이다.
+  expect(await page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeFalsy();
+
+  await page.evaluate(()=>{
+    window.OliveMetronome.setMeter('4/4');
+    window.OliveMetronome.setBpm(120);      // 한 마디 = 2초
+    window.__counts=[];
+    const timer=document.getElementById('recordTimer');
+    new MutationObserver(()=>window.__counts.push(timer.textContent))
+      .observe(timer,{childList:true,characterData:true,subtree:true});
+  });
+
+  await page.locator('#recordToggle').click();
+
+  // 세는 동안에는 카운트인이고, 큰 숫자가 세이지로 바뀐다.
+  await expect(page.locator('#recordState')).toHaveText('카운트인');
+  await expect(page.locator('#recordTimer')).toHaveClass(/counting/);
+  // 아직 파일은 시작되지 않았다. 여기서 시작하면 앞에 빈 한 마디가 붙는다.
+  expect(await page.evaluate(()=>(
+    window.__micHarness.mediaRecorder && window.__micHarness.mediaRecorder.state
+  ))).not.toBe('recording');
+
+  // 한 마디를 다 세면 녹음이 시작되고 숫자는 0:00으로 돌아온다.
+  await expect(page.locator('#recordState')).toHaveText('녹음 중',{timeout:15000});
+  await expect(page.locator('#recordTimer')).not.toHaveClass(/counting/);
+  await expect(page.locator('#recordTimer')).toHaveText('0:00');
+  await expect(page.locator('#recordToggle')).toHaveClass(/on/);
+  expect(await page.evaluate(()=>window.__micHarness.mediaRecorder.state)).toBe('recording');
+  // 녹음하는 동안에도 박은 계속 들린다.
+  expect(await page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeTruthy();
+
+  // 4/4면 4·3·2·1을 거쳐야 한다. 마디 중간에서 시작하면 이 줄이 짧아진다.
+  const counted=await page.evaluate(()=>window.__counts);
+  expect(counted.filter(text=>/^[0-9]$/.test(text))).toEqual(['4','3','2','1']);
+
+  // 녹음을 멈추면 우리가 켠 메트로놈도 함께 멈춘다.
+  await page.locator('#recordToggle').click();
+  await expect.poll(()=>page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeFalsy();
+});
+
+test('메트로놈 버튼을 길게 누르면 설정이 열리고 메트로놈 탭과 같은 값을 고친다',async({page})=>{
+  await preparePage(page,{cloudClient:'recordings',microphone:'meter-signal'});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+
+  const metro=page.locator('#recordMetro');
+  const box=await metro.boundingBox();
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+
+  await expect(page.locator('#recordMetroSheet')).toBeVisible();
+  // 길게 누른 뒤에 켜짐까지 뒤집히면 설정을 열 때마다 원하지 않는 상태가 된다.
+  await expect(metro).toHaveAttribute('aria-pressed','false');
+
+  await page.locator('#recordMetroMeters .pill',{hasText:'3/4'}).click();
+  await page.locator('#recordMetroAccent').click();
+
+  // 메트로놈 탭이 같은 값을 보여야 한다. 두 벌로 나뉘면 어느 쪽이 진짜인지 알 수 없다.
+  expect(await page.evaluate(()=>window.OliveMetronome.meterLabel())).toBe('3/4');
+  await expect(page.locator('#beatDots .beat-dot')).toHaveCount(3);
+  await expect(page.locator('#accentToggle')).toHaveText('OFF');
+  await expect(page.locator('#recordMetroAccent')).toHaveText('OFF');
+
+  await page.locator('#recordMetroClose').click();
+  await expect(page.locator('#recordMetroSheet')).toBeHidden();
 });

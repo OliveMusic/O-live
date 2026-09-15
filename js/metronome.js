@@ -45,6 +45,18 @@
   const scheduleAheadTime = 0.12, backgroundScheduleAheadTime = 2.5, lookahead = 25;
   let scheduledBeats = [];
 
+  /* 박에 맞춰 움직여야 하는 다른 기능(녹음 카운트인)이 붙는 자리.
+     예약한 시각이 아니라 실제로 소리가 난 순간에 부른다. 그래야 화면의
+     숫자와 귀에 들리는 박이 어긋나지 않는다. */
+  const beatListeners = new Set();
+  function emitBeat(mark){
+    if(!beatListeners.size) return;
+    beatListeners.forEach(fn=>{
+      try{ fn({beatIndex:mark.beatIndex, level:mark.level, beats:meter.beats}); }
+      catch(error){}
+    });
+  }
+
   const bpmNum = document.getElementById('bpmNum');
   const beatDotsEl = document.getElementById('beatDots');
   const metroStart = document.getElementById('metroStart');
@@ -144,12 +156,14 @@
     return bpm;
   }
 
+  /* 탭에서 빠르기를 바꿔도 녹음 화면의 설정 창이 같은 숫자를 보여야 한다. */
+  function setBpmShared(value){ const next=setBpm(value); notifyChange(); return next; }
   bindTempoKeys(document.getElementById('bpmMinus'),
                 document.getElementById('bpmPlus'),
-                ()=>bpm, setBpm);
-  bindResetOnDouble(bpmNum, ()=>setBpm(BPM_DEFAULT));
+                ()=>bpm, setBpmShared);
+  bindResetOnDouble(bpmNum, ()=>setBpmShared(BPM_DEFAULT));
 
-  bindTapTempo(document.getElementById('tapTempoBtn'), setBpm);
+  bindTapTempo(document.getElementById('tapTempoBtn'), setBpmShared);
 
   /* ---------- 음표 그림 ----------
      글자 대신 실제 악보 기호를 그린다. {div, hits}만 주면
@@ -228,7 +242,7 @@
     METERS.indexOf(meter),
     i=>{
       meter=METERS[i]; computeGroups(); renderDots();
-      window.OlivePreferences.changed();
+      window.OlivePreferences.changed(); notifyChange();
     }
   );
   SUBS.forEach(v=>{
@@ -238,19 +252,16 @@
     b.setAttribute('aria-label', v.name);
     b.title=v.name;
     b.addEventListener('click', ()=>{
-      sub=v;
-      subdivGroup.querySelectorAll('.note-btn').forEach(x=>x.classList.toggle('active', x===b));
-      window.OlivePreferences.changed();
+      selectSub(v.key);
+      window.OlivePreferences.changed(); notifyChange();
     });
     subdivGroup.appendChild(b);
   });
   computeGroups();
   const accentToggle=document.getElementById('accentToggle');
-  accentToggle.addEventListener('click', (e)=>{
-    accentOn = !accentOn;
-    e.target.textContent = accentOn?'ON':'OFF';
-    e.target.classList.toggle('active', accentOn);
-    window.OlivePreferences.changed();
+  accentToggle.addEventListener('click', ()=>{
+    selectAccent(!accentOn);
+    window.OlivePreferences.changed(); notifyChange();
   });
 
   function scheduleNote(step, time){
@@ -336,6 +347,7 @@
         void metroStart.offsetWidth;      // 애니메이션 재시작
         metroStart.classList.add('flash');
         pulseTab('metronome');
+        emitBeat(b);
         const dots = beatDotsEl.querySelectorAll('.beat-dot');
         dots.forEach(d=>d.classList.remove('on','mid-on','accent-on'));
         if(dots[b.beatIndex])
@@ -455,27 +467,76 @@
     scheduler();
   });
 
+  /* ---------- 설정 바꾸기 ----------
+     메트로놈 탭과 녹음 화면의 메트로놈 설정 창은 같은 값을 고친다. 그래서
+     '값을 바꾸고 탭의 화면을 맞추는' 일을 여기 한 곳에 모아 두고, 양쪽이
+     모두 이 함수만 부른다. 두 벌로 나뉘면 어느 쪽이 진짜인지 알 수 없게 된다. */
+  function selectMeter(label){
+    const index=METERS.findIndex(item=>item.label===label);
+    if(index<0) return false;
+    meter=METERS[index]; meterDD.set(index);
+    computeGroups(); renderDots();
+    return true;
+  }
+  function selectSub(key){
+    const index=SUBS.findIndex(item=>item.key===key);
+    if(index<0) return false;
+    sub=SUBS[index];
+    subdivGroup.querySelectorAll('.note-btn')
+      .forEach((button,at)=>button.classList.toggle('active',at===index));
+    return true;
+  }
+  function selectAccent(on){
+    accentOn=on!==false;
+    accentToggle.textContent=accentOn?'ON':'OFF';
+    accentToggle.classList.toggle('active',accentOn);
+    return accentOn;
+  }
+
+  /* 설정 창이 열려 있는 동안 탭에서 값이 바뀌면 창도 따라 그려야 한다. */
+  const changeListeners=new Set();
+  function notifyChange(){
+    changeListeners.forEach(fn=>{ try{ fn(); }catch(error){} });
+  }
+
   window.OlivePreferences.register('metronome',
     ()=>({bpm,meter:meter.label,subdivision:sub.key,accent:accentOn}),
     value=>{
       if(!value || typeof value!=='object') return;
       setBpm(value.bpm);
-      const meterIndex=METERS.findIndex(item=>item.label===value.meter);
-      if(meterIndex>=0){
-        meter=METERS[meterIndex]; meterDD.set(meterIndex);
-        computeGroups(); renderDots();
-      }
-      const subIndex=SUBS.findIndex(item=>item.key===value.subdivision);
-      if(subIndex>=0){
-        sub=SUBS[subIndex];
-        subdivGroup.querySelectorAll('.note-btn')
-          .forEach((button,index)=>button.classList.toggle('active',index===subIndex));
-      }
-      accentOn=value.accent!==false;
-      accentToggle.textContent=accentOn?'ON':'OFF';
-      accentToggle.classList.toggle('active',accentOn);
+      selectMeter(value.meter);
+      selectSub(value.subdivision);
+      selectAccent(value.accent);
+      notifyChange();
     }
   );
   updateBpmUI();
-  window.__metronome = { getBpm:()=>bpm };
+
+  /* 녹음 화면의 메트로놈 버튼과 설정 창이 쓰는 창구.
+     소리를 내는 주체는 여전히 여기 하나뿐이고, 밖에서는 조작만 한다. */
+  window.OliveMetronome={
+    getBpm:()=>bpm,
+    defaultBpm:()=>BPM_DEFAULT,
+    setBpm:value=>{ const next=setBpm(value); notifyChange(); return next; },
+    adjustTempo:delta=>{ const next=adjustTempo(delta); notifyChange(); return next; },
+    isPlaying:()=>isPlaying || startPending,
+    start:startMetro,
+    stop:()=>stopMetro(),
+    beatsPerBar:()=>meter.beats,
+    secondsPerBeat:()=>60/bpm,
+    meters:()=>METERS.map(item=>item.label),
+    meterLabel:()=>meter.label,
+    setMeter:label=>{ if(!selectMeter(label)) return false;
+      window.OlivePreferences.changed(); notifyChange(); return true; },
+    subs:()=>SUBS.map(item=>({key:item.key, name:item.name, glyph:noteGlyph(item.div,item.hits)})),
+    subKey:()=>sub.key,
+    setSub:key=>{ if(!selectSub(key)) return false;
+      window.OlivePreferences.changed(); notifyChange(); return true; },
+    accent:()=>accentOn,
+    setAccent:on=>{ const next=selectAccent(on);
+      window.OlivePreferences.changed(); notifyChange(); return next; },
+    onBeat:fn=>{ beatListeners.add(fn); return ()=>beatListeners.delete(fn); },
+    onChange:fn=>{ changeListeners.add(fn); return ()=>changeListeners.delete(fn); },
+  };
+  window.__metronome=window.OliveMetronome;
 })();

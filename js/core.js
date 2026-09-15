@@ -474,6 +474,42 @@ function bindSliderReset(slider,resetValue,apply){
   slider.addEventListener('dblclick',reset);
 }
 
+/* 짧게 누르면 onTap, 누르고 있으면 onHold.
+   길게 누른 뒤에는 onTap이 따라 나오지 않는다 — 삭제하거나 설정 창을 여는
+   자리에서 원래 동작까지 함께 일어나면 사용자가 되돌릴 방법이 없다.
+   손가락이 움직이면 스크롤로 보고 둘 다 취소한다. */
+function bindLongPress(el, onTap, onHold, holdMs){
+  if(!el) return;
+  const span=holdMs||500;
+  let pointerId=null, timer=0, held=false, startX=0, startY=0;
+  const clear=()=>{ if(timer){ clearTimeout(timer); timer=0; } };
+  el.addEventListener('pointerdown',event=>{
+    if(event.isPrimary===false || event.button>0) return;
+    pointerId=event.pointerId; held=false;
+    startX=event.clientX; startY=event.clientY;
+    clear();
+    timer=setTimeout(()=>{
+      timer=0; held=true;
+      if(onHold) onHold();
+    },span);
+  });
+  el.addEventListener('pointermove',event=>{
+    if(event.pointerId!==pointerId) return;
+    if(Math.abs(event.clientX-startX)>8 || Math.abs(event.clientY-startY)>8){
+      clear(); pointerId=null;
+    }
+  });
+  el.addEventListener('pointerup',event=>{
+    if(event.pointerId!==pointerId) return;
+    pointerId=null; clear();
+    if(held){ event.preventDefault(); return; }
+    if(onTap) onTap();
+  });
+  el.addEventListener('pointercancel',()=>{ pointerId=null; clear(); });
+  // 길게 누르면 iOS가 선택·확대 메뉴를 띄운다. 여기서는 방해만 된다.
+  el.addEventListener('contextmenu',event=>event.preventDefault());
+}
+
 // 숫자를 두 번 누르면 기본값으로
 function bindResetOnDouble(el, reset){
   if(!el) return;
