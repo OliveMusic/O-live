@@ -358,7 +358,7 @@
     requestAnimationFrame(()=>visualLoop(gen));
   }
 
-  async function startMetro(){
+  async function startMetro(leadInMs){
     if(isPlaying || startPending) return;
     const token=++startToken;
     startPending=true;
@@ -374,12 +374,17 @@
       if(document.visibilityState!=='visible') throw new Error('PageNotVisible');
       metroCtx=ctx;
       createMetroOutput(ctx);
+      /* 경로를 먼저 깨운다. 이것 없이는 막 열린 출력의 첫 클릭이 작게 난다. */
+      if(typeof primeAudioOutput==='function') primeAudioOutput(ctx);
       isPlaying=true;
       currentStep=0;
       rollBeat=0;
       scheduledBeats=[];
-      // 버튼 반응은 즉시 느껴지되 Web Audio가 첫 박을 놓치지 않을 최소 여유만 둔다.
-      nextNoteTime=ctx.currentTime+START_LEAD_TIME;
+      /* 버튼 반응은 즉시 느껴지되 Web Audio가 첫 박을 놓치지 않을 최소 여유만 둔다.
+         녹음 카운트인처럼 첫 박이 온전히 들려야 하는 쪽은 더 긴 여유를 달라고 한다.
+         자바스크립트 타이머가 아니라 오디오 시계 위에 얹으므로 정확하다. */
+      const lead=Number(leadInMs)>0 ? Number(leadInMs)/1000 : START_LEAD_TIME;
+      nextNoteTime=ctx.currentTime+lead;
       orbLabel.textContent='정지';
       metroStart.classList.remove('starting');
       metroStart.classList.remove('media-paused');
@@ -530,7 +535,7 @@
     setBpm:value=>{ const next=setBpm(value); notifyChange(); return next; },
     adjustTempo:delta=>{ const next=adjustTempo(delta); notifyChange(); return next; },
     isPlaying:()=>isPlaying || startPending,
-    start:startMetro,
+    start:options=>startMetro(options&&options.leadIn),
     stop:()=>stopMetro(),
     beatsPerBar:()=>meter.beats,
     secondsPerBeat:()=>60/bpm,

@@ -843,9 +843,10 @@
      입력뿐이고 메트로놈은 다른 출력 버스로 나가기 때문이다. 귀로 듣고 박에
      맞춰 칠 수는 있지만 파일에는 남지 않는다. */
   const METRO_ARMED_KEY='olive-record-metronome';
-  /* iPhone은 오디오가 막 깨어난 직후의 첫 소리를 작게 낸다. 튜너에서 첫 현음이
-     작게 들리던 것과 같은 일이라, 메트로놈을 켜고 한 박자 쉰 뒤에 센다.
-     그동안 화면은 첫 숫자를 들고 기다리므로 멈춘 것처럼 보이지 않는다. */
+  /* 메트로놈을 켜고 첫 박까지 두는 여유. iPhone은 오디오 경로가 막 열린 직후의
+     첫 소리를 작게 내므로, 그 사이에 들리지 않는 소리로 경로를 깨워 둔다.
+     자바스크립트 타이머가 아니라 오디오 시계 위에 얹혀 예약되므로 정확하다.
+     그동안 화면은 첫 숫자를 들고 기다려 멈춘 것처럼 보이지 않는다. */
   const METRO_LEAD_IN_MS=1000;
   let metroArmed=false;
   let metroStartedByRecorder=false;
@@ -865,18 +866,27 @@
     if(!recordMetro) return;
     recordMetro.setAttribute('aria-pressed',metroArmed?'true':'false');
   }
+  /* 물드는 시간. 90 BPM의 한 박(667ms)보다 충분히 짧아야 박과 박 사이가 보인다. */
+  const BEAT_FLASH_MS=150;
+  let beatFlashTimer=0;
   function attachMetroBeat(){
     const metro=metronome();
     if(!metro || metroBeatOff || !recordMetro) return;
     metroBeatOff=metro.onBeat(()=>{
       if(!recordMetro) return;
+      clearTimeout(beatFlashTimer);
       recordMetro.classList.remove('beat');
-      void recordMetro.offsetWidth;           // 애니메이션을 처음부터 다시
+      void recordMetro.offsetWidth;           // 퍼지는 테를 처음부터 다시
       recordMetro.classList.add('beat');
+      beatFlashTimer=setTimeout(()=>{
+        beatFlashTimer=0;
+        if(recordMetro) recordMetro.classList.remove('beat');
+      },BEAT_FLASH_MS);
     });
   }
   function detachMetroBeat(){
     if(metroBeatOff){ metroBeatOff(); metroBeatOff=null; }
+    clearTimeout(beatFlashTimer); beatFlashTimer=0;
     if(recordMetro) recordMetro.classList.remove('beat');
   }
   /* 이미 돌고 있어도 처음부터 다시 켠다. 마디 중간에서 그대로 이어받으면
@@ -888,9 +898,8 @@
     if(!metro) return false;
     attachMetroBeat();
     if(metro.isPlaying()) metro.stop();
-    await new Promise(resolve=>setTimeout(resolve,METRO_LEAD_IN_MS));
+    try{ await metro.start({leadIn:METRO_LEAD_IN_MS}); }catch(error){ return false; }
     if(token!==undefined && (token!==startToken || !startPending)) return false;
-    try{ await metro.start(); }catch(error){ return false; }
     if(!metro.isPlaying()) return false;
     metroStartedByRecorder=true;
     return true;
@@ -1487,6 +1496,20 @@
   /* 화면이 잠기면 requestAnimationFrame이 멈춘다. 소리는 AudioBufferSourceNode의
      loop로 계속 돌지만 잠금화면에 알려 준 위치가 그대로 남아, 시간 표시가 A/B 구간을
      지나 흘러가는 것처럼 보인다. 타이머로 실제 위치를 계속 알린다. */
+  /* native 경로의 A/B 되감기.
+     <audio>의 currentTime은 seek이 끝날 때까지 예전 값을 돌려준다. 그래서 매
+     프레임 검사하면 한 번 B를 넘긴 뒤 몇 프레임 동안 조건이 계속 참이고, 그
+     사이 되감기가 겹겹이 쌓여 '아주 짧게 여러 번 처음으로 돌아가는' 소리가 난다.
+     구간이 짧을수록(도움말의 예시가 그렇다) 더 자주 걸린다.
+     한 번 되감으면 seek이 자리를 잡을 때까지 다시 부르지 않는다. */
+  const LOOP_SEEK_SETTLE=140;
+  let loopSeekAt=0;
+  function rewindNativeLoop(region){
+    const now=performance.now();
+    if(now-loopSeekAt<LOOP_SEEK_SETTLE) return;
+    loopSeekAt=now;
+    try{ activeCloudAudio().currentTime=region.a; }catch(error){}
+  }
   function startCloudPositionTimer(){
     stopCloudPositionTimer();
     cloudPositionTimer=setInterval(()=>{
@@ -1497,8 +1520,8 @@
       let position=currentCloudPosition();
       /* native 경로는 되감기도 이 루프에서 한다. 잠금 중에는 tick이 돌지 않는다. */
       if(region && isNativePlaybackMode() && !region.whole && position>=region.b){
+        rewindNativeLoop(region);
         position=region.a;
-        try{ activeCloudAudio().currentTime=region.a; }catch(error){}
       }
       playbackPositions.set(cloudPlayingId,position);
       refreshCloudMediaSessionPosition(0);
@@ -1507,6 +1530,7 @@
   function startCloudProgress(){
     stopCloudProgress();
     cloudMediaPositionUpdatedAt=0;
+    loopSeekAt=0;
     startCloudPositionTimer();
     const tick=()=>{
       if(!cloudPlayingId) return;
@@ -1514,8 +1538,8 @@
       const row=rows.find(item=>item.id===cloudPlayingId);
       const region=row&&activeLoopFor(row);
       if(region && isNativePlaybackMode() && !region.whole && position>=region.b){
+        rewindNativeLoop(region);
         position=region.a;
-        try{ activeCloudAudio().currentTime=region.a; }catch(error){}
       }
       playbackPositions.set(cloudPlayingId,position);
       if(scrubbingRecordingId!==cloudPlayingId) updatePlayerProgress(cloudPlayingId,position);

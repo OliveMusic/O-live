@@ -178,6 +178,30 @@ function makeIR(ctx, dur, decay){
   }
   return b;
 }
+/* iOS는 오디오 경로가 막 열린 직후의 첫 소리를 작게 낸다. 튜너의 첫 현음이,
+   그리고 녹음 카운트인의 첫 클릭이 작게 들리던 것이 이것이다.
+   들리지 않을 만큼 작은 소리를 먼저 흘려 경로를 깨워 두면 이어지는 첫 소리가
+   온전히 나온다. 소리로 치지 않으므로 마스터가 아니라 출력에 바로 붙인다 —
+   컴프레서와 리버브를 거치게 하면 그 꼬리가 다음 소리에 얹힌다. */
+function primeAudioOutput(preparedCtx){
+  const ctx=preparedCtx || getCtx();
+  if(!ctx || ctx.state!=='running') return;
+  try{
+    const gain=ctx.createGain();
+    gain.gain.value=0.0002;
+    gain.connect(getAppOutput(ctx));
+    const osc=ctx.createOscillator();
+    osc.type='sine';
+    osc.frequency.value=440;
+    osc.connect(gain);
+    const at=ctx.currentTime;
+    osc.start(at);
+    osc.stop(at+0.15);
+    const drop=()=>{ try{ gain.disconnect(); }catch(error){} };
+    osc.onended=drop;
+    setTimeout(drop,400);
+  }catch(error){}
+}
 function getMaster(preparedCtx){
   const ctx=preparedCtx || getCtx();
   if(!__master){

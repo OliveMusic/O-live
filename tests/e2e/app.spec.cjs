@@ -2374,6 +2374,11 @@ test('녹음 메트로놈을 켜면 한 마디를 세고 나서 녹음이 시작
   await page.evaluate(()=>{
     window.OliveMetronome.setMeter('4/4');
     window.OliveMetronome.setBpm(120);      // 한 마디 = 2초
+    window.__beatFlashes=0;
+    const button=document.getElementById('recordMetro');
+    new MutationObserver(()=>{
+      if(button.classList.contains('beat')) window.__beatFlashes++;
+    }).observe(button,{attributes:true,attributeFilter:['class']});
     window.__counts=[];
     window.__countAt=[];
     window.__pressedAt=0;
@@ -2390,6 +2395,10 @@ test('녹음 메트로놈을 켜면 한 마디를 세고 나서 녹음이 시작
   // 세는 동안에는 카운트인이고, 큰 숫자가 세이지로 바뀐다.
   await expect(page.locator('#recordState')).toHaveText('카운트인');
   await expect(page.locator('#recordTimer')).toHaveClass(/counting/);
+  /* 박마다 버튼이 올리브로 물든다. 귀로 놓친 박을 눈으로도 짚을 수 있어야 한다.
+     150ms만 켜졌다 꺼지므로 표본을 찍어서는 놓친다 — 켜지는 순간을 세어 둔다. */
+  await expect.poll(()=>page.evaluate(()=>window.__beatFlashes||0),{timeout:9000})
+    .toBeGreaterThan(0);
   // 아직 파일은 시작되지 않았다. 여기서 시작하면 앞에 빈 한 마디가 붙는다.
   expect(await page.evaluate(()=>(
     window.__micHarness.mediaRecorder && window.__micHarness.mediaRecorder.state

@@ -95,14 +95,28 @@ assert.match(recorder,/counting=armCountIn\(token\);[\s\S]{0,140}startRecorderMe
 /* iPhone은 오디오가 막 깨어난 직후의 첫 소리를 작게 낸다. 메트로놈을 켜고 한
    박자 쉰 뒤에 세야 첫 클릭이 온전히 들린다 — 튜너 첫 현음과 같은 일이다. */
 assert.match(recorder,/const METRO_LEAD_IN_MS=1000;/);
-assert.match(recorder,/if\(metro\.isPlaying\(\)\) metro\.stop\(\);\s*await new Promise\(resolve=>setTimeout\(resolve,METRO_LEAD_IN_MS\)\);/);
-/* 박마다 버튼이 올리브로 물든다. 테만 번지게 하면 38px 버튼에서는 안 보인다. */
-assert.match(index,/@keyframes recordMetroBeat\{[\s\S]*?background:var\(--signal\); border-color:var\(--signal\)/);
-assert.match(index,/@keyframes recordMetroRing\{/);
+/* 여유는 자바스크립트 타이머가 아니라 오디오 시계 위에 얹혀 예약된다. */
+assert.match(recorder,/await metro\.start\(\{leadIn:METRO_LEAD_IN_MS\}\)/);
+assert.doesNotMatch(recorder,/setTimeout\(resolve,METRO_LEAD_IN_MS\)/);
+assert.match(metronome,/const lead=Number\(leadInMs\)>0 \? Number\(leadInMs\)\/1000 : START_LEAD_TIME;/);
+/* 들리지 않을 만큼 작은 소리로 출력 경로를 먼저 깨운다. iOS는 막 열린 경로의
+   첫 소리를 작게 낸다 — 튜너 첫 현음과 카운트인 첫 클릭이 그것이다. */
+assert.match(core,/function primeAudioOutput\(preparedCtx\)/);
+assert.match(core,/gain\.gain\.value=0\.0002;/);
+assert.match(core,/gain\.connect\(getAppOutput\(ctx\)\);/,'마스터를 거치면 컴프레서·리버브 꼬리가 얹힌다');
+assert.match(metronome,/if\(typeof primeAudioOutput==='function'\) primeAudioOutput\(ctx\);/);
+
+/* 박마다 버튼이 올리브로 물든다. 애니메이션이 아니라 상태다 — 동작 줄이기를
+   켠 기기에서 animation:none이 걸려 박이 통째로 보이지 않았다. */
+assert.match(index,/\.record-metro\.beat\{\s*background:var\(--signal\); border-color:var\(--signal\); color:var\(--on-signal\);/);
+assert.doesNotMatch(index,/\.record-metro\.beat\{ animation:/);
+assert.match(recorder,/beatFlashTimer=setTimeout\(/);
+/* 퍼지는 테만 동작 줄이기에서 거둔다. 물드는 것은 남는다. */
+assert.match(index,/@media \(prefers-reduced-motion:reduce\)\{\s*\.record-metro\.beat::after\{ animation:none; opacity:0; \}\s*\}/);
 /* 이미 돌고 있어도 처음부터 다시 켠다. 마디 중간에서 이어받으면 클릭이 그냥
    계속 들릴 뿐이라 어디가 카운트인인지 귀로 알 수 없고, 다음 마디 첫 박을
    기다리느라 최대 두 마디가 지나간다. */
-assert.match(recorder,/if\(metro\.isPlaying\(\)\) metro\.stop\(\);[\s\S]{0,240}await metro\.start\(\)/);
+assert.match(recorder,/if\(metro\.isPlaying\(\)\) metro\.stop\(\);[\s\S]{0,120}await metro\.start\(\{/);
 /* 그래서 마디 첫 박을 기다리는 길은 남겨 두지 않는다. */
 assert.doesNotMatch(recorder,/waitForDownbeat|mark\.beatIndex!==0/);
 /* 다시 켜려고 멈춘 것을 '남이 밀어냈다'로 오해하면 박 리스너까지 떨어진다. */
