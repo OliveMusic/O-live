@@ -915,17 +915,27 @@
   function cancelCountIn(){
     if(countInAbort){ const abort=countInAbort; countInAbort=null; abort(); }
     clearCountIn();
+    if(!recording) setTimer(0);
   }
-  /* 다음 마디 첫 박부터 한 마디를 세고 나서 녹음을 시작한다. 마디 중간에서
-     시작하면 세는 길이가 매번 달라져 언제 들어가야 할지 알 수 없다.
-     세는 기준은 예약 시각이 아니라 실제로 소리가 난 순간이라, 화면의 숫자와
+  /* 한 마디를 세고 나서 녹음을 시작한다.
+
+     리스너는 메트로놈을 켜기 '전에' 건다. 켠 뒤에 걸면 첫 박을 놓쳐 다음 마디
+     첫 박까지 한 바퀴를 더 기다리게 된다 — 카운트인이 네 박 늦게 시작하던 원인이다.
+
+     우리가 켜는 경우 첫 박이 곧 마디 첫 박이므로 바로 센다. 이미 돌고 있던
+     메트로놈에만 다음 마디 첫 박을 기다린다. 마디 중간에서 세기 시작하면
+     클릭의 강세와 화면의 숫자가 어긋난다.
+
+     세는 기준은 예약 시각이 아니라 실제로 소리가 난 박이라, 화면의 숫자와
      귀에 들리는 클릭이 어긋나지 않는다. */
-  function countInOneBar(token){
+  function armCountIn(token){
     const metro=metronome();
-    if(!metro) return Promise.resolve();
+    if(!metro) return null;
     const beats=Math.max(1,metro.beatsPerBar());
+    const waitForDownbeat=metro.isPlaying();
+    showCountIn(beats);
     return new Promise(resolve=>{
-      let counted=0, armed=false, done=false, off=null, guard=0;
+      let counted=0, armed=!waitForDownbeat, done=false, off=null, guard=0;
       const finish=()=>{
         if(done) return;
         done=true;
@@ -938,7 +948,7 @@
       off=metro.onBeat(mark=>{
         if(token!==startToken || !startPending){ finish(); return; }
         if(!armed){
-          if(mark.beatIndex!==0) return;      // 마디 첫 박을 기다린다
+          if(mark.beatIndex!==0) return;
           armed=true;
         }
         counted++;
@@ -946,7 +956,7 @@
         showCountIn(beats-counted+1);
       });
       // 박이 오지 않으면(오디오가 막히는 등) 무한정 기다리지 않는다.
-      guard=setTimeout(finish,(beats+2)*metro.secondsPerBeat()*1000+2000);
+      guard=setTimeout(finish,(beats*2+2)*metro.secondsPerBeat()*1000+2500);
     });
   }
 
@@ -1195,6 +1205,14 @@
     source.connect(levelAnalyser);
     levelAnalyser.connect(levelSink);
     levelSink.connect(ctx.destination);
+    /* 그림 루프는 여기서 걸지 않는다. drawLevel은 recording이 아니면 그 자리에서
+       돌아가고 다음 프레임을 예약하지 않는데, 카운트인이 붙으면서 그래프를 세운
+       뒤 실제 녹음이 시작되기까지 한 마디가 비게 되었다. 그 사이에 첫 프레임이
+       돌면 루프가 그대로 죽어 입력 레벨이 끝까지 움직이지 않는다. */
+  }
+  function startLevelLoop(){
+    if(!levelAnalyser) return;
+    cancelAnimationFrame(levelFrame);
     levelFrame=requestAnimationFrame(drawLevel);
   }
   function setupCapture(ctx){
@@ -1257,25 +1275,40 @@
     // 실제 녹음은 메트로놈·잼과 함께 쓸 수 있지만, 저장된 파일 재생과는
     // 하나의 오디오 세션을 나눠 쓰지 않는다.
     if(cloudPlayingId || cloudMediaId) stopCloudPlayback(false);
-    const preservePlayback=anySounding();
     const token=++startToken;
     startPending=true;
     setMessage('');
-    recordState.textContent='마이크 연결 중…';
     recordStateDot.hidden=true;
     setButtonMode('starting');
     try{
       setAudioSession('play-and-record');
+
+      /* 메트로놈을 마이크보다 '먼저' 켠다. 캡처 그래프를 다 세운 뒤에 켜면
+         메트로놈이 오디오 컨텍스트를 갈아 끼우면서 방금 만든 그래프가 끊어진다.
+         입력 레벨 막대가 죽고, MediaRecorder가 끊긴 스트림을 물고 있게 된다. */
+      let counting=null;
+      if(metroArmed){
+        counting=armCountIn(token);
+        const beating=await startRecorderMetronome();
+        if(!beating){ cancelCountIn(); counting=null; }
+        if(token!==startToken || !startPending){
+          cancelCountIn(); finishAudioSession(); return;
+        }
+      }
+      if(!counting) recordState.textContent='마이크 연결 중…';
+
+      // 메트로놈까지 켜진 상태에서 재야 어느 소리를 이어 갈지 제대로 판단한다.
+      const preservePlayback=anySounding();
       let ctx=await ensureRecordingCtx(preservePlayback);
-      if(token!==startToken || !startPending){ finishAudioSession(); return; }
+      if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
       stream=await navigator.mediaDevices.getUserMedia({audio:{
         channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false,
       }});
-      if(token!==startToken || !startPending){ finishAudioSession(); return; }
+      if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
       if(ctx!==audioCtx || ctx.state!=='running'){
         ctx=await ensureRecordingCtx(preservePlayback && anySounding());
       }
-      if(token!==startToken || !startPending){ finishAudioSession(); return; }
+      if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
       const mimeType=chooseMimeType();
       const options={audioBitsPerSecond:96000};
       if(mimeType) options.mimeType=mimeType;
@@ -1306,17 +1339,13 @@
           if(recording) stopRecording();
         },{once:true});
       });
-      /* 마이크가 준비된 다음에 센다. 연결을 기다리는 동안 세면 숫자가 0에
-         닿았는데도 녹음이 시작되지 않는다. 클릭음은 마이크로만 들어가므로
-         여기서 세는 한 마디는 파일 앞에 붙지 않는다. */
-      if(metroArmed){
-        recordState.textContent='카운트인';
-        const beating=await startRecorderMetronome();
+      /* 마디를 다 셀 때까지 기다린다. 마이크는 세는 동안 이미 붙었으므로
+         숫자가 0에 닿는 순간이 곧 녹음이 시작되는 순간이다.
+         클릭음은 setupCapture가 잇는 마이크 입력을 거치지 않으므로 파일 앞에
+         빈 한 마디가 붙지 않는다. */
+      if(counting){
+        await counting;
         if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
-        if(beating){
-          await countInOneBar(token);
-          if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
-        }
       }
       /* iPhone Safari의 MP4 MediaRecorder는 timeslice로 잘게 나눈 조각을
          다시 합쳤을 때 긴 녹음이 재생 불가능해지는 경우가 있다.
@@ -1326,6 +1355,7 @@
         processedStream:recordingStream!==stream,
       });
       recording=true; startPending=false; startedAt=performance.now(); recordedAt=new Date().toISOString();
+      startLevelLoop();
       clearCountIn();
       setTimer(0);
       timerId=setInterval(updateTimer,200);

@@ -37,8 +37,6 @@
   const app=document.getElementById('app');
 
   const STORE_KEY='olive-practice-log-v1';
-  const EAR_KEY='olive-ear-history-v1';
-  const EAR_USER_PREFIX='olive-ear-history-user-v1:';
   /* 하루치 막대가 꽉 차는 기준. 세 시간 친 날 하나 때문에 나머지 날이 전부
      납작해지면 달력이 쓸모없어지므로, 넘어가도 막대는 더 자라지 않는다. */
   const FULL_BAR_SECONDS=90*60;
@@ -232,34 +230,21 @@
   });
   window.addEventListener('pagehide',()=>{ accumulate(Date.now()); saveNow(); });
 
-  /* ---------- 청음 기록 읽기 ----------
-     청음 트레이너가 쓰는 저장소를 그대로 읽는다. 같은 값을 두 벌로 쌓으면
-     어느 쪽이 맞는지 알 수 없게 된다. */
-  function earHistory(){
-    const keys=[];
-    try{
-      for(let i=0;i<localStorage.length;i++){
-        const name=localStorage.key(i);
-        if(name && name.indexOf(EAR_USER_PREFIX)===0) keys.push(name);
-      }
-    }catch(error){}
-    keys.push(EAR_KEY);
-    for(const name of keys){
-      try{
-        const parsed=JSON.parse(localStorage.getItem(name)||'{}');
-        if(parsed && typeof parsed==='object' && Object.keys(parsed).length) return parsed;
-      }catch(error){}
-    }
-    return {};
-  }
+  /* ---------- 청음 기록 ----------
+     청음 트레이너가 들고 있는 것을 그대로 읽는다. 예전에는 localStorage 키를
+     짐작해 읽었는데, 로그인 여부에 따라 엉뚱한 저장소를 집어 청음 트레이너가
+     보여 주는 숫자와 어긋났다. 창구는 하나여야 한다. */
   function earFor(key){
-    const record=earHistory()[key];
-    if(!record || !Number(record.total)) return null;
-    return {
-      total:Number(record.total)||0,
-      correct:Number(record.correct)||0,
-      byMode:record.byMode||{},
-    };
+    const source=window.OliveEarHistory;
+    return source ? source.forDate(key) : null;
+  }
+  function earModes(){
+    const source=window.OliveEarHistory;
+    return source ? source.modes() : [];
+  }
+  function earDays(){
+    const source=window.OliveEarHistory;
+    return source ? source.days() : [];
   }
 
   /* ---------- 저장한 녹음 ---------- */
@@ -356,7 +341,7 @@
       cell.type='button';
       cell.className='ear-day log-day';
       cell.dataset.key=key;
-      if(totalSeconds(day)>0 || Number(day&&day.saved)) cell.classList.add('has-record');
+      if(totalSeconds(day)>0 || Number(day&&day.saved) || earFor(key)) cell.classList.add('has-record');
       if(key===todayKey()) cell.classList.add('today');
       if(key===selectedKey) cell.classList.add('selected');
       if(key>todayKey()) cell.classList.add('log-future');
@@ -375,12 +360,16 @@
   function renderLead(){
     const prefix=`${shownMonth.getFullYear()}-${String(shownMonth.getMonth()+1).padStart(2,'0')}-`;
     let days=0, seconds=0;
+    const counted=new Set();
     Object.keys(store).forEach(key=>{
       if(key.indexOf(prefix)!==0) return;
       const total=totalSeconds(store[key]);
       if(total<=0) return;
-      days++; seconds+=total;
+      counted.add(key); seconds+=total;
     });
+    // 소리 없이 청음만 한 날도 연습한 날이다.
+    earDays().forEach(key=>{ if(key.indexOf(prefix)===0 && earFor(key)) counted.add(key); });
+    days=counted.size;
     leadEl.innerHTML=days
       ? `${shownMonth.getMonth()+1}월에 <b>${days}일 · ${formatSpan(seconds)}</b>`
       : `${shownMonth.getMonth()+1}월에는 아직 기록이 없습니다`;
@@ -428,14 +417,30 @@
       lines.push({tool:'rhy',name:'리듬',text:formatSpan(day.rhy)});
     }
     if(ear){
+      /* 청음만 시간이 아니라 문제 수로 센다. 나머지 도구는 얼마나 붙잡고
+         있었는지가 전부지만, 청음은 몇 문제를 어느 모드에서 몇 개 맞혔는지가
+         곧 연습의 내용이다. 그래서 여기만 한 줄 더 쓴다. */
       const accuracy=Math.round(ear.correct/ear.total*100);
-      const modes=[['interval','음정'],['chord','화음'],['scale','음계']]
-        .map(([key,label])=>{
-          const part=ear.byMode[key];
-          return part && part.total ? `${label} ${part.correct}/${part.total}` : '';
-        }).filter(Boolean);
-      lines.push({tool:'rhy',name:'청음',
-        text:`${ear.total}문제 · ${accuracy}%`+(modes.length?` <em>· ${modes.join(' · ')}</em>`:'')});
+      const counted=earModes().reduce((sum,item)=>{
+        const part=ear.byMode[item.key];
+        return {
+          correct:sum.correct+(part&&Number(part.correct)||0),
+          total:sum.total+(part&&Number(part.total)||0),
+        };
+      },{correct:0,total:0});
+      const rest={
+        correct:Math.max(0,ear.correct-counted.correct),
+        total:Math.max(0,ear.total-counted.total),
+      };
+      const modes=earModes().map(item=>{
+        const part=ear.byMode[item.key];
+        return part && Number(part.total)
+          ? `${item.label} ${part.correct}/${part.total}` : '';
+      }).filter(Boolean);
+      if(rest.total) modes.push(`구분 전 ${rest.correct}/${rest.total}`);
+      lines.push({swatch:'log-sw-ear',name:'청음',
+        text:`${ear.correct}/${ear.total} 정답 · ${accuracy}%`
+          +(modes.length?`<br><em>${modes.join(' · ')}</em>`:'')});
     }
     return lines;
   }
@@ -470,7 +475,7 @@
     fullEl.hidden=!expanded;
     fullEl.innerHTML=expanded
       ? lines.map(line=>(
-          `<div class="log-row"><i class="log-sw log-seg-${line.tool}"></i>`+
+          `<div class="log-row"><i class="log-sw ${line.swatch||('log-seg-'+line.tool)}"></i>`+
           `<span class="log-who">${line.name}</span>`+
           `<span class="log-what">${line.text}</span></div>`
         )).join('')
@@ -543,6 +548,8 @@
 
   window.OlivePracticeLog={
     noteRecordingSaved,
+    /* 청음 트레이너가 답을 적을 때마다 부른다. 창이 닫혀 있으면 할 일이 없다. */
+    refresh(){ if(!sheet.hidden) render(); },
     open:openSheet,
     /* 검사와 진단용. 값은 읽기만 한다. */
     snapshot:()=>JSON.parse(JSON.stringify(store)),

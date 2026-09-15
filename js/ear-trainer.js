@@ -63,12 +63,6 @@
   const earPrompt   = document.getElementById('earPrompt');
   const earFeedback = document.getElementById('earFeedback');
   const earChoices  = document.getElementById('earChoices');
-  const earHistory  = document.getElementById('earHistory');
-  const earMonthLabel = document.getElementById('earMonthLabel');
-  const earMonthPrev = document.getElementById('earMonthPrev');
-  const earMonthNext = document.getElementById('earMonthNext');
-  const earCalendarGrid = document.getElementById('earCalendarGrid');
-  const earDayDetail = document.getElementById('earDayDetail');
 
   /* ---------- 날짜별 청음 기록 ----------
      달력은 하루 기록을 합산하고 상세에는 음정·화음·음계를 나눠 보여준다.
@@ -108,9 +102,6 @@
     }catch(e){ return {}; }
   }
   let earHistoryData = loadEarHistory();
-  const now = new Date();
-  let historyMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  let selectedHistoryKey = '';
 
   function dateKey(date){
     const y=date.getFullYear();
@@ -121,94 +112,12 @@
   function saveEarHistory(){
     try{ localStorage.setItem(activeEarHistoryKey, JSON.stringify(earHistoryData)); }catch(e){}
   }
-  function dayLabel(y,m,d){
-    return `${y}년 ${m+1}월 ${d}일`;
-  }
-  function showEarDay(key, y, m, d){
-    selectedHistoryKey=key;
-    const rec=earHistoryData[key];
-    if(rec && rec.total){
-      const acc=Math.round(rec.correct/rec.total*100);
-      const classified=EAR_HISTORY_MODES.reduce((sum,item)=>{
-        const part=rec.byMode&&rec.byMode[item.key];
-        return {correct:sum.correct+(part&&part.correct||0),total:sum.total+(part&&part.total||0)};
-      },{correct:0,total:0});
-      const legacy={
-        correct:Math.max(0,rec.correct-classified.correct),
-        total:Math.max(0,rec.total-classified.total),
-      };
-      const breakdown=EAR_HISTORY_MODES.map(item=>{
-        const part=rec.byMode&&rec.byMode[item.key] || {correct:0,total:0};
-        return `<span><b>${item.label}</b>${part.total?`${part.correct}/${part.total}`:'—'}</span>`;
-      }).join('');
-      earDayDetail.innerHTML=
-        `<span class="ear-day-total">${m+1}월 ${d}일 · 전체 ${rec.correct}/${rec.total} 정답 · ${acc}%</span>`+
-        `<span class="ear-day-breakdown">${breakdown}</span>`+
-        (legacy.total?`<small class="ear-day-legacy">구분 전 기록 ${legacy.correct}/${legacy.total}</small>`:'');
-      const detail=EAR_HISTORY_MODES.map(item=>{
-        const part=rec.byMode&&rec.byMode[item.key] || {correct:0,total:0};
-        return `${item.label} ${part.total?`${part.total}문제 중 ${part.correct}개 정답`:'기록 없음'}`;
-      });
-      if(legacy.total) detail.push(`구분 전 기록 ${legacy.total}문제 중 ${legacy.correct}개 정답`);
-      earDayDetail.setAttribute('aria-label',
-        `${m+1}월 ${d}일, 전체 ${rec.total}문제 중 ${rec.correct}개 정답, ${detail.join(', ')}`);
-    }else{
-      earDayDetail.textContent=`${m+1}월 ${d}일 · 기록 없음`;
-      earDayDetail.removeAttribute('aria-label');
-    }
-    earCalendarGrid.querySelectorAll('.ear-day').forEach(b=>
-      b.classList.toggle('selected', b.dataset.date===key));
-  }
-  function renderEarCalendar(){
-    const y=historyMonth.getFullYear(), m=historyMonth.getMonth();
-    const today=new Date();
-    const currentMonth=new Date(today.getFullYear(), today.getMonth(), 1);
-    earMonthLabel.textContent=`${y}년 ${m+1}월`;
-    earMonthNext.disabled=historyMonth>=currentMonth;
-    earCalendarGrid.innerHTML='';
-
-    const firstDay=new Date(y,m,1).getDay();
-    const days=new Date(y,m+1,0).getDate();
-    for(let i=0;i<firstDay;i++){
-      const blank=document.createElement('span');
-      blank.className='ear-day-empty';
-      blank.setAttribute('aria-hidden','true');
-      earCalendarGrid.appendChild(blank);
-    }
-
-    for(let d=1;d<=days;d++){
-      const date=new Date(y,m,d);
-      const key=dateKey(date);
-      const rec=earHistoryData[key];
-      const b=document.createElement('button');
-      b.type='button';
-      b.className='ear-day'+(rec&&rec.total?' has-record':'');
-      b.dataset.date=key;
-      if(key===dateKey(today)) b.classList.add('today');
-      if(key===selectedHistoryKey) b.classList.add('selected');
-      const scoreText=rec&&rec.total ? `${rec.correct}/${rec.total}` : '';
-      b.innerHTML=`<span class="d">${d}</span><span class="s">${scoreText}</span>`;
-      b.setAttribute('aria-label', rec&&rec.total
-        ? `${dayLabel(y,m,d)}, ${rec.total}문제 중 ${rec.correct}개 정답`
-        : `${dayLabel(y,m,d)}, 기록 없음`);
-      b.addEventListener('click', ()=>showEarDay(key,y,m,d));
-      earCalendarGrid.appendChild(b);
-    }
-
-    const selected=selectedHistoryKey && selectedHistoryKey.startsWith(
-      `${y}-${String(m+1).padStart(2,'0')}-`);
-    if(selected){
-      // 선택된 날짜의 점수도 답변 직후 다시 계산해 하단 설명에 즉시 반영한다.
-      showEarDay(selectedHistoryKey,y,m,Number(selectedHistoryKey.slice(-2)));
-    }else{
-      const todayKey=dateKey(today);
-      if(y===today.getFullYear() && m===today.getMonth()){
-        showEarDay(todayKey,y,m,today.getDate());
-      }else{
-        selectedHistoryKey='';
-        earDayDetail.textContent='날짜를 누르면 기록을 볼 수 있습니다';
-        earDayDetail.removeAttribute('aria-label');
-      }
+  /* 달력은 상단바의 연습 기록 하나로 모았다. 여기서는 기록을 쌓고 저장하는
+     일만 하고, 그리는 것은 js/practice-log.js가 맡는다. 같은 값을 두 군데에서
+     그리면 어느 쪽이 맞는지 알 수 없게 된다 — 실제로 두 화면의 숫자가 달랐다. */
+  function notifyHistoryChanged(){
+    if(window.OlivePracticeLog && typeof window.OlivePracticeLog.refresh==='function'){
+      window.OlivePracticeLog.refresh();
     }
   }
   function recordEarResult(correct){
@@ -221,21 +130,25 @@
     if(correct) part.correct++;
     earHistoryData[key]=rec;
     saveEarHistory();
-    renderEarCalendar();
+    notifyHistoryChanged();
     if(window.OliveCloud) window.OliveCloud.recordAnswer(key,correct,mode);
   }
-  earMonthPrev.addEventListener('click', ()=>{
-    historyMonth=new Date(historyMonth.getFullYear(),historyMonth.getMonth()-1,1);
-    selectedHistoryKey='';
-    renderEarCalendar();
-  });
-  earMonthNext.addEventListener('click', ()=>{
-    if(earMonthNext.disabled) return;
-    historyMonth=new Date(historyMonth.getFullYear(),historyMonth.getMonth()+1,1);
-    selectedHistoryKey='';
-    renderEarCalendar();
-  });
-  earHistory.addEventListener('toggle', ()=>{ if(earHistory.open) renderEarCalendar(); });
+
+  /* 청음 기록의 유일한 창구. 연습 기록이 localStorage 키를 짐작해 읽던 때는
+     로그인 여부에 따라 엉뚱한 저장소를 집어 두 화면의 숫자가 어긋났다. */
+  window.OliveEarHistory={
+    modes:()=>EAR_HISTORY_MODES.map(item=>({key:item.key,label:item.label})),
+    forDate(key){
+      const rec=earHistoryData[key];
+      if(!rec || !Number(rec.total)) return null;
+      return {
+        total:Number(rec.total)||0,
+        correct:Number(rec.correct)||0,
+        byMode:rec.byMode&&typeof rec.byMode==='object' ? rec.byMode : {},
+      };
+    },
+    days:()=>Object.keys(earHistoryData),
+  };
   if(window.OliveCloud){
     window.OliveCloud.init({
       getAnonymousHistory:()=>loadEarHistory(EAR_HISTORY_KEY),
@@ -246,12 +159,12 @@
         activeEarHistoryKey=EAR_USER_HISTORY_PREFIX+userId;
         earHistoryData=history && typeof history==='object' ? history : {};
         saveEarHistory();
-        renderEarCalendar();
+        notifyHistoryChanged();
       },
       useAnonymousHistory:()=>{
         activeEarHistoryKey=EAR_HISTORY_KEY;
         earHistoryData=loadEarHistory(EAR_HISTORY_KEY);
-        renderEarCalendar();
+        notifyHistoryChanged();
       },
       getPreferences:()=>window.OlivePreferences.getRecord(),
       applyPreferences:(data,updatedAt)=>window.OlivePreferences.applyRecord(data,updatedAt),
@@ -447,6 +360,6 @@
   earReplay.addEventListener('click', playCurrent);
 
   renderStats();
-  renderEarCalendar();
+  notifyHistoryChanged();
   newQuestion(false);
 })();

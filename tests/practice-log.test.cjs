@@ -34,12 +34,25 @@ assert.match(log,/const MIN_SESSION_SECONDS=3;/);
 assert.match(log,/visibilitychange[\s\S]{0,140}accumulate\(Date\.now\(\)\); saveNow\(\);/);
 assert.match(log,/pagehide[\s\S]{0,90}accumulate\(Date\.now\(\)\); saveNow\(\);/);
 
-/* ---------- 청음은 한 벌만 쌓는다 ----------
-   같은 값을 두 벌로 쌓으면 어느 쪽이 맞는지 알 수 없다. 청음 트레이너가 쓰는
-   저장소를 그대로 읽는다. */
-assert.match(log,/const EAR_KEY='olive-ear-history-v1';/);
-assert.match(log,/const EAR_USER_PREFIX='olive-ear-history-user-v1:';/);
+/* ---------- 청음 기록은 한 군데에만 있다 ----------
+   달력이 두 개면 어느 쪽이 맞는지 알 수 없다 — 실제로 두 화면의 숫자가 달랐다.
+   청음 트레이너의 달력을 걷어내고 연습 기록 하나로 모았다. */
+const ear=fs.readFileSync('js/ear-trainer.js','utf8');
+assert.doesNotMatch(index,/id="earHistory"|id="earCalendarGrid"|id="earDayDetail"/);
+assert.doesNotMatch(ear,/renderEarCalendar/);
+/* 기록을 쌓고 저장하는 일은 그대로 청음 트레이너가 한다. */
+assert.match(ear,/function recordEarResult\(correct\)/);
+assert.match(ear,/window\.OliveEarHistory=\{/);
+/* 연습 기록은 localStorage 키를 짐작하지 않는다. 로그인 여부에 따라 엉뚱한
+   저장소를 집어 두 화면의 숫자가 어긋난 적이 있다. */
+assert.doesNotMatch(log,/olive-ear-history/);
+assert.match(log,/window\.OliveEarHistory/);
 assert.doesNotMatch(log,/recordEarResult|byMode\[mode\]/);
+/* 계정 줄은 잃지 않고 연습 기록 창으로 옮겼다. cloud-sync.js가 이 아이디로 찾는다. */
+assert.match(index,/id="practiceLogSheet"[\s\S]*?id="earCloudAction"[\s\S]*?<\/section>/);
+/* 청음은 막대에 마디를 갖지 않는다 — 시간이 아니라 문제 수로 센다. */
+assert.match(index,/\.log-row \.log-sw-ear\{ background:transparent/);
+assert.match(log,/swatch:'log-sw-ear'/);
 
 /* ---------- 막대 ----------
    키는 그날 총 시간, 마디는 무엇을 했는지. 한 가지 색의 농도만 쓴다 —

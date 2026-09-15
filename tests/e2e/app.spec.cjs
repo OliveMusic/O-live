@@ -2368,11 +2368,16 @@ test('녹음 메트로놈을 켜면 한 마디를 세고 나서 녹음이 시작
     window.OliveMetronome.setMeter('4/4');
     window.OliveMetronome.setBpm(120);      // 한 마디 = 2초
     window.__counts=[];
+    window.__countAt=[];
+    window.__pressedAt=0;
     const timer=document.getElementById('recordTimer');
-    new MutationObserver(()=>window.__counts.push(timer.textContent))
-      .observe(timer,{childList:true,characterData:true,subtree:true});
+    new MutationObserver(()=>{
+      window.__counts.push(timer.textContent);
+      window.__countAt.push(performance.now());
+    }).observe(timer,{childList:true,characterData:true,subtree:true});
   });
 
+  await page.evaluate(()=>{ window.__pressedAt=performance.now(); });
   await page.locator('#recordToggle').click();
 
   // 세는 동안에는 카운트인이고, 큰 숫자가 세이지로 바뀐다.
@@ -2392,9 +2397,34 @@ test('녹음 메트로놈을 켜면 한 마디를 세고 나서 녹음이 시작
   // 녹음하는 동안에도 박은 계속 들린다.
   expect(await page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeTruthy();
 
-  // 4/4면 4·3·2·1을 거쳐야 한다. 마디 중간에서 시작하면 이 줄이 짧아진다.
+  /* 4/4면 4·3·2·1을 거쳐야 한다. 마디 중간에서 세기 시작하면 이 줄이 짧아진다.
+     누르자마자 4를 먼저 띄우고 첫 박에서 다시 4가 되므로, 이어지는 같은 숫자는
+     한 번으로 본다 — 화면에서는 4에 잠깐 머무는 것으로 보인다. */
   const counted=await page.evaluate(()=>window.__counts);
-  expect(counted.filter(text=>/^[0-9]$/.test(text))).toEqual(['4','3','2','1']);
+  const steps=counted.filter(text=>/^[0-9]$/.test(text))
+    .filter((text,at,all)=>at===0 || text!==all[at-1]);
+  expect(steps).toEqual(['4','3','2','1']);
+
+  /* 세기 시작하는 시점도 봐야 한다. 박 리스너를 메트로놈보다 늦게 걸면 첫 박을
+     놓쳐 다음 마디까지 한 바퀴를 더 기다린다 — 숫자는 그대로 4·3·2·1이라
+     순서만 봐서는 잡히지 않는다. 120 BPM 한 마디가 2초이므로 그 안에 시작해야 한다. */
+  const startedAfter=await page.evaluate(()=>{
+    const at=window.__countAt.findIndex((_,i)=>/^[0-9]$/.test(window.__counts[i]));
+    return at<0 ? Infinity : window.__countAt[at]-window.__pressedAt;
+  });
+  expect(startedAfter).toBeLessThan(2000);
+
+  /* 메트로놈을 켠 채로도 입력 레벨이 살아 있어야 한다. 캡처 그래프를 세운 뒤에
+     메트로놈을 켜면 오디오 컨텍스트가 갈리면서 막대가 죽는다. */
+  await expect(page.locator('#recordTimeProgress')).toHaveClass(/running/);
+  await expect.poll(()=>page.locator('#recordLevelFill').evaluate(element=>{
+    const transform=getComputedStyle(element).transform;
+    return transform==='none'?0:new DOMMatrix(transform).a;
+  })).toBeGreaterThan(0);
+  // 녹음이 무는 스트림은 캡처 그래프가 만든 그것이어야 한다.
+  expect(await page.evaluate(()=>(
+    window.__micHarness.recorderStream===window.__micHarness.processedStream
+  ))).toBeTruthy();
 
   // 녹음을 멈추면 우리가 켠 메트로놈도 함께 멈춘다.
   await page.locator('#recordToggle').click();

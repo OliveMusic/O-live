@@ -7,7 +7,8 @@ const read=file=>fs.readFileSync(file,'utf8');
 const indexHtml=read('index.html');
 const appScripts=[
   'js/audio-runtime.js','js/core.js','js/metronome.js','js/tuner-engine.js','js/tuner.js','js/scales.js',
-  'js/ear-trainer.js','js/rhythm-trainer.js','js/recorder.js','js/jam-session.js','js/app-shell.js',
+  'js/ear-trainer.js','js/rhythm-trainer.js','js/recorder.js','js/jam-session.js',
+  'js/practice-log.js','js/app-shell.js',
 ].map(read).join('\n');
 const index=indexHtml+'\n'+appScripts;
 const about=read('about.html');
@@ -222,9 +223,12 @@ assert.match(index,/\.choice-row \.choice-primary\{[\s\S]*?gap:6px;/);
 assert.match(index,/\.choice-row \.ko\{[\s\S]*?white-space:nowrap;/);
 assert.match(index,/구성 도수 \$\{item\.degrees\}/);
 assert.match(index,/const EAR_HISTORY_MODES = \[/);
-assert.match(index,/class="ear-day-breakdown"/);
-assert.match(index,/구분 전 기록/);
 assert.match(index,/recordAnswer\(key,correct,mode\)/);
+/* 날짜별 청음 기록은 상단바의 연습 기록 하나로 모았다. 음정/화음/음계로 나눈
+   정답률과 '구분 전' 몫은 거기서 이어 보여 준다 — 통합하면서 잃지 않았다. */
+assert.match(index,/window\.OliveEarHistory=\{/);
+assert.match(index,/문제 수로 센다/);
+assert.match(index,/구분 전 \$\{rest\.correct\}\/\$\{rest\.total\}/);
 
 console.log('public pages tests passed');
 
@@ -354,10 +358,38 @@ assert.doesNotMatch(guide,/메트로놈이나 잼을 켜 둔 채로 녹음할 �
 assert.match(guide,/<h3>연습 기록<\/h3>/);
 assert.match(guide,/실제로 소리가 난 시간<\/b>만 셉니다/);
 assert.match(guide,/이 기기에만<\/b> 남습니다/);
-assert.doesNotMatch(guide,/target:'#practiceLogBtn'/);
+/* 달력 버튼 자체를 누르는 법은 가르치지 않는다 — 보이는 버튼이다. 청음 챕터가
+   한 번 가리키는 것은 조작법이 아니라 '맞힌 문제가 어디로 갔는지'다. 청음 안의
+   달력을 걷어낸 지금은 그게 눈에 보이지 않는 사실이라 한마디가 필요하다. */
+assert.doesNotMatch(guide,/key:'log'|key:'practice'/);
+assert.doesNotMatch(guide,/#practiceLogBtn'[\s\S]{0,200}hint:/);
+assert.match(guide,/target:'#practiceLogBtn', title:'기록은 여기에 쌓입니다'/);
 /* 파형만 뚫으면 재생을 시작할 수 없다. 왼쪽 올리브 버튼과 한 짝으로 묶는다. */
 assert.match(guide,/target:'\.record-waveform', also:'\.record-player-play'/);
 assert.match(guide,/function holeBox\(el,also\)/);
+
+/* ---------- 강조는 버튼 모양을 따라간다 ----------
+   네 조각은 네모난 구멍만 낼 수 있다. 동그란 버튼이나 기울어진 올리브를 네모로
+   비추면 버튼 바깥의 네 모서리가 훤히 드러나 무엇을 누르라는 것인지 흐려진다. */
+assert.match(guide,/function roundShape\(el,also\)/);
+assert.match(guide,/if\(also \|\| !el\) return null;/,'여러 곳을 묶는 단계는 그대로 네모다');
+assert.match(guide,/transform:style\.transform==='none' \? '' : style\.transform,/);
+assert.match(guide,/\.mask-shape\{[\s\S]*?box-shadow:0 0 0 2000px/);
+/* 두 겹으로 어둡게 하면 겹치는 자리만 짙어져 구멍 둘레에 밝은 테가 생긴다. */
+assert.match(guide,/parts\.top\.style\.background=shape\?'transparent':'';/);
+/* 테두리는 버튼에서 같은 간격만큼 떨어져야 한다 — px 반지름은 키운 만큼 더한다. */
+assert.match(guide,/\(parseFloat\(shape\.radius\)\+pad\)\+'px'/);
+
+/* ---------- 한 기능만 볼 때는 그 화면에서 시작한다 ----------
+   튜너 도움말을 열었는데 메트로놈 화면에서 튜너 탭 누르는 법부터 배울 이유가 없다.
+   전체 둘러보기에서는 그 흐름이 뜻을 갖는다. */
+assert.match(guide,/const single=keys\.length===1;/);
+assert.match(guide,/if\(single && step\.nav\) return;/);
+assert.equal((guide.match(/nav:true/g)||[]).length,8,'챕터를 여는 길잡이 단계 여덟 개');
+
+/* 설정 창이 열리면 강조도 창으로 옮겨 간다. 작은 버튼만 계속 비추면
+   정작 무엇이 열렸는지 어두워서 보이지 않는다. */
+assert.match(guide,/if\(sheet && !sheet\.hidden\) return sheet\.querySelector\('\.cloud-sheet'\);/);
 /* 링크를 담는 화면도 설명한다. 누르고 아무 말 없이 지나가면 안 된다. */
 assert.match(guide,/target:'#linkSearchForm', also:'#linkPanel'/);
 assert.match(guide,/title:'검색해서 담기'/);

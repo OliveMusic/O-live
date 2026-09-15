@@ -954,6 +954,16 @@
     font-variant-numeric:tabular-nums;
   }
   .log-row .log-what em{ font-style:normal; color:var(--ink-3); }
+  /* 청음은 막대에 마디를 갖지 않는다 — 시간이 아니라 문제 수로 세기 때문이다.
+     채운 네모를 쓰면 막대에도 그만큼의 마디가 있는 것처럼 읽힌다. */
+  .log-row .log-sw-ear{ background:transparent; box-shadow:inset 0 0 0 1.5px var(--ink-3); }
+
+  /* 계정 줄은 청음 기록 카드에서 옮겨 왔다. 음수 여백이 그쪽 안쪽 여백에
+     맞춰져 있었으므로 이 창의 여백으로 다시 맞춘다. */
+  .log-sheet .ear-cloud{
+    margin:15px -18px -18px; padding:9px 18px;
+    border-radius:0 0 23px 23px;
+  }
 
   /* ---------- 녹음 화면의 메트로놈 설정 창 ---------- */
   .metro-sheet{ max-height:calc(100dvh - 56px); overflow-y:auto; }
@@ -2564,38 +2574,7 @@
         <div class="choice-list" id="earChoices"></div>
       </div>
 
-      <details class="card ear-history" id="earHistory">
-        <summary>
-          <span class="ear-history-title">청음 기록</span>
-        </summary>
-        <div class="ear-history-body">
-          <div class="ear-calendar-head">
-            <button class="ear-month-btn" id="earMonthPrev" type="button" aria-label="이전 달">‹</button>
-            <strong id="earMonthLabel"></strong>
-            <button class="ear-month-btn" id="earMonthNext" type="button" aria-label="다음 달">›</button>
-          </div>
-          <div class="ear-weekdays" aria-hidden="true">
-            <span>일</span><span>월</span><span>화</span><span>수</span>
-            <span>목</span><span>금</span><span>토</span>
-          </div>
-          <div class="ear-calendar-grid" id="earCalendarGrid"></div>
-          <div class="ear-day-detail" id="earDayDetail" role="status">날짜를 누르면 기록을 볼 수 있습니다</div>
-          <div class="ear-cloud" id="earCloud">
-            <div class="ear-cloud-copy">
-              <span class="ear-cloud-dot" id="earCloudDot" data-state="unconfigured" aria-hidden="true"></span>
-              <span>
-                <strong id="earCloudTitle">클라우드 연결 준비 중</strong>
-                <small id="earCloudStatus" aria-live="polite">설정을 확인하고 있습니다</small>
-              </span>
-            </div>
-            <button class="ear-cloud-action" id="earCloudAction" type="button" aria-label="계정 연결">
-              <span id="earCloudActionLabel">계정 연결</span>
-              <img class="ear-cloud-avatar" id="earCloudAvatar" alt="" referrerpolicy="no-referrer" hidden>
-              <span class="ear-cloud-avatar-fallback" id="earCloudAvatarFallback" aria-hidden="true" hidden></span>
-            </button>
-          </div>
-        </div>
-      </details>
+
     
       </div>
 
@@ -2917,6 +2896,21 @@
       <div class="log-brief" id="practiceLogBrief"></div>
       <div class="log-full" id="practiceLogFull" hidden></div>
     </div>
+
+    <div class="ear-cloud" id="earCloud">
+      <div class="ear-cloud-copy">
+        <span class="ear-cloud-dot" id="earCloudDot" data-state="unconfigured" aria-hidden="true"></span>
+        <span>
+          <strong id="earCloudTitle">클라우드 연결 준비 중</strong>
+          <small id="earCloudStatus" aria-live="polite">설정을 확인하고 있습니다</small>
+        </span>
+      </div>
+      <button class="ear-cloud-action" id="earCloudAction" type="button" aria-label="계정 연결">
+        <span id="earCloudActionLabel">계정 연결</span>
+        <img class="ear-cloud-avatar" id="earCloudAvatar" alt="" referrerpolicy="no-referrer" hidden>
+        <span class="ear-cloud-avatar-fallback" id="earCloudAvatarFallback" aria-hidden="true" hidden></span>
+      </button>
+    </div>
   </section>
 </div>
 
@@ -3016,23 +3010,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=238"></script>
+<script src="app-version.js?v=239"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=238"></script>
-<script src="js/audio-runtime.js?v=238"></script>
-<script src="js/core.js?v=238"></script>
-<script src="js/metronome.js?v=238"></script>
-<script src="js/tuner-engine.js?v=238"></script>
-<script src="js/tuner.js?v=238"></script>
-<script src="js/scales.js?v=238"></script>
-<script src="js/ear-trainer.js?v=238"></script>
-<script src="js/rhythm-trainer.js?v=238"></script>
-<script src="js/recording-cache.js?v=238"></script>
-<script src="js/recorder.js?v=238"></script>
-<script src="js/practice-links.js?v=238"></script>
-<script src="js/jam-session.js?v=238"></script>
-<script src="js/practice-log.js?v=238"></script>
-<script src="js/app-shell.js?v=238"></script>
+<script src="cloud-sync.js?v=239"></script>
+<script src="js/audio-runtime.js?v=239"></script>
+<script src="js/core.js?v=239"></script>
+<script src="js/metronome.js?v=239"></script>
+<script src="js/tuner-engine.js?v=239"></script>
+<script src="js/tuner.js?v=239"></script>
+<script src="js/scales.js?v=239"></script>
+<script src="js/ear-trainer.js?v=239"></script>
+<script src="js/rhythm-trainer.js?v=239"></script>
+<script src="js/recording-cache.js?v=239"></script>
+<script src="js/recorder.js?v=239"></script>
+<script src="js/practice-links.js?v=239"></script>
+<script src="js/jam-session.js?v=239"></script>
+<script src="js/practice-log.js?v=239"></script>
+<script src="js/app-shell.js?v=239"></script>
 </body>
 </html>

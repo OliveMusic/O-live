@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=238">
+<link rel="stylesheet" href="info.css?v=239">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -121,6 +121,17 @@
     position:absolute; background:rgba(12,12,10,.66);
     transition:all .22s var(--ease-out,ease);
   }
+  /* 네 조각은 네모난 구멍만 낼 수 있다. 동그란 버튼이나 올리브처럼 네모가 아닌
+     것을 비추면 버튼 바깥의 네 모서리까지 훤히 드러난다. 그래서 구멍 자리에
+     버튼과 같은 모양·회전을 가진 조각을 하나 더 얹고, 그 바깥으로 그림자를
+     크게 드리워 모서리를 메운다. 그림자가 넘치는 자리는 이미 네 조각이 덮은
+     곳이라 겹쳐도 상관없다. 터치는 그대로 통과한다. */
+  .mask-shape{
+    position:absolute; pointer-events:none;
+    box-shadow:0 0 0 2000px rgba(12,12,10,.66);
+    transition:all .22s var(--ease-out,ease);
+  }
+  .mask-shape[hidden]{ display:none; }
   .halo{
     position:absolute; pointer-events:none; border-radius:13px;
     box-shadow:0 0 0 2px var(--signal), 0 0 0 7px rgba(151,169,130,.22);
@@ -320,6 +331,7 @@
         <i class="mask-part" data-part="right"></i>
         <i class="mask-part" data-part="bottom"></i>
         <i class="mask-part" data-part="left"></i>
+        <i class="mask-shape" id="maskShape" hidden></i>
         <i class="halo" id="halo"></i>
       </div>
       <div class="coach" id="coach" hidden role="status">
@@ -457,6 +469,7 @@
   const stage=document.getElementById('stage');
   const mask=document.getElementById('mask');
   const halo=document.getElementById('halo');
+  const maskShape=document.getElementById('maskShape');
   const coach=document.getElementById('coach');
   const coachTitle=document.getElementById('coachTitle');
   const coachBody=document.getElementById('coachBody');
@@ -483,7 +496,7 @@
     {
       key:'metronome', icon:'metronome', name:'메트로놈', blurb:'박자 맞추기와 숨은 조작',
       steps:[
-        {screen:null, target:'.tab-btn[data-tab="metronome"]',
+        {screen:null, nav:true, target:'.tab-btn[data-tab="metronome"]',
          title:'메트로놈으로 갑니다', body:'화면 아래 탭으로 다섯 기능을 오갑니다.', hint:'여기를 누르세요'},
         {screen:'metronome', target:'#metroStart',
          title:'올리브를 누르면 시작', body:'박마다 올리브가 빛납니다. 메트로놈과 잼은 동시에 울리지 않지만, <b>녹음과는 함께</b> 쓸 수 있습니다. 녹음하면서 박을 들으려면 트랙 화면의 메트로놈 버튼이 더 가깝습니다.',
@@ -509,7 +522,7 @@
     {
       key:'tuner', icon:'tuner', name:'튜너', blurb:'기준음과 감도',
       steps:[
-        {screen:null, target:'.tab-btn[data-tab="tuner"]',
+        {screen:null, nav:true, target:'.tab-btn[data-tab="tuner"]',
          title:'튜너로 갑니다', body:'튜너에 들어오면 <b>다른 소리가 자동으로 멈춥니다.</b> 마이크를 방해하지 않기 위해서입니다.', hint:'여기를 누르세요'},
         {screen:'tuner', target:'#stringBtns',
          title:'현을 누르면 기준음', body:'귀로 먼저 맞춰 볼 수 있습니다. 기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다. 소리가 안 나면 <b>무음 모드</b>를 꺼 보세요.',
@@ -538,7 +551,7 @@
     {
       key:'scales', icon:'scales', name:'스케일', blurb:'지판과 건반에서 보기',
       steps:[
-        {screen:null, target:'.tab-btn[data-tab="scales"]', title:'스케일로 갑니다',
+        {screen:null, nav:true, target:'.tab-btn[data-tab="scales"]', title:'스케일로 갑니다',
          body:'고른 스케일을 지판과 건반에 함께 보여 줍니다.', hint:'여기를 누르세요'},
         {screen:'scales', target:'#scaleKey', title:'루트음 고르기',
          body:'여기서 고른 음이 스케일의 시작점이 됩니다.', hint:'목록을 열어 다른 음을 골라 보세요',
@@ -557,9 +570,9 @@
     {
       key:'ear', icon:'trainer', name:'청음 트레이너', blurb:'음정·화음·음계 듣기',
       steps:[
-        {screen:null, target:'.tab-btn[data-tab="trainer"]', title:'트레이너로 갑니다',
+        {screen:null, nav:true, target:'.tab-btn[data-tab="trainer"]', title:'트레이너로 갑니다',
          body:'트레이너 안에는 청음·리듬·트랙 세 가지가 있습니다.', hint:'여기를 누르세요'},
-        {screen:'trainer', target:'#trainerSeg', title:'청음을 고릅니다',
+        {screen:'trainer', nav:true, target:'#trainerSeg', title:'청음을 고릅니다',
          body:'위쪽 세그먼트로 <b>청음·리듬·트랙</b> 셋을 오갑니다.', hint:'청음을 누르세요'},
         /* 알약 사이의 빈 곳도 상자 안이라 눌리면 넘어갔다. 고른 것이 실제로 바뀌었는지 본다. */
         {screen:'trainer:ear', target:'#earModes', title:'무엇을 들을지',
@@ -572,15 +585,17 @@
               2초 남짓이니 다 들려주고 1초를 더 둔다. */
         {screen:'trainer:ear', target:'#earPlayBtn', title:'들어보기',
          body:'다시 듣고 싶으면 <b>다시 듣기</b>를 누릅니다.', hint:'눌러서 들어 보세요', linger:3200},
-        {screen:'trainer:ear', target:'#earHistory', title:'청음 기록',
-         body:'펼치면 달력이 나오고, <b>날짜를 누르면</b> 그날의 음정·화음·음계를 나눠서 보여 줍니다. 로그인하면 기기 사이에서 이어집니다.',
-         hint:'펼쳐 보세요', before:doc=>{ const d=doc.querySelector('#earHistory'); if(d && !d.open) d.open=true; }, advance:'next'},
+        /* 달력은 청음 안에 따로 두지 않고 상단바의 연습 기록 하나로 모았다.
+           두 군데에서 같은 값을 그리던 때는 숫자가 서로 어긋났다. */
+        {screen:'trainer:ear', target:'#practiceLogBtn', title:'기록은 여기에 쌓입니다',
+         body:'맞힌 문제는 <b>오른쪽 위 달력</b>에 날짜별로 쌓입니다. 날짜를 누르고 자세히를 열면 그날의 음정·화음·음계를 나눠서 보여 줍니다.',
+         advance:'next'},
       ],
     },
     {
       key:'rhythm', icon:'trainer', name:'리듬 트레이너', blurb:'패턴 만들고 따라 치기',
       steps:[
-        {screen:'trainer', target:'#trainerSeg', title:'리듬을 고릅니다',
+        {screen:'trainer', nav:true, target:'#trainerSeg', title:'리듬을 고릅니다',
          body:'트레이너 안의 두 번째입니다.', hint:'리듬을 누르세요', check:doc=>seg(doc)==='rhythm'},
         {screen:'trainer:rhythm', target:'#beatGrid', title:'칸을 눌러 직접 편집',
          body:'16분음표 한 칸씩 켜고 끕니다.', hint:'칸을 눌러 보세요'},
@@ -611,12 +626,20 @@
     {
       key:'record', icon:'trainer', name:'트랙 트레이너', blurb:'녹음·업로드·YouTube로 연습',
       steps:[
-        {screen:'trainer', target:'#trainerSeg', title:'트랙을 고릅니다',
+        {screen:'trainer', nav:true, target:'#trainerSeg', title:'트랙을 고릅니다',
          body:'녹음한 것, 올린 파일, YouTube 링크가 <b>한 목록</b>에 모입니다.', hint:'트랙을 누르세요',
          check:doc=>seg(doc)==='record'},
         /* 그냥 누르면 켜고 꺼지는 것은 보이는 버튼이라 알아서 찾는다. 길게 누르면
            설정이 열린다는 것만 화면에 아무 힌트가 없어 여기서 가르친다. */
-        {screen:'trainer:record', target:'#recordMetro', title:'길게 누르면 메트로놈 설정',
+        /* 창이 열리면 강조도 창으로 옮겨 간다. 작은 버튼만 계속 비추면 정작
+           무엇이 열렸는지 어두워서 보이지 않는다. */
+        {screen:'trainer:record',
+         target:doc=>{
+           const sheet=doc.querySelector('#recordMetroSheet');
+           if(sheet && !sheet.hidden) return sheet.querySelector('.cloud-sheet');
+           return doc.querySelector('#recordMetro');
+         },
+         title:'길게 누르면 메트로놈 설정',
          body:'빠르기·박자·세분화를 여기서 바꿉니다. <b>메트로놈 탭과 같은 설정</b>이라 한쪽에서 바꾸면 양쪽이 같이 바뀝니다.',
          hint:'길게 눌러 보세요', linger:3000, done:'메트로놈 설정이 열렸습니다',
          check:doc=>{ const sheet=doc.querySelector('#recordMetroSheet'); return Boolean(sheet && !sheet.hidden); }},
@@ -749,7 +772,7 @@
     {
       key:'jam', icon:'jam', name:'잼 세션', blurb:'코드 진행 만들고 반주 받기',
       steps:[
-        {screen:null, target:'.tab-btn[data-tab="jam"]', title:'잼 세션으로 갑니다',
+        {screen:null, nav:true, target:'.tab-btn[data-tab="jam"]', title:'잼 세션으로 갑니다',
          body:'코드 진행을 만들면 드럼·베이스·코드가 함께 따라옵니다.', hint:'여기를 누르세요'},
         {screen:'jam', target:'#chordPalette', title:'미리 듣기와 담기는 다르다',
          body:'코드 몸통을 누르면 <b>소리만</b> 들어봅니다. 진행에 담으려면 오른쪽 위의 <b>+</b>를 누릅니다. 소리가 안 나면 <b>무음 모드</b>를 꺼 보세요.',
@@ -1031,6 +1054,33 @@
       width:box.width, height:box.height,
     };
   }
+  /* 버튼이 네모가 아니면 그 모양 그대로 비춘다. 동그란 버튼이나 기울어진
+     올리브를 네모로 비추면 버튼 바깥의 네 모서리가 훤히 드러나 무엇을 누르라는
+     것인지 흐려진다.
+
+     여러 곳을 한 덩어리로 묶는 단계(also)는 그대로 네모다. 서로 떨어진 것들을
+     감싼 모양에는 따라갈 윤곽이 없다. */
+  function roundShape(el,also){
+    if(also || !el) return null;
+    let view=null;
+    try{ view=el.ownerDocument.defaultView; }catch(e){ return null; }
+    if(!view) return null;
+    const style=view.getComputedStyle(el);
+    const width=el.offsetWidth, height=el.offsetHeight;
+    if(!width || !height) return null;
+    const radius=style.borderTopLeftRadius||'';
+    const round=radius.indexOf('%')>=0
+      ? parseFloat(radius)>=35
+      : parseFloat(radius)>=Math.min(width,height)/2-0.5;
+    if(!round) return null;
+    return {
+      width, height,
+      radius:style.borderRadius,
+      /* 회전한 올리브는 바깥 상자만 보면 실제보다 크다. 상자 가운데는 회전해도
+         그대로이므로 회전 전 크기를 그 가운데에 놓고 같은 변형을 건다. */
+      transform:style.transform==='none' ? '' : style.transform,
+    };
+  }
   function paint(el,also){
     if(!el || !el.isConnected) return;
     const pad=7;
@@ -1041,7 +1091,37 @@
     parts.bottom.style.cssText='left:0;top:'+(y+h)+'px;right:0;bottom:0';
     parts.left.style.cssText='left:0;top:'+y+'px;width:'+Math.max(0,x)+'px;height:'+h+'px';
     parts.right.style.cssText='left:'+(x+w)+'px;top:'+y+'px;right:0;height:'+h+'px';
-    halo.style.cssText='left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+h+'px';
+
+    const shape=roundShape(el,also);
+    /* 모양으로 비출 때는 어둡게 하는 일을 그림자 하나에 맡긴다. 네 조각까지
+       함께 어둡게 하면 두 겹이 겹치는 자리만 더 짙어져, 구멍 둘레에 밝은
+       테가 생긴다. 조각은 자리를 지켜 바깥 터치만 막는다. */
+    parts.top.style.background=shape?'transparent':'';
+    parts.bottom.style.background=shape?'transparent':'';
+    parts.left.style.background=shape?'transparent':'';
+    parts.right.style.background=shape?'transparent':'';
+    if(shape){
+      const cx=box.left+box.width/2, cy=box.top+box.height/2;
+      const sw=shape.width, sh=shape.height;
+      maskShape.hidden=false;
+      maskShape.style.cssText=
+        'left:'+(cx-sw/2)+'px;top:'+(cy-sh/2)+'px;width:'+sw+'px;height:'+sh+'px;'+
+        'border-radius:'+shape.radius+';'+
+        (shape.transform?'transform:'+shape.transform+';':'');
+      /* 테두리는 버튼에서 같은 간격만큼 떨어져야 한다. 퍼센트 반지름은 상자를
+         키워도 그대로 타원을 유지하지만, px 반지름은 키운 만큼 더해야 한다. */
+      const hw=sw+pad*2, hh=sh+pad*2;
+      const grown=shape.radius.indexOf('%')>=0
+        ? shape.radius
+        : (parseFloat(shape.radius)+pad)+'px';
+      halo.style.cssText=
+        'left:'+(cx-hw/2)+'px;top:'+(cy-hh/2)+'px;width:'+hw+'px;height:'+hh+'px;'+
+        'border-radius:'+grown+';'+
+        (shape.transform?'transform:'+shape.transform+';':'');
+    }else{
+      maskShape.hidden=true;
+      halo.style.cssText='left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+h+'px';
+    }
     placeCoach(y,h);
   }
   function placeCoach(holeTop,holeHeight){
@@ -1134,9 +1214,17 @@
 
   function startChapters(keys){
     queue=[];
+    /* 한 기능만 볼 때는 그 기능 화면에서 바로 시작한다. 탭과 세그먼트를 누르는
+       길잡이 단계는 전체 둘러보기에서만 뜻이 있다 — 튜너 도움말을 열었는데
+       메트로놈 화면에서 튜너 탭 누르는 법부터 배울 이유가 없다. */
+    const single=keys.length===1;
     keys.forEach(key=>{
       const chapter=chapterByKey(key);
-      if(chapter) chapter.steps.forEach(step=>queue.push({step,chapter}));
+      if(!chapter) return;
+      chapter.steps.forEach(step=>{
+        if(single && step.nav) return;
+        queue.push({step,chapter});
+      });
     });
     if(!queue.length) return;
     at=0; running=true;
