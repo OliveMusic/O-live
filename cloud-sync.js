@@ -30,6 +30,17 @@
   let sheetTrigger=null;
   let schemaContract={ready:false,version:0,checkedAt:0};
   const sessionSubscribers=new Set();
+  /* subscribeSession은 붙자마자 지금 값을 한 번 알려 주는데, 그 '지금'은 아직
+     세션을 읽기도 전이라 로그인한 사람에게도 null이다. 처음 한 번은 그 차이가
+     중요한 자리가 있어(트레이너를 어느 세그먼트로 열지) 판가름이 난 시점을
+     따로 알린다. */
+  let settleSession=null;
+  const sessionReady=new Promise(resolve=>{ settleSession=resolve; });
+  function settleSessionOnce(){
+    if(!settleSession) return;
+    const resolve=settleSession; settleSession=null;
+    resolve(currentUser);
+  }
 
   function readJSON(key,fallback){
     try{
@@ -763,9 +774,10 @@
     handlers=nextHandlers;
     bindUI();
     renderSheet();
-    if(guideMode){ startGuideDemo(); return; }
+    if(guideMode){ startGuideDemo(); settleSessionOnce(); return; }
     if(!configured || !window.supabase){
       setState('unconfigured');
+      settleSessionOnce();
       return;
     }
     client=window.supabase.createClient(config.supabaseUrl,config.supabasePublishableKey,{
@@ -778,9 +790,11 @@
     if(error){
       setState('error');
       setMessage(error.message,true);
+      settleSessionOnce();
       return;
     }
     await applySession(data.session);
+    settleSessionOnce();
     window.addEventListener('online',()=>syncAndRefresh(false));
     window.addEventListener('offline',()=>{ if(currentUser) setState('offline'); });
     document.addEventListener('visibilitychange',()=>{
@@ -1127,6 +1141,8 @@
     isConfigured:()=>configured,
     getUser:()=>currentUser,
     subscribeSession,
+    /* 세션을 실제로 읽어 본 뒤에 풀린다. 처음 한 번만 물어보는 쪽이 쓴다. */
+    whenSessionReady:()=>sessionReady,
     listRecordings,
     uploadRecording,
     saveRecordingWaveform,

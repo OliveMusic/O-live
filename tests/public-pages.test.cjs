@@ -455,6 +455,20 @@ assert.match(indexHtml,/<button class="seg-btn active" data-mode="record">트랙
 assert.match(indexHtml,/<div class="trainer-pane active" id="pane-record">/);
 assert.doesNotMatch(indexHtml,/<div class="trainer-pane active" id="pane-ear">/);
 assert.doesNotMatch(guide,/title:'트랙을 고릅니다'/,'들어서자마자 통과할 단계는 두지 않는다');
+/* 트랙은 계정이 있어야 쓸 수 있다. 로그인 전에는 '계정 연결' 화면부터 마주치므로
+   그때만 청음으로 연다 — 계정 없이 바로 연습할 수 있는 자리다. 세그먼트 차례는
+   트랙이 맨 앞 그대로다. */
+assert.match(appShell,/window\.OliveCloud\.whenSessionReady\(\)\.then\(user=>\{\s*\n\s*if\(user \|\| touched\) return;/);
+assert.match(appShell,/seg\.querySelector\('\.seg-btn\[data-mode="ear"\]'\)/);
+/* subscribeSession은 붙자마자 지금 값을 알려 주는데 그때는 아직 세션을 읽기 전이라
+   로그인한 사람에게도 null이다. 그 값으로 옮겼다가 되돌리면 화면이 한 번 튄다. */
+assert.match(cloud,/const sessionReady=new Promise\(resolve=>\{ settleSession=resolve; \}\);/);
+assert.match(cloud,/whenSessionReady:\(\)=>sessionReady,/);
+assert.match(cloud,/await applySession\(data\.session\);\s*\n\s*settleSessionOnce\(\);/,'세션을 읽은 뒤에 푼다');
+assert.match(cloud,/if\(guideMode\)\{ startGuideDemo\(\); settleSessionOnce\(\); return; \}/);
+assert.match(cloud,/setState\('unconfigured'\);\s*\n\s*settleSessionOnce\(\);/,'설정이 없을 때도 풀어야 갇히지 않는다');
+/* 기다리는 사이에 직접 고른 것을 빼앗지 않는다. */
+assert.match(appShell,/if\(event\.target\.closest\('\.seg-btn'\)\) touched=true;/);
 assert.match(guide,/hint:'청음을 누르세요',\s*\n\s*check:doc=>seg\(doc\)==='ear'/);
 assert.match(guide,/hint:'리듬을 누르세요', check:doc=>seg\(doc\)==='rhythm'/);
 /* 도움말 차례도 앱과 같아야 한다. 트랙 → 청음 → 리듬. */

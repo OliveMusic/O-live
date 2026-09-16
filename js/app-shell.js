@@ -2,6 +2,7 @@
 (function(){
   const seg=document.getElementById('trainerSeg');
   if(!seg) return;
+  let touched=false;
   seg.querySelectorAll('.seg-btn').forEach(b=>{
     b.addEventListener('click', ()=>{
       const m=b.dataset.mode;
@@ -13,6 +14,24 @@
       if(m==='rhythm') setTimeout(()=>window.dispatchEvent(new Event('resize')),0);
     });
   });
+  /* 세그먼트 차례는 트랙이 맨 앞이지만, 트랙은 계정이 있어야 쓸 수 있다.
+     로그인 전에 트레이너를 열면 '계정 연결' 화면부터 마주치므로 그때만 청음으로
+     연다 — 계정 없이 바로 연습할 수 있는 자리다.
+
+     세션을 '읽어 본 뒤'에 판단해야 한다. subscribeSession은 붙자마자 한 번
+     알려 주는데 그때는 아직 읽기 전이라 로그인한 사람에게도 null이다. 그 값으로
+     옮겼다가 되돌리면 화면이 한 번 튄다. 그리고 사람이 세그먼트를 이미 만졌으면
+     손대지 않는다 — 기다리는 사이에 직접 고른 것을 빼앗는 꼴이 된다. */
+  const ready=window.OliveCloud && window.OliveCloud.whenSessionReady;
+  if(!ready) return;
+  window.OliveCloud.whenSessionReady().then(user=>{
+    if(user || touched) return;
+    const ear=seg.querySelector('.seg-btn[data-mode="ear"]');
+    if(ear && !ear.classList.contains('active')) ear.click();
+  }).catch(()=>{});
+  seg.addEventListener('click',event=>{
+    if(event.target.closest('.seg-btn')) touched=true;
+  },true);
 })();
 
 /* ===== 스크롤 시 탭바 축소 (iOS 26 리퀴드 글라스 거동) ===== */
