@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=253">
+<link rel="stylesheet" href="info.css?v=254">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -175,6 +175,9 @@
   }
   .coach-next.quiet{ background:var(--key); color:var(--ink-2); border:1px solid var(--line); }
   .coach-next:active{ opacity:.85; }
+  /* 아직 눌러도 소용없는 단계가 있다 — 녹음은 누른 그 순간이 아니라 몇 초가 지나야
+     볼 것이 생긴다. 잠긴 동안은 흐리게 두어 기다리는 중임을 알린다. */
+  .coach-next:disabled{ opacity:.4; cursor:default; }
 
   /* ── 챕터 끝 ── */
   .done-mark{
@@ -589,11 +592,12 @@
          hint:'하나 골라 보세요', linger:700},
         /* 3) 소리가 다 끝나기도 전에 달력으로 넘어가면 뚝 끊긴 느낌이 든다. 가장 긴 음계가
               2초 남짓이니 다 들려주고 1초를 더 둔다. */
-        /* 한 번 누르면 곧바로 봉해 버려서 정작 '다시 듣기'를 눌러 볼 수가 없었다.
-           둘을 한 구멍에 넣고, 여기서는 봉하지 않는다. 넘어가는 것은 사람이 정한다. */
-        {screen:'trainer:ear', target:'#earPlayBtn', also:'#earReplay',
+        /* 올리브와 '다시 듣기'를 한 구멍에 넣으면 둘을 감싼 네모가 되어, 무엇을 누르라는
+           것인지 되레 흐려진다. 올리브만 그 테두리대로 비추고 봉하지 않는다 — 같은 버튼을
+           몇 번이든 다시 누를 수 있으니 '다시 듣기'는 말로만 일러 준다. */
+        {screen:'trainer:ear', target:'#earPlayBtn',
          title:'들어보기',
-         body:'올리브를 누르면 문제가 울립니다. 놓쳤으면 아래 <b>다시 듣기</b>로 몇 번이든 다시 듣습니다.',
+         body:'올리브를 누르면 문제가 울립니다. 몇 번이든 다시 누를 수 있고, 아래 <b>다시 듣기</b>도 같은 일을 합니다.',
          hint:'눌러서 들어 보세요', keepOpen:true, linger:3200},
         /* 맞혔을 때와 틀렸을 때는 화면이 하는 일이 전혀 다르다. 한데 뭉뚱그리면
            둘 다 흐려진다. 미리보기에서는 정답 보기에 표시가 붙으므로, 먼저 그것을
@@ -692,14 +696,22 @@
          body:'빠르기·박자·세분화를 여기서 바꿉니다. <b>메트로놈 탭과 같은 설정</b>이라 한쪽에서 바꾸면 양쪽이 같이 바뀝니다.',
          hint:'길게 눌러 보세요', linger:3000, done:'메트로놈 설정이 열렸습니다',
          check:doc=>{ const sheet=doc.querySelector('#recordMetroSheet'); return Boolean(sheet && !sheet.hidden); }},
+        /* 누르자마자 '다음'을 누르면 아무것도 녹음되지 않은 채 넘어가, 남은 시간도
+           입력 크기도 움직이지 않고 초안도 없다. 누른 순간부터 버튼을 잠그고,
+           카운트인이 끝나 실제로 5초가 돌아간 뒤에 푼다. */
         {screen:'trainer:record', target:'#recordToggle', also:'#recordMetro', recording:true, title:'눌러서 녹음',
-         before:closeMetroSheet,
+         before:closeMetroSheet, gate:5000,
+         gateSaid:'녹음 중입니다 — 잠시 뒤 넘어갈 수 있습니다', done:'5초가 담겼습니다',
          body:'왼쪽 <b>메트로놈 버튼</b>을 켜 두면 한 마디를 세고 시작하고, 녹음하는 내내 박이 들립니다. 클릭음은 녹음 파일에는 담기지 않습니다. 녹음 중에는 화면을 <b>직접 잠그지 마세요.</b> 자동으로 꺼지는 것은 막아 줍니다.',
-         hint:'눌러서 녹음해 보세요',
+         hint:'눌러서 녹음해 보세요', linger:2000,
          check:doc=>{
            try{
              const rec=doc.defaultView && doc.defaultView.OliveRecorder;
-             return Boolean(rec && rec.isRecording());
+             if(!rec || !rec.isRecording()) return false;
+             /* isRecording()은 카운트인 중에도 참이다. 세는 동안은 아직 담기지 않으므로
+                앱이 '카운트인'으로 표시하는 동안은 빼고 센다. */
+             const timer=doc.querySelector('#recordTimer');
+             return !(timer && timer.classList.contains('counting'));
            }catch(e){ return false; }
          }},
         {screen:'trainer:record', target:'#recordTimeProgress', also:'#recordLevelRow', recording:true,
@@ -721,7 +733,9 @@
          check:doc=>{ const d=doc.querySelector('#recordListCard'); return Boolean(d && d.open); }},
         /* 곧바로 한 줄만 비추면 그 줄이 무엇의 일부인지 알 수 없다. 목록 전체를
            한 번 보여 주고 나서 한 줄로 좁힌다. */
-        {screen:'trainer:record', target:'#recordList', before:openList,
+        /* 보여 주기만 하는 단계다. 상자째 비추고 앱은 봉해 둔다 — 여기서 행을 눌러
+           재생기가 열려 버리면 바로 다음 단계가 가르칠 것이 미리 일어난다. */
+        {screen:'trainer:record', target:'#recordListCard', before:openList, seal:true,
          title:'한 목록에 모입니다',
          body:'녹음한 것, 올린 파일, YouTube 링크가 <b>같은 목록</b>에 섞여 쌓입니다. 왼쪽 올리브는 즐겨찾기 표시이고, 오른쪽 <b>•••</b>에 이름 변경·삭제가 있습니다.',
          advance:'next'},
@@ -966,6 +980,13 @@
          나머지는 흐리게 두어 눈이 갈 곳을 하나로 만든다. */
       button.style.opacity=on?'.3':'';
     });
+  }
+  /* 리듬을 울린 채로 트랙으로 넘어가면 시끄럽기만 한 것이 아니라, 트랙의 메트로놈과
+     겹쳐 카운트인이 무엇인지 알아들을 수가 없다. 리듬 화면을 떠날 때 끈다. */
+  function stopRhythmIn(doc){
+    if(!doc) return;
+    const play=doc.querySelector('#rhyPlay');
+    if(play && play.classList.contains('on')) play.click();
   }
   /* 예시 녹음은 조옮김까지만 들려주면 된다. 그 뒤로도 계속 울리면 남은 설명을 덮는다. */
   function stopRowPlayback(doc){
@@ -1346,7 +1367,10 @@
   function offerNext(){
     coachNext.textContent='다음';
     coachNext.classList.remove('quiet');
+    coachNext.disabled=false;
   }
+  /* 끝내 녹음이 시작되지 않으면(마이크를 막았다든지) 가둬 두지 않는다. 잠금만 푼다. */
+  const GATE_GIVE_UP=14000;
   function cancelDefer(){
     if(deferTimer){ clearTimeout(deferTimer); deferTimer=0; }
     if(sealTimer){ clearTimeout(sealTimer); sealTimer=0; }
@@ -1403,6 +1427,7 @@
     coachHint.textContent='';
     coachNext.textContent=label;
     coachNext.classList.remove('quiet');
+    coachNext.disabled=false;
     retry=action||null;
     coach.style.top='50%';
     coach.style.left='50%';
@@ -1428,6 +1453,7 @@
         return;
       }
       goScreen(doc,step.screen);
+      if(step.screen!=='trainer:rhythm') stopRhythmIn(doc);
       if(!step.recording) stopRecordingIn(doc,step.draft);
       if(!step.log) closePracticeLog(doc);
       if(!step.lockMenu) lockMenuItems(doc,false);
@@ -1453,11 +1479,15 @@
       coachHint.classList.remove('done');
       coachNext.textContent=needsTap?'건너뛰기':'다음';
       coachNext.classList.toggle('quiet',needsTap);
+      coachNext.disabled=false;
       retry=null;
       mask.hidden=false;
       coach.hidden=false;
       track(step.target,step.also);
       listen(step);
+      /* 보여 주기만 하는 단계는 앱을 통째로 봉한다. 여기서 만질 수 있는 것은
+         도움말 쪽의 '다음'뿐이다 — 그 버튼은 봉인 바깥에 있다. */
+      if(step.seal) sealFrame(true);
       });
     });
   }
@@ -1468,7 +1498,7 @@
     const doc=frameDoc();
     if(!doc) return;
     const memo=step.memo?step.memo(doc):null;
-    let timer=0, onDown=null, unpress=null;
+    let timer=0, onDown=null, unpress=null, ungate=null;
     /* '여러 번 누르기'를 가르치는 단계는 결과로 판정하면 안 된다. TAP은 두 번째 탭에서
        이미 간격 하나를 얻어 템포를 바꾸므로, BPM이 변했는지 보면 네 번 누르라고 해 놓고
        두 번에 넘어간다. 이럴 때는 앱 상태가 아니라 누른 횟수를 센다. */
@@ -1485,12 +1515,36 @@
         unpress=()=>{ try{ target.removeEventListener('click',onHit); }catch(e){} };
       }
     }else if(step.check){
+      /* 누른 순간과 볼 것이 생기는 순간이 다른 단계가 있다 — 녹음은 카운트인이 끝나야
+         비로소 돌아간다. gate가 걸린 단계는 누르는 즉시 '다음'을 잠그고, 해낸 상태가
+         그만큼 이어진 뒤에 푼다. 도중에 멈추면 처음부터 다시 센다. */
+      let armed=0, held=0;
+      if(step.gate){
+        const armTarget=resolveTarget(doc,step.target);
+        const onArm=event=>{
+          if(armed || !armTarget) return;
+          if(armTarget!==event.target && !armTarget.contains(event.target)) return;
+          armed=Date.now();
+          coachNext.disabled=true;
+        };
+        doc.addEventListener('pointerdown',onArm,true);
+        ungate=()=>{ try{ doc.removeEventListener('pointerdown',onArm,true); }catch(e){} };
+      }
       timer=setInterval(()=>{
         const now=frameDoc();
         if(!now) return;
         let ok=false;
         try{ ok=step.check(now,memo); }catch(e){}
-        if(!ok) return;
+        if(step.gate){
+          if(!armed) return;
+          if(!ok){
+            held=0;
+            if(Date.now()-armed>GATE_GIVE_UP){ clearInterval(timer); timer=0; coachNext.disabled=false; }
+            return;
+          }
+          if(!held){ held=Date.now(); announce(step.gateSaid); }
+          if(Date.now()-held<step.gate) return;
+        }else if(!ok) return;
         /* 마지막 단계에서 소리를 켜자마자 끄면 '팍' 꺼지는 느낌이 든다.
            linger가 있으면 그동안 들려주고 넘어간다. 그 사이 두 번 울리지 않게 세운다. */
         clearInterval(timer); timer=0;
@@ -1536,6 +1590,8 @@
       if(timer){ clearInterval(timer); timer=0; }
       if(onDown){ try{ doc.removeEventListener('pointerdown',onDown,true); }catch(e){} }
       if(unpress){ unpress(); unpress=null; }
+      if(ungate){ ungate(); ungate=null; }
+      coachNext.disabled=false;
       pass=null;
     };
   }

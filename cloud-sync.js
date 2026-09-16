@@ -530,6 +530,10 @@
     }catch(error){ return recordings; }
   }
   async function uploadRecording(recording){
+    /* 도움말은 서버에 올리지 않는다. 그래도 저장이 되어야 무엇을 배우는지 끝까지 보인다 —
+       멈추고 이름을 적고 저장을 눌렀는데 실패로 끝나면 배우다 만 셈이다. 올라간 것처럼
+       목록 맨 위에 넣어 둔다. 챕터를 다시 시작하면 처음 상태로 돌아간다. */
+    if(guideMode){ guideAdd(recording); return true; }
     await ensureRecordingAccess();
     const id=String(recording&&recording.id||'');
     const extension=String(recording&&recording.extension||'').toLowerCase();
@@ -580,6 +584,7 @@
     return true;
   }
   async function saveRecordingWaveform(id,waveform){
+    if(guideMode){ guideWaveform(id,waveform); return true; }
     await ensureRecordingAccess();
     const {data,error}=await client.rpc('save_practice_recording_waveform',{
       p_recording_id:id,
@@ -1019,6 +1024,31 @@
     const gone={};
     (ids||[]).forEach(id=>{ gone[String(id||'')]=true; });
     for(let i=list.length-1;i>=0;i--){ if(gone[list[i].id]) list.splice(i,1); }
+  }
+  /* 도움말에서 저장한 녹음. 목록이 읽는 모양(열 이름)에 맞춰 넣어야 그대로 그려진다.
+     소리는 recorder가 이미 기억해 둔 blob에서 나오므로 여기서는 줄만 만든다. */
+  function guideAdd(recording){
+    const now=new Date().toISOString();
+    const id=String(recording&&recording.id||'guide-recording-'+Date.now());
+    const extension=String(recording&&recording.extension||'webm').toLowerCase();
+    guideState().recordings.unshift({
+      id,title:String(recording&&recording.title||'새 녹음'),
+      object_path:'guide/'+id+'.'+extension,
+      duration_ms:Math.round(Number(recording&&recording.durationMs)||0),
+      byte_size:Number(recording&&recording.blob&&recording.blob.size)||0,
+      mime_type:String(recording&&recording.mimeType||''),
+      source_type:String(recording&&recording.sourceType||'recording'),
+      waveform:Array.isArray(recording&&recording.waveform)?recording.waveform.slice():[],
+      playback_gain:Number(recording&&recording.playbackGain)||1,pinned:false,
+      playback_rate:1,transpose:0,loop_a_ms:null,loop_b_ms:null,loop_enabled:false,
+      recorded_at:String(recording&&recording.recordedAt||now),created_at:now,
+    });
+    return true;
+  }
+  function guideWaveform(id,waveform){
+    const row=guideState().recordings.find(item=>item&&item.id===String(id||''));
+    if(row) row.waveform=Array.isArray(waveform)?waveform.slice():[];
+    return Boolean(row);
   }
   function guidePin(list,id,pinned){
     const row=(list||[]).find(item=>item&&item.id===String(id||''));

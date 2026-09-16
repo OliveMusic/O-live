@@ -457,6 +457,18 @@ assert.match(guide,/if\(metro && metro\.classList\.contains\('running'\)\) metro
 assert.match(cloud,/const guideMode=\/\[\?&\]guide=1/);
 assert.match(cloud,/if\(guideMode\) return guideRecordings\(\)/);
 assert.match(cloud,/if\(guideMode\) return guideLinks\(\)/);
+/* 도움말은 서버에 올리지 않는다. 그래도 저장이 되어야 무엇을 배우는지 끝까지 보인다 —
+   멈추고 이름을 적고 저장을 눌렀는데 실패로 끝나면 배우다 만 셈이다. 올라간 것처럼
+   목록 맨 위에 넣어 둔다. 챕터를 다시 시작하면 처음 상태로 돌아간다. */
+assert.match(cloud,/if\(guideMode\)\{ guideAdd\(recording\); return true; \}/);
+assert.match(cloud,/function guideAdd\(recording\)/);
+assert.match(cloud,/guideState\(\)\.recordings\.unshift\(\{/);
+assert.match(cloud,/if\(guideMode\)\{ guideWaveform\(id,waveform\); return true; \}/);
+/* 소리는 recorder가 저장할 때 기억해 둔 blob에서 난다. 다만 기기 캐시에는 남기지
+   않는다 — 자리가 정해져 있어 시연이 들어가면 진짜 녹음이 그만큼 밀려난다. */
+assert.match(recorder,/const guidePreview=\/\[\?&\]guide=1\(\?:&\|\$\)\/\.test\(location\.search\);/);
+assert.match(recorder,/function cacheRowBlob\(row,blob,userId\)\{\s*\n\s*if\(guidePreview\) return Promise\.resolve\(false\);/);
+assert.match(recorder,/rememberCloudBlob\(saved,saved\.blob\)/,'프레임이 사는 동안은 메모리에서 들린다');
 assert.match(cloud,/title:'C Major Scale'/);
 assert.match(cloud,/video_id:'edScGrfl50M'/);
 /* 예시 녹음은 C4에서 시작하는 장음계다. 제목과 어긋나면 안 된다. */
@@ -528,9 +540,28 @@ assert.match(guide,/button\.style\.opacity=on\?'\.3':''/);
 assert.match(guide,/function stopRowPlayback\(doc\)/);
 assert.match(guide,/rec\.stopPlayback\(\)/);
 assert.match(recorder,/stopPlayback:stopPlaybackForOtherTool/,'도움말이 부르는 이름이다');
+/* 누르자마자 '다음'을 누르면 아무것도 녹음되지 않은 채 넘어가, 남은 시간도 입력
+   크기도 움직이지 않고 초안도 없다. 누른 순간부터 버튼을 잠그고, 카운트인이 끝나
+   실제로 5초가 돌아간 뒤에 푼다. isRecording()은 카운트인 중에도 참이므로 앱이
+   '카운트인'으로 표시하는 동안은 빼고 센다. */
+assert.match(guide,/before:closeMetroSheet, gate:5000,/);
+assert.match(guide,/timer\.classList\.contains\('counting'\)/);
+assert.match(indexHtml + appScripts,/recordTimer\.classList\.add\('counting'\)/,'앱이 카운트인을 표시하는 방식');
+assert.match(guide,/if\(!held\)\{ held=Date\.now\(\); announce\(step\.gateSaid\); \}/);
+assert.match(guide,/if\(Date\.now\(\)-held<step\.gate\) return;/);
+assert.match(guide,/coachNext\.disabled=true;/,'누른 순간부터 잠근다');
+assert.match(guide,/\.coach-next:disabled\{ opacity:\.4; cursor:default; \}/);
+/* 끝내 시작되지 않으면(마이크를 막았다든지) 가둬 두지 않는다. */
+assert.match(guide,/const GATE_GIVE_UP=14000;/);
+assert.match(guide,/if\(Date\.now\(\)-armed>GATE_GIVE_UP\)\{ clearInterval\(timer\); timer=0; coachNext\.disabled=false; \}/);
+assert.match(guide,/function offerNext\(\)\{[\s\S]{0,120}?coachNext\.disabled=false;/,'풀어 주는 곳은 한 군데다');
+
 /* 곧바로 한 줄만 비추면 그 줄이 무엇의 일부인지 알 수 없다. 목록 전체를 한 번
    보여 주고 나서 한 줄로 좁힌다. */
-assert.match(guide,/target:'#recordList', before:openList,\s*\n\s*title:'한 목록에 모입니다'/);
+assert.match(guide,/target:'#recordListCard', before:openList, seal:true,\s*\n\s*title:'한 목록에 모입니다'/);
+/* 보여 주기만 하는 단계다. 여기서 행을 눌러 재생기가 열리면 바로 다음 단계가
+   가르칠 것이 미리 일어난다. 만질 수 있는 것은 봉인 바깥의 '다음'뿐이다. */
+assert.match(guide,/if\(step\.seal\) sealFrame\(true\);/);
 assert.ok(guide.indexOf("title:'한 목록에 모입니다'")<guide.indexOf("title:'행을 누르면 재생기'"),
   '목록 전체가 한 행보다 먼저 온다');
 assert.match(guide,/before:doc=>\{ stopRowPlayback\(doc\); openList\(doc\); \}, title:'즐겨찾기 올리브'/);
@@ -798,10 +829,12 @@ assert.match(guide,/target:'#earLevels', hitOn:'\.pill'/);
 assert.match(guide,/if\(step\.hitOn && !\(event\.target\.closest && event\.target\.closest\(step\.hitOn\)\)\) return;/);
 assert.match(earTrainer,/classList\.toggle\('active', x\.dataset\.mode===mode\)/,'앱이 표시하는 방식이다');
 
-/* 한 번 누르면 곧바로 봉해 버려서 정작 '다시 듣기'를 눌러 볼 수가 없었다.
-   둘을 한 구멍에 넣고 여기서는 봉하지 않는다. 넘어가는 것은 사람이 정한다. */
-assert.match(guide,/target:'#earPlayBtn', also:'#earReplay'/);
+/* 한 번 누르면 곧바로 봉해 버려서 같은 버튼을 다시 눌러 볼 수가 없었다. 여기서는
+   봉하지 않는다. 다만 '다시 듣기'까지 한 구멍에 넣으면 둘을 감싼 네모가 되어 무엇을
+   누르라는 것인지 되레 흐려진다 — 올리브만 그 테두리대로 비추고 말로 일러 준다. */
+assert.doesNotMatch(guide,/also:'#earReplay'/,'올리브 하나만 비춘다');
 assert.match(guide,/hint:'눌러서 들어 보세요', keepOpen:true, linger:3200\}/);
+assert.match(guide,/아래 <b>다시 듣기<\/b>도 같은 일을 합니다/);
 assert.match(indexHtml,/<button class="link-btn" id="earReplay">다시 듣기<\/button>/);
 
 /* 맞혔을 때와 틀렸을 때는 화면이 하는 일이 전혀 다르다. 한데 뭉뚱그리면 둘 다 흐려진다.
@@ -829,6 +862,10 @@ assert.match(guide,/hint:'세 번쯤 눌러 보세요', presses:3, linger:900/);
 assert.match(guide,/target:'#rhyPlay', title:'들어 보기'/);
 assert.match(guide,/hint:'눌러서 들어 보세요', linger:4000/);
 assert.match(rhythm,/rhyPlay\.classList\.add\('on'\)/,'앱이 울리는 중임을 표시하는 방식');
+/* 리듬을 울린 채로 트랙으로 넘어가면 시끄럽기만 한 것이 아니라, 트랙의 메트로놈과
+   겹쳐 카운트인이 무엇인지 알아들을 수가 없다. 리듬 화면을 떠날 때 끈다. */
+assert.match(guide,/function stopRhythmIn\(doc\)/);
+assert.match(guide,/if\(step\.screen!=='trainer:rhythm'\) stopRhythmIn\(doc\);/);
 /* 리듬이 울린 채로 끝나면 그 소리도 함께 줄이고, 나갈 때 끈다. */
 assert.match(guide,/if\(rhy && rhy\.classList\.contains\('on'\)\) rhy\.click\(\)/);
 assert.match(guide,/\|\| \(rhy && rhy\.classList\.contains\('on'\)\)\)/,'소리가 남았는지 셀 때도');

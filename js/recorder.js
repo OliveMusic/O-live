@@ -1693,7 +1693,12 @@
     cloudBlobs.delete(recordingId);
   }
   function recordingCache(){ return window.OliveRecordingCache||null; }
+  /* 도움말 미리보기의 시연 녹음은 기기에 남기지 않는다. 프레임이 사는 동안은 메모리에
+     들고 있어 그대로 들리고, 챕터를 다시 시작하면 어차피 사라지는 줄이다. 캐시는
+     자리가 정해져 있어, 시연이 들어가면 진짜 녹음이 그만큼 밀려난다. */
+  const guidePreview=/[?&]guide=1(?:&|$)/.test(location.search);
   function cacheRowBlob(row,blob,userId){
+    if(guidePreview) return Promise.resolve(false);
     const cache=recordingCache();
     const ownerId=userId||currentUser&&currentUser.id||'';
     if(!cache || !ownerId) return Promise.resolve(false);
