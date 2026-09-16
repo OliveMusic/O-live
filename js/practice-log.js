@@ -36,10 +36,12 @@
   const app=document.getElementById('app');
 
   const STORE_KEY='olive-practice-log-v1';
-  /* 하루치 막대가 꽉 차는 기준. 세 시간 친 날 하나 때문에 나머지 날이 전부
-     납작해지면 달력이 쓸모없어지므로, 넘어가도 막대는 더 자라지 않는다. */
+  /* 가장 진한 칸이 되는 기준. 세 시간 친 날 하나 때문에 나머지 날이 전부
+     옅어지면 달력이 쓸모없어지므로, 넘어가도 더 진해지지 않는다. */
   const FULL_BAR_SECONDS=90*60;
-  const COLUMN_PX=25;
+  /* 농도는 이어지지 않고 다섯 단계로 끊는다. 이어진 농도는 서로 견줄 수가 없다 —
+     두 칸을 나란히 놓고도 어느 쪽이 더 진한지 눈으로 가리기 어렵다. */
+  const LEVELS=[.12,.3,.55,.85];
   const TICK_MS=10000;
   /* 너무 짧은 소리는 연습이 아니다. 코드 하나 눌러 본 것까지 쌓이면
      "1분 연습함" 같은 기록이 달력을 채운다. */
@@ -221,64 +223,34 @@
   shownMonth=new Date(shownMonth.getFullYear(),shownMonth.getMonth(),1);
   let selectedKey=todayKey();
 
+  /* 색 표 대신 눈금 하나. 칸 하나가 한 가지 농도이므로 도구별 색을 읽을 일이
+     없어졌고, 남는 것은 '옅으면 적게, 진하면 많이'뿐이다. */
   function buildLegend(){
     if(legendEl.childElementCount) return;
-    TOOL_ORDER.forEach(tool=>{
-      const item=document.createElement('span');
-      const swatch=document.createElement('i');
-      swatch.className='log-seg-'+tool;
-      item.appendChild(swatch);
-      item.appendChild(document.createTextNode(TOOL_NAMES[tool]));
-      legendEl.appendChild(item);
-    });
+    const low=document.createElement('span');
+    low.className='log-scale-end';
+    low.textContent='적게';
+    legendEl.appendChild(low);
+    for(let level=1;level<=LEVELS.length+1;level++){
+      const mark=document.createElement('i');
+      mark.dataset.level=String(level);
+      legendEl.appendChild(mark);
+    }
+    const high=document.createElement('span');
+    high.className='log-scale-end';
+    high.textContent='많이';
+    legendEl.appendChild(high);
   }
 
-  function makeColumn(day){
-    const wrap=document.createElement('span');
-    wrap.className='log-col-wrap';
-    const column=document.createElement('span');
-    column.className='log-col';
-    const total=totalSeconds(day);
-    if(total>0){
-      const height=Math.max(4,Math.round(Math.min(1,total/FULL_BAR_SECONDS)*COLUMN_PX));
-      /* 2px보다 얇게 그려질 도구는 마디로 그리지 않는다. 그렇게 얇은 띠는 읽히지도
-         않으면서 막대만 흐리게 만든다. 정확한 시간은 아래 상세에 그대로 있고,
-         막대의 전체 키는 언제나 그날 총 시간을 뜻한다. */
-      const parts=TOOL_ORDER
-        .map(tool=>({tool,seconds:Number(day[tool])||0}))
-        .filter(item=>item.seconds>0 && height*item.seconds/total>=2);
-      if(!parts.length){
-        // 전부 얇으면 가장 오래 잡은 것 하나로 막대를 채운다.
-        const top=TOOL_ORDER.reduce((at,tool)=>
-          (Number(day[tool])||0)>(Number(day[at])||0)?tool:at,TOOL_ORDER[0]);
-        parts.push({tool:top,seconds:total});
-      }
-      const sum=parts.reduce((at,item)=>at+item.seconds,0)||total;
-      let left=height;
-      parts.forEach(item=>{
-        item.span=Math.max(2,Math.round(height*item.seconds/sum));
-        left-=item.span;
-      });
-      // 반올림으로 남거나 모자란 만큼은 가장 긴 마디가 흡수한다. 마지막 마디에
-      // 떠넘기면 1px짜리 실오라기가 다시 생긴다.
-      if(left!==0){
-        let biggest=0;
-        parts.forEach((item,index)=>{ if(item.span>parts[biggest].span) biggest=index; });
-        parts[biggest].span=Math.max(2,parts[biggest].span+left);
-      }
-      parts.forEach(item=>{
-        const segment=document.createElement('i');
-        segment.className='log-seg-'+item.tool;
-        segment.style.height=item.span+'px';
-        column.appendChild(segment);
-      });
-    }else{
-      const rest=document.createElement('i');
-      rest.className='log-rest';
-      column.appendChild(rest);
-    }
-    wrap.appendChild(column);
-    return wrap;
+  /* 그날 총 시간을 다섯 단계 중 하나로 옮긴다. 소리 없이 청음만 한 날도
+     연습한 날이므로 가장 옅은 단계를 준다 — 빈칸으로 두면 쉰 날과 같아진다. */
+  function tintLevel(seconds,hasEar){
+    const total=Number(seconds)||0;
+    if(total<=0) return hasEar?1:0;
+    const ratio=Math.min(1,total/FULL_BAR_SECONDS);
+    let level=1;
+    LEVELS.forEach(edge=>{ if(ratio>=edge) level+=1; });
+    return level;
   }
 
   function renderCalendar(){
@@ -300,18 +272,18 @@
       cell.type='button';
       cell.className='ear-day log-day';
       cell.dataset.key=key;
-      if(totalSeconds(day)>0 || earFor(key)) cell.classList.add('has-record');
+      const total=totalSeconds(day);
+      const level=tintLevel(total,Boolean(earFor(key)));
+      if(level>0) cell.dataset.level=String(level);
       if(key===todayKey()) cell.classList.add('today');
       if(key===selectedKey) cell.classList.add('selected');
       if(key>todayKey()) cell.classList.add('log-future');
-      const total=totalSeconds(day);
       cell.setAttribute('aria-label',
-        `${month+1}월 ${date}일 ${total>0?formatSpan(total)+' 연습':'기록 없음'}`);
+        `${month+1}월 ${date}일 ${total>0?formatSpan(total)+' 연습':(level?'소리 없는 연습':'기록 없음')}`);
       const number=document.createElement('span');
       number.className='d';
       number.textContent=String(date);
       cell.appendChild(number);
-      cell.appendChild(makeColumn(day));
       gridEl.appendChild(cell);
     }
   }

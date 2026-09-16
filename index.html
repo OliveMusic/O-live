@@ -879,46 +879,50 @@
   }
   .cloud-sheet-close:active{background:var(--key-press);}
   /* ---------- 연습 기록 ----------
-     날짜 칸은 청음 기록 달력(.ear-day)을 그대로 쓴다. 다른 것은 칸 안에
-     세로 막대가 하나 선다는 점뿐이다.
+     날짜 칸은 청음 기록 달력(.ear-day)을 그대로 쓴다. 다른 것은 칸이 그날
+     연습한 만큼 물든다는 점뿐이다.
 
      활동 링을 쓰지 않은 이유: 링은 세 가지 색으로 세 지표를 나눈다. 이 앱에는
      색이 하나뿐이고, 세이지는 '작동 중'일 때만 쓴다는 규칙이 화면 전체를
-     지탱한다. 그래서 색 대신 높이와 농도로 바꿨다. 막대가 칸 아래쪽 같은
-     바닥선에 정렬되므로 한 주가 한 줄의 막대그래프로도 읽힌다. */
+     지탱한다. 그래서 색 대신 농도로 바꿨다.
+
+     칸 안에 작은 막대를 세워 봤지만(17×25px) 마디가 읽히지 않았고, 무엇보다
+     한 달을 훑을 때 어느 주에 많이 했는지가 눈에 들어오지 않았다. 칸 전체를
+     물들이면 많이 한 주가 통째로 진해져 한눈에 보인다. 도구별 구분은 날짜를
+     눌렀을 때 아래에 그대로 있다. */
   .log-sheet{ max-height:calc(100dvh - 56px); overflow-y:auto; }
   .log-sheet > h2{ margin-top:6px; }
   .log-grid{ margin-top:0; }
-  .log-day{ min-height:48px; justify-content:flex-start; gap:4px; }
-  .log-col-wrap{
-    width:17px; height:25px; margin-top:auto;
-    display:flex; align-items:flex-end;
-  }
-  .log-col{
-    width:100%; display:flex; flex-direction:column-reverse;
-    border-radius:3px; overflow:hidden;
-  }
-  .log-col i{ display:block; width:100%; }
-  /* 한 가지 색의 농도만으로 나눈다. 진할수록 오래 잡고 있는 도구다. */
+  .log-day{ min-height:46px; background:var(--key); }
+  /* 농도는 다섯 단계로 끊는다. 이어진 농도는 두 칸을 나란히 놓고도 어느 쪽이
+     더 진한지 눈으로 가리기 어렵다. */
+  .log-day[data-level="1"], .log-legend i[data-level="1"]{ background:rgba(var(--signal-rgb),.18); }
+  .log-day[data-level="2"], .log-legend i[data-level="2"]{ background:rgba(var(--signal-rgb),.38); }
+  .log-day[data-level="3"], .log-legend i[data-level="3"]{ background:rgba(var(--signal-rgb),.62); }
+  .log-day[data-level="4"], .log-legend i[data-level="4"]{ background:rgba(var(--signal-rgb),.85); }
+  .log-day[data-level="5"], .log-legend i[data-level="5"]{ background:rgba(var(--signal-rgb),1); }
+  .log-day[data-level] .d{ color:var(--ink); font-weight:600; }
+  /* 진한 칸에서는 잉크색 숫자가 묻힌다. 바탕 위에 얹는 글자색으로 바꾼다. */
+  .log-day[data-level="4"] .d, .log-day[data-level="5"] .d{ color:var(--on-signal); }
+  .log-day:active{ filter:brightness(.94); }
+  .log-day.log-future{ opacity:.32; }
+
+  /* 도구별 색 표는 상세에만 남는다. 칸 하나가 한 가지 농도이므로 달력에서
+     읽을 색이 없다. */
   .log-seg-met{ background:rgba(var(--signal-rgb),1); }
   .log-seg-jam{ background:rgba(var(--signal-rgb),.66); }
   .log-seg-trk{ background:rgba(var(--signal-rgb),.42); }
   .log-seg-rhy{ background:rgba(var(--signal-rgb),.24); }
   .log-seg-rec{ background:rgba(var(--signal-rgb),.84); }
-  /* 쉰 날은 빈칸이 아니라 바닥선으로 남긴다. 달력이 구멍 뚫린 표가 아니라
-     바닥이 있는 그래프로 읽히고, 쉰 날을 나무라지 않으면서 사실만 적는다. */
-  .log-rest{ background:var(--line); height:2px; border-radius:1px; }
-  .log-day.log-future{ opacity:.32; }
 
   .log-legend{
-    display:flex; flex-wrap:wrap; gap:5px 12px; margin:12px 0 0;
+    display:flex; align-items:center; gap:6px; margin:12px 0 0;
     justify-content:center;
   }
-  .log-legend span{
-    display:flex; align-items:center; gap:5px;
+  .log-legend .log-scale-end{
     font-size:0.5938rem; font-weight:500; color:var(--ink-3);
   }
-  .log-legend i{ width:9px; height:9px; border-radius:2px; display:block; }
+  .log-legend i{ width:17px; height:9px; border-radius:2px; display:block; }
 
   .log-detail{ margin-top:12px; padding-top:11px; border-top:1px solid var(--line-soft); }
   .log-detail-head{
@@ -3003,23 +3007,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=259"></script>
+<script src="app-version.js?v=260"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=259"></script>
-<script src="js/audio-runtime.js?v=259"></script>
-<script src="js/core.js?v=259"></script>
-<script src="js/metronome.js?v=259"></script>
-<script src="js/tuner-engine.js?v=259"></script>
-<script src="js/tuner.js?v=259"></script>
-<script src="js/scales.js?v=259"></script>
-<script src="js/ear-trainer.js?v=259"></script>
-<script src="js/rhythm-trainer.js?v=259"></script>
-<script src="js/recording-cache.js?v=259"></script>
-<script src="js/recorder.js?v=259"></script>
-<script src="js/practice-links.js?v=259"></script>
-<script src="js/jam-session.js?v=259"></script>
-<script src="js/practice-log.js?v=259"></script>
-<script src="js/app-shell.js?v=259"></script>
+<script src="cloud-sync.js?v=260"></script>
+<script src="js/audio-runtime.js?v=260"></script>
+<script src="js/core.js?v=260"></script>
+<script src="js/metronome.js?v=260"></script>
+<script src="js/tuner-engine.js?v=260"></script>
+<script src="js/tuner.js?v=260"></script>
+<script src="js/scales.js?v=260"></script>
+<script src="js/ear-trainer.js?v=260"></script>
+<script src="js/rhythm-trainer.js?v=260"></script>
+<script src="js/recording-cache.js?v=260"></script>
+<script src="js/recorder.js?v=260"></script>
+<script src="js/practice-links.js?v=260"></script>
+<script src="js/jam-session.js?v=260"></script>
+<script src="js/practice-log.js?v=260"></script>
+<script src="js/app-shell.js?v=260"></script>
 </body>
 </html>

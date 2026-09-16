@@ -70,15 +70,32 @@ for(const tool of segments){
 }
 assert.doesNotMatch(index,/\.log-seg-[a-z]+\{ background:(?!rgba\(var\(--signal-rgb\))/);
 
-/* 세 시간 친 날 하나 때문에 나머지가 전부 납작해지면 달력이 쓸모없어진다. */
+/* 세 시간 친 날 하나 때문에 나머지가 전부 옅어지면 달력이 쓸모없어진다. */
 assert.match(log,/const FULL_BAR_SECONDS=90\*60;/);
-/* 2px보다 얇게 그려질 마디는 읽히지도 않으면서 막대만 흐리게 만든다. */
-assert.match(log,/height\*item\.seconds\/total>=2/);
-/* 반올림 보정을 마지막 마디에 떠넘기면 1px짜리 실오라기가 생긴다. */
-assert.match(log,/parts\[biggest\]\.span=Math\.max\(2,parts\[biggest\]\.span\+left\);/);
-/* 쉰 날은 빈칸이 아니라 바닥선으로 남긴다. */
-assert.match(log,/className='log-rest'/);
-assert.match(index,/\.log-rest\{ background:var\(--line\); height:2px/);
+
+/* ---------- 달력은 칸을 물들인다 ----------
+   칸 안에 17×25px 막대를 세워 봤지만 마디가 읽히지 않았고, 무엇보다 한 달을
+   훑을 때 어느 주에 많이 했는지가 눈에 들어오지 않았다. 칸 전체를 물들이면
+   많이 한 주가 통째로 진해져 한눈에 보인다. */
+assert.doesNotMatch(log,/makeColumn|log-col|log-rest|COLUMN_PX/,'막대는 걷었다');
+assert.doesNotMatch(index,/\.log-col|\.log-rest/);
+/* 농도는 이어지지 않고 다섯 단계로 끊는다. 이어진 농도는 두 칸을 나란히 놓고도
+   어느 쪽이 더 진한지 눈으로 가리기 어렵다. */
+assert.match(log,/const LEVELS=\[\.12,\.3,\.55,\.85\];/);
+assert.match(log,/function tintLevel\(seconds,hasEar\)/);
+for(const [level,alpha] of [[1,'.18'],[2,'.38'],[3,'.62'],[4,'.85'],[5,'1']]){
+  assert.ok(index.includes(
+    `.log-day[data-level="${level}"], .log-legend i[data-level="${level}"]{ background:rgba(var(--signal-rgb),${alpha}); }`),
+    `${level}단계 농도가 있다`);
+}
+/* 소리 없이 청음만 한 날도 연습한 날이다. 빈칸으로 두면 쉰 날과 같아진다. */
+assert.match(log,/if\(total<=0\) return hasEar\?1:0;/);
+/* 진한 칸에서는 잉크색 숫자가 묻힌다. */
+assert.match(index,/\.log-day\[data-level="4"\] \.d, \.log-day\[data-level="5"\] \.d\{ color:var\(--on-signal\); \}/);
+/* 도구별 색 표 대신 눈금 하나. 칸 하나가 한 가지 농도라 읽을 색이 없다. */
+assert.match(log,/low\.textContent='적게';/);
+assert.match(log,/high\.textContent='많이';/);
+assert.doesNotMatch(log,/legendEl\.appendChild\(item\)/,'도구 이름을 늘어놓던 범례는 없다');
 
 /* 정해 둔 display는 UA의 [hidden]{display:none}을 이긴다. 이 줄이 없으면
    기록 없는 날에도 빈 상세 상자가 보인다. */

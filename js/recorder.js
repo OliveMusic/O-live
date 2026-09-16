@@ -1297,9 +1297,20 @@
     try{
       setAudioSession('play-and-record');
 
-      /* 메트로놈을 마이크보다 '먼저' 켠다. 캡처 그래프를 다 세운 뒤에 켜면
+      /* 마이크부터 받는다. 권한 창이 뜨는 동안 카운트인이 먼저 돌면, 허용을 누를
+         즈음 한 마디가 이미 지나가 있다. 세는 소리를 듣고 들어와야 할 사람에게는
+         그 녹음이 통째로 어긋난 것이다. 거절당했을 때 메트로놈을 켰다 끄는 헛일도
+         하지 않는다. */
+      recordState.textContent='마이크 연결 중…';
+      stream=await navigator.mediaDevices.getUserMedia({audio:{
+        channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false,
+      }});
+      if(token!==startToken || !startPending){ finishAudioSession(); return; }
+
+      /* 메트로놈은 캡처 그래프보다 '먼저' 켠다. 그래프를 다 세운 뒤에 켜면
          메트로놈이 오디오 컨텍스트를 갈아 끼우면서 방금 만든 그래프가 끊어진다.
-         입력 레벨 막대가 죽고, MediaRecorder가 끊긴 스트림을 물고 있게 된다. */
+         입력 레벨 막대가 죽고, MediaRecorder가 끊긴 스트림을 물고 있게 된다.
+         스트림은 아직 어느 컨텍스트에도 붙지 않았으므로 여기서 켜도 안전하다. */
       let counting=null;
       if(metroArmed){
         counting=armCountIn(token);
@@ -1309,15 +1320,10 @@
           cancelCountIn(); finishAudioSession(); return;
         }
       }
-      if(!counting) recordState.textContent='마이크 연결 중…';
 
       // 메트로놈까지 켜진 상태에서 재야 어느 소리를 이어 갈지 제대로 판단한다.
       const preservePlayback=anySounding();
       let ctx=await ensureRecordingCtx(preservePlayback);
-      if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
-      stream=await navigator.mediaDevices.getUserMedia({audio:{
-        channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false,
-      }});
       if(token!==startToken || !startPending){ cancelCountIn(); finishAudioSession(); return; }
       if(ctx!==audioCtx || ctx.state!=='running'){
         ctx=await ensureRecordingCtx(preservePlayback && anySounding());
@@ -1383,12 +1389,28 @@
       startPending=false; recording=false;
       cancelCountIn(); stopRecorderMetronome();
       finishAudioSession(); renderIdle();
-      const message=error && error.name==='NotAllowedError' ? '마이크 권한이 필요합니다'
-        : error && error.name==='NotReadableError' ? '마이크가 다른 앱에서 사용 중입니다'
+      if(error && error.name==='NotAllowedError'){ explainMicDenied(); return; }
+      const message=error && error.name==='NotReadableError' ? '마이크가 다른 앱에서 사용 중입니다'
         : error && error.name==='NotFoundError' ? '사용할 수 있는 마이크가 없습니다'
         : '녹음을 시작하지 못했습니다. 다시 시도해 주세요';
       setMessage(message,true);
     }
+  }
+  /* 권한 창을 앱이 다시 띄울 수는 없다. 한 번 '허용 안 함'을 누르면 브라우저가
+     기억해 두고, 그다음부터 getUserMedia는 창도 없이 곧바로 거절한다. 그래서
+     둘을 갈라 말해 준다 — 창을 닫아 버린 것뿐이면 다시 누르면 또 물어보고,
+     막아 둔 것이면 설정에서 풀어야 한다. Permissions API가 없는 브라우저
+     (사파리 다수)에서는 가릴 수 없으므로 다시 눌러 보라고 한다. */
+  function explainMicDenied(){
+    const askAgain='마이크 권한이 필요합니다 · 다시 눌러 허용해 주세요';
+    const blocked='마이크가 차단되어 있습니다 · 브라우저 설정에서 이 사이트의 마이크를 허용해 주세요';
+    setMessage(askAgain,true);
+    let query=null;
+    try{ query=navigator.permissions && navigator.permissions.query({name:'microphone'}); }catch(e){}
+    if(!query || typeof query.then!=='function') return;
+    query.then(status=>{
+      if(status && status.state==='denied') setMessage(blocked,true);
+    }).catch(()=>{});
   }
   function stopRecording(){
     if(startPending){

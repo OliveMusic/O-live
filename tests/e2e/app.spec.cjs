@@ -2545,10 +2545,15 @@ test('연습 기록은 소리가 난 시간만 세고 튜너는 세지 않는다
   await expect(page.locator('#practiceLogFull')).toContainText('메트로놈');
   await expect(page.locator('#practiceLogFull')).not.toContainText('BPM');
 
-  // 연습한 날은 막대가 서고, 아직 오지 않은 날은 바닥선만 남는다.
-  const bars=await page.locator('#practiceLogGrid .log-day.today .log-col i').count();
-  expect(bars).toBeGreaterThan(0);
-  expect(await page.locator('#practiceLogGrid .log-rest').count()).toBeGreaterThan(0);
+  // 연습한 날은 칸이 물들고, 쉰 날은 물들지 않는다.
+  await expect(page.locator('#practiceLogGrid .log-day.today')).toHaveAttribute('data-level',/[1-5]/);
+  const tinted=await page.locator('#practiceLogGrid .log-day[data-level]').count();
+  const plain=await page.locator('#practiceLogGrid .log-day:not([data-level])').count();
+  expect(tinted).toBeGreaterThan(0);
+  expect(plain).toBeGreaterThan(0);
+  // 진하기를 읽는 눈금이 달력 아래에 있다.
+  await expect(page.locator('#practiceLogLegend')).toContainText('적게');
+  await expect(page.locator('#practiceLogLegend')).toContainText('많이');
 
   await page.locator('#practiceLogClose').click();
   await expect(page.locator('#practiceLogSheet')).toBeHidden();
