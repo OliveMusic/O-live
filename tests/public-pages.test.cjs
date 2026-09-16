@@ -457,6 +457,14 @@ assert.match(indexHtml,/<div class="trainer-pane active" id="pane-record">/);
    상자가 화면보다 그만큼 길어지고(다이나믹 아일랜드 기기에서 62px), 화면보다 큰 뿌리
    레이어가 생긴다. 그 레이어에 그려지는 것은 상단바뿐이라(본문은 main의 스크롤 레이어,
    탭바는 fixed로 각자 제 레이어를 갖는다) 상단바만 흐리게 래스터됐다. */
+/* 홈 화면 앱(standalone)에서는 iOS가 확대 잠금을 실제로 지킨다. 그러면 화면을 한 번
+   고정 해상도로 구워 두고 재사용해서 작고 연한 글씨가 흐릿하게 나온다 — 같은 앱이라도
+   잠금이 없는 도움말 페이지는 또렷했다. 더블탭 확대는 버튼마다 touch-action으로 이미
+   막고 있으니 이 메타는 하는 일도 없었다. */
+assert.doesNotMatch(indexHtml,/<meta name="viewport"[^>]*(maximum-scale|user-scalable)/,
+  '확대 잠금은 걸지 않는다');
+assert.match(indexHtml,/<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/);
+assert.match(indexHtml,/button, \.pill, \.btn[^}]*touch-action:manipulation;/,'더블탭 확대는 여기서 막는다');
 assert.match(indexHtml,/padding-top:env\(safe-area-inset-top\);/);
 assert.match(indexHtml,/height:calc\(100vh - env\(safe-area-inset-top\)\);\s*\n\s*height:calc\(100dvh - env\(safe-area-inset-top\)\);/);
 assert.doesNotMatch(indexHtml,/#app\{display:flex; flex-direction:column; height:100vh; height:100dvh;\}/);
