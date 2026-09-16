@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>조옮김 계측</title>
+<style>
+  :root{
+    --body:#d3d2cc; --panel:#e5e3dd; --key:#eae8e2;
+    --ink:#1c1c1a; --ink-2:#5d5d57; --ink-3:#918f88;
+    --line:#bab8b0; --signal:#687c52; --on-signal:#fff; --error:#8b514a;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --body:#22221f; --panel:#1c1c19; --key:#302f2b;
+      --ink:#e9e7df; --ink-2:#9e9c94; --ink-3:#6f6e67;
+      --line:#3b3a35; --signal:#97a982; --on-signal:#1e2417; --error:#9d625a;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:20px 16px 40px; background:var(--body); color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1{font-size:19px; margin:0 0 6px; font-weight:600;}
+  .lead{margin:0 0 18px; color:var(--ink-2); font-size:13px;}
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:15px;
+    padding:16px; margin-bottom:12px;
+  }
+  button{
+    font:inherit; font-weight:600; min-height:48px; padding:0 18px; width:100%;
+    border-radius:10px; border:1px solid var(--line); background:var(--key); color:var(--ink);
+    touch-action:manipulation;
+  }
+  button.go{background:var(--signal); border-color:var(--signal); color:var(--on-signal);}
+  button:disabled{opacity:.4}
+  label{display:block; font-size:12px; color:var(--ink-3); margin:14px 0 4px;}
+  input[type=range]{width:100%; height:44px; touch-action:manipulation;}
+  .big{font-size:34px; font-weight:200; letter-spacing:-.03em; font-variant-numeric:tabular-nums;}
+  .row{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-top:8px;}
+  .row span:first-child{color:var(--ink-3); font-size:12px;}
+  .row span:last-child{font-variant-numeric:tabular-nums; font-weight:600;}
+  .hot{color:var(--error);}
+  pre{
+    background:var(--key); border-radius:10px; padding:12px; margin:10px 0 0;
+    font:11px/1.5 ui-monospace,Menlo,monospace; white-space:pre-wrap; word-break:break-all;
+    color:var(--ink-2); max-height:220px; overflow:auto;
+  }
+  .hint{font-size:12px; color:var(--ink-3); margin:10px 0 0;}
+</style>
+</head>
+<body>
+<h1>조옮김 계측</h1>
+<p class="lead">앱과 같은 SoundTouch 경로로 소리를 내고, 슬라이더를 움직이는 동안 파이프가 굶는지 셉니다.
+소리가 실제로 나야 하니 <b>무음 스위치를 끄고</b> 볼륨을 올려 주세요.</p>
+
+<div class="card">
+  <button class="go" id="start" type="button">소리 켜기</button>
+  <label for="tr">조옮김 — 앱처럼 드래그해 보세요</label>
+  <input type="range" id="tr" min="-12" max="12" step="1" value="0" disabled>
+  <div class="row"><span>지금 조옮김</span><span id="trv">0</span></div>
+</div>
+
+<div class="card">
+  <div class="row"><span>지난 3초 언더런</span><span class="big" id="recent">—</span></div>
+  <div class="row"><span>전체 언더런 / 블록</span><span id="total">—</span></div>
+  <div class="row"><span>버퍼에 남은 프레임</span><span id="buf">—</span></div>
+  <p class="hint">언더런은 파이프가 요청받은 만큼을 못 내놓은 횟수입니다.
+  버벅일 때 이 숫자가 같이 뛰면 원인이 파이프고, 안 뛰면 다른 데 있습니다.</p>
+</div>
+
+<div class="card">
+  <button id="mark" type="button" disabled>지금 버벅였다</button>
+  <p class="hint">버벅이는 소리가 들린 순간 눌러 주세요. 그 시점의 숫자를 아래에 적어 둡니다.</p>
+  <pre id="log">아직 없음</pre>
+</div>
+
+<div class="card">
+  <button id="copy" type="button">기록 복사하기</button>
+  <p class="hint">복사해서 그대로 붙여 주시면 됩니다.</p>
+</div>
+
+<script>
+(function(){
+  const startBtn=document.getElementById('start');
+  const markBtn=document.getElementById('mark');
+  const copyBtn=document.getElementById('copy');
+  const slider=document.getElementById('tr');
+  const trv=document.getElementById('trv');
+  const recentEl=document.getElementById('recent');
+  const totalEl=document.getElementById('total');
+  const bufEl=document.getElementById('buf');
+  const logEl=document.getElementById('log');
+
+  const lines=[];
+  let ctx=null,node=null,source=null,gain=null;
+  const history=[];          // {at, under, blocks, buf}
+  let dragging=false, lastDragAt=0;
+
+  function note(text){
+    lines.push(text);
+    logEl.textContent=lines.join('\n');
+    logEl.scrollTop=logEl.scrollHeight;
+  }
+  function envLine(){
+    const ua=navigator.userAgent;
+    return 'env · '+(ctx?ctx.sampleRate+'Hz base'+(ctx.baseLatency||0).toFixed(4):'?')
+      +' · '+(window.matchMedia('(prefers-reduced-motion:reduce)').matches?'동작줄이기 켜짐':'동작줄이기 꺼짐')
+      +'\n'+ua;
+  }
+  function makeBuffer(){
+    const seconds=12;
+    const buffer=ctx.createBuffer(2,Math.floor(ctx.sampleRate*seconds),ctx.sampleRate);
+    for(let ch=0;ch<2;ch++){
+      const data=buffer.getChannelData(ch);
+      for(let i=0;i<data.length;i++){
+        const t=i/ctx.sampleRate;
+        data[i]=(Math.sin(2*Math.PI*196*t)*.5
+                +Math.sin(2*Math.PI*392*t)*.25
+                +Math.sin(2*Math.PI*588*t)*.12)*.22;
+      }
+    }
+    return buffer;
+  }
+  function latest(){ return history.length?history[history.length-1]:null; }
+  function recentUnderruns(spanMs){
+    const now=performance.now();
+    const old=history.filter(m=>now-m.at<=spanMs)[0]||history[0];
+    const last=latest();
+    return (old&&last)?last.under-old.under:0;
+  }
+  function paint(){
+    const last=latest();
+    if(!last) return;
+    const recent=recentUnderruns(3000);
+    recentEl.textContent=recent;
+    recentEl.classList.toggle('hot',recent>3);
+    totalEl.textContent=last.under+' / '+last.blocks;
+    bufEl.textContent=last.buf;
+  }
+
+  async function start(){
+    startBtn.disabled=true;
+    startBtn.textContent='켜는 중…';
+    try{
+      ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+      await ctx.resume();
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?diag=1');
+      source=ctx.createBufferSource();
+      source.buffer=makeBuffer();
+      source.loop=true;
+      source.loopStart=1;
+      source.loopEnd=4;
+      node=new AudioWorkletNode(ctx,'soundtouch-processor',{
+        numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],
+        processorOptions:{sampleBufferType:'circular'},
+      });
+      node.parameters.get('playbackRate').value=1;
+      node.parameters.get('pitch').value=1;
+      gain=ctx.createGain();
+      gain.gain.value=.5;
+      source.connect(node).connect(gain).connect(ctx.destination);
+      node.port.onmessage=event=>{
+        const data=event.data;
+        if(!data||data.type!=='metrics') return;
+        history.push({at:performance.now(),under:Number(data.underrunCount)||0,
+          blocks:Number(data.blockCount)||0,buf:Number(data.framesBuffered)||0});
+        if(history.length>400) history.shift();
+        paint();
+      };
+      try{ node.port.start(); }catch(e){}
+      source.start(0,1);
+      slider.disabled=false;
+      markBtn.disabled=false;
+      startBtn.textContent='소리 켜짐';
+      note(envLine());
+      note('시작');
+    }catch(error){
+      startBtn.disabled=false;
+      startBtn.textContent='소리 켜기';
+      note('실패: '+(error&&error.message||error));
+    }
+  }
+
+  slider.addEventListener('input',()=>{
+    trv.textContent=slider.value;
+    if(!node) return;
+    if(!dragging){ dragging=true; note('드래그 시작 @'+(latest()?latest().under:0)+'회'); }
+    lastDragAt=performance.now();
+    node.parameters.get('pitch').setValueAtTime(
+      Math.pow(2,Number(slider.value)/12),ctx.currentTime);
+  });
+  slider.addEventListener('change',()=>{
+    dragging=false;
+    const last=latest();
+    note('손 뗌 · 누적 '+(last?last.under:0)+'회 · 지난 3초 '+recentUnderruns(3000)+'회');
+  });
+  markBtn.addEventListener('click',()=>{
+    const last=latest();
+    note('▲ 버벅임 · 누적 '+(last?last.under:0)+'회 · 지난 3초 '+recentUnderruns(3000)
+      +'회 · 버퍼 '+(last?last.buf:'?')+' · 조옮김 '+slider.value
+      +(performance.now()-lastDragAt<400?' · 드래그 중':' · 손 뗀 뒤'));
+  });
+  copyBtn.addEventListener('click',async()=>{
+    const text=lines.join('\n');
+    try{ await navigator.clipboard.writeText(text); copyBtn.textContent='복사했습니다'; }
+    catch(error){ copyBtn.textContent='복사 실패 — 아래 글을 직접 선택해 주세요'; }
+    setTimeout(()=>{ copyBtn.textContent='기록 복사하기'; },2000);
+  });
+  startBtn.addEventListener('click',start);
+})();
+</script>
+</body>
+</html>
