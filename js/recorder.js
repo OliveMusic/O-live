@@ -140,6 +140,7 @@
   let cloudTransportPlayPromise=null;
   let cloudTransportPlayGeneration=0;
   let cloudStretchNode=null;
+  let cloudStretchOpenTimer=0;
   let cloudMediaUsesPersistentNative=false;
   let cloudNativeInternalPause=false;
   let cloudNativeIgnorePauseUntil=0;
@@ -1551,6 +1552,8 @@
     cloudProgressFrame=requestAnimationFrame(tick);
   }
   function releaseCloudSource(){
+    // 열어 주기로 한 예약도 함께 거둔다. 놓아 준 게인을 뒤늦게 열면 안 된다.
+    clearTimeout(cloudStretchOpenTimer); cloudStretchOpenTimer=0;
     const source=cloudSource;
     cloudSource=null;
     if(source){
@@ -1768,6 +1771,10 @@
      연다. 조옮김을 처음 걸 때만 두드러졌던 이유는, 그 뒤로는 노드가 이미 있어
      파라미터만 바뀌기 때문이다. */
   const STRETCH_PRIME_SECONDS=.28;
+  /* 다 찼다고 볼 프레임 수. 한 렌더 블록이 128프레임이니 여덟 블록쯤이면 넉넉하다. */
+  const STRETCH_READY_FRAMES=1024;
+  /* 워클릿이 끝내 아무 말이 없어도 소리는 나야 한다. */
+  const STRETCH_PRIME_MAX_MS=700;
   function startDecodedSource(ctx,buffer,row,token,offset,fadeIn){
     try{
       releaseCloudSource();
@@ -1800,12 +1807,11 @@
       startAt-=backUp;
       if(fadeIn || stretching){
         const open=ctx.currentTime;
-        const opens=open+prime;
         try{
           gain.gain.setValueAtTime(.0001,open);
-          if(prime>0) gain.gain.setValueAtTime(.0001,opens);
-          gain.gain.linearRampToValueAtTime(Math.max(.0001,level),opens+.035);
-        }catch(error){ gain.gain.value=level; }
+          /* 스트레처는 다 찼다는 기별이 올 때 연다. 아래에서 예약한다. */
+          if(!stretching) gain.gain.linearRampToValueAtTime(Math.max(.0001,level),open+.035);
+        }catch(error){ if(!stretching) gain.gain.value=level; }
       }
       try{ source.playbackRate.value=rate; }catch(error){}
       if(stretching){
@@ -1819,6 +1825,33 @@
         if(stretchPitch) stretchPitch.value=transposeRatio(rowTranspose(row));
         source.connect(stretch).connect(gain);
         cloudStretchNode=stretch;
+        /* 파이프가 찼다고 알려 올 때 소리를 연다. 차는 데 걸리는 시간은 기기마다
+           다르므로 고정한 시간으로 맞히면 어디선가는 모자라고 어디선가는 길다.
+           워클릿은 100블록마다 버퍼 상태를 보내 온다. 기별이 끝내 없으면 한도
+           뒤에 그냥 연다 — 소리가 영영 닫혀 있는 것이 제일 나쁘다. */
+        let opened=false;
+        const openOutput=()=>{
+          if(opened || cloudGainNode!==gain) return;
+          opened=true;
+          clearTimeout(cloudStretchOpenTimer); cloudStretchOpenTimer=0;
+          const now=ctx.currentTime;
+          try{
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(.0001,now);
+            gain.gain.linearRampToValueAtTime(Math.max(.0001,level),now+.035);
+          }catch(error){ gain.gain.value=level; }
+        };
+        /* 기별을 듣는 것은 곁다리다. 창구가 없다고 재생이 통째로 무너지면 안 된다. */
+        try{
+          stretch.port.onmessage=event=>{
+            const data=event.data;
+            if(!data || data.type!=='metrics') return;
+            if(Number(data.framesBuffered)>=STRETCH_READY_FRAMES) openOutput();
+          };
+          if(typeof stretch.port.start==='function') stretch.port.start();
+        }catch(error){}
+        clearTimeout(cloudStretchOpenTimer);
+        cloudStretchOpenTimer=setTimeout(openOutput,STRETCH_PRIME_MAX_MS);
       }else source.connect(gain);
       gain.connect(cloudOutputDestination(ctx));
       source.onended=()=>{

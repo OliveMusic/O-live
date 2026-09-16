@@ -351,6 +351,9 @@ async function preparePage(page,{
           node.gain={
             value:1,
             setValueAtTime(value){ this.value=value; },
+            /* 진짜 GainNode에는 이것도 있다. 없는 채로 두었더니 앱이 부르다
+               던져서, 검사가 늘 예외 처리 쪽만 지나갔다. */
+            linearRampToValueAtTime(value){ this.value=value; },
             exponentialRampToValueAtTime(value){ this.value=value; },
             setTargetAtTime(value){ this.value=value; },
             cancelScheduledValues(){},
@@ -415,6 +418,10 @@ async function preparePage(page,{
           this.parameters=new Map([
             ['pitch',makeParam()],['pitchSemitones',makeParam()],['playbackRate',makeParam()],
           ]);
+          /* 진짜 워클릿 노드에는 언제나 port가 있다. 없는 채로 두었더니 앱이
+             거기에 기별을 걸다 던졌고, 그 예외가 재생 전체를 무너뜨렸다. */
+          this.port={onmessage:null,start(){},close(){},
+            postMessage(data){ if(typeof this.onmessage==='function') this.onmessage({data}); }};
           harness.workletNode=this;
           harness.workletName=name;
         }
@@ -2620,4 +2627,54 @@ test('이미 울리던 메트로놈도 녹음을 시작하면 처음부터 다�
   // 녹음을 멈추면 우리가 켠 메트로놈도 함께 멈춘다.
   await page.locator('#recordToggle').click();
   await expect.poll(()=>page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeFalsy();
+});
+
+/* 조옮김을 처음 걸면 SoundTouch 파이프가 빈 출력 버퍼로 시작해 ¼초쯤 굶는다.
+   굶은 스트레처는 그레인을 되풀이하고, 그것이 '아주 짧게 여러 번 되풀이되는'
+   소리다. 그동안은 소리를 닫아 두고, 파이프가 다 찼다고 알려 올 때 연다. */
+test('조옮김을 걸면 스트레처가 찰 때까지 소리를 닫아 둔다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    microphone:'playback',
+    recordings:[{
+      id:'rec-stretch',title:'스트레처',object_path:'recording-browser-user/rec-stretch.m4a',
+      duration_ms:8000,byte_size:1000,mime_type:'audio/mp4',playback_gain:1,
+      waveform:Array.from({length:80},(_,index)=>18+(index*17)%82),
+      recorded_at:'2026-09-06T09:00:00.000Z',created_at:'2026-09-06T09:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+  await page.locator('#recordList .record-row-open').click();
+  await expect(page.locator('.record-waveform')).toBeVisible();
+  await page.locator('.record-player-play').click();
+  await resolveRecordingDownload(page);
+
+  // 조옮김을 걸면 SoundTouch 경로로 갈아탄다.
+  const transpose=page.locator('.record-transpose-control input[type="range"]');
+  await transpose.evaluate(el=>{
+    el.value='2';
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+    el.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await expect.poll(()=>page.evaluate(()=>Boolean(window.__micHarness.workletNode))).toBeTruthy();
+
+  /* 아직 기별이 없으니 소리는 닫혀 있어야 한다. */
+  const closed=await page.evaluate(()=>{
+    const gains=window.__micHarness.gainNodes;
+    return gains[gains.length-1].gain.value;
+  });
+  expect(closed).toBeLessThan(.01);
+
+  /* 다 찼다고 알려 오면 연다. 기기마다 차는 시간이 달라 고정한 시간으로는
+     어디선가 모자라고 어디선가 길다. */
+  await page.evaluate(()=>{
+    window.__micHarness.workletNode.port.postMessage({type:'metrics',framesBuffered:4096,
+      underrunCount:0,blockCount:100,outputRms:.1,outputPeak:.2});
+  });
+  await expect.poll(()=>page.evaluate(()=>{
+    const gains=window.__micHarness.gainNodes;
+    return gains[gains.length-1].gain.value;
+  })).toBeGreaterThan(.5);
 });

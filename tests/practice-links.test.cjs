@@ -104,6 +104,13 @@ assert.match(recorder,/const stretching=needsPitchProcessing\(row\) && typeof Au
    그동안은 소리를 닫아 두고 실제 소리로 파이프를 채운다. */
 assert.match(recorder,/const STRETCH_PRIME_SECONDS=\.28;/);
 assert.match(recorder,/const prime=stretching \? STRETCH_PRIME_SECONDS : 0;/);
+/* 차는 데 걸리는 시간은 기기마다 다르다. 고정한 시간으로 맞히면 어디선가는
+   모자라고 어디선가는 길다 — 워클릿이 다 찼다고 알려 올 때 연다. */
+assert.match(recorder,/const STRETCH_READY_FRAMES=1024;/);
+assert.match(recorder,/if\(Number\(data\.framesBuffered\)>=STRETCH_READY_FRAMES\) openOutput\(\);/);
+/* 기별이 끝내 없어도 소리는 나야 한다. 영영 닫혀 있는 것이 제일 나쁘다. */
+assert.match(recorder,/cloudStretchOpenTimer=setTimeout\(openOutput,STRETCH_PRIME_MAX_MS\);/);
+assert.match(recorder,/clearTimeout\(cloudStretchOpenTimer\); cloudStretchOpenTimer=0;\s*const source=cloudSource;/);
 /* 채우는 동안에도 소리는 흐르므로 그만큼 앞에서 시작해야 들리는 자리가 맞는다. */
 assert.match(recorder,/const backUp=Math\.min\(prime,Math\.max\(0,startAt\)\);\s*startAt-=backUp;/);
 assert.doesNotMatch(recorder,/if\(rate!==1 && typeof AudioWorkletNode/);
