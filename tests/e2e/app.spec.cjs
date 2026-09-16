@@ -495,7 +495,7 @@ async function preparePage(page,{
   });
   const response=await page.goto('/',{waitUntil:'domcontentloaded'});
   expect(response && response.ok()).toBeTruthy();
-  await expect(page.locator('#appVersion')).toHaveText('버전 '+RELEASE.version+' · '+RELEASE.build);
+  await expect(page.locator('#appVersion')).toHaveText('버전 '+RELEASE.version);
 }
 
 async function expandRecordList(page){

@@ -77,9 +77,9 @@
 const release=window.OLIVE_RELEASE||{version:'0.0.0',build:'dev'};
 const appVersion=document.getElementById('appVersion');
 if(appVersion){
-  /* 빌드까지 적는다. 버전만 적으면 같은 버전으로 여러 번 배포했을 때 지금
-     기기에 무엇이 깔렸는지 화면에서 알 수 없다. */
-  appVersion.textContent='버전 '+release.version+' · '+release.build;
+  /* 버전만 적는다. 빌드는 캐시를 가르는 내부 번호이고, 배포할 때마다 버전도 함께
+     올리므로 화면에 둘을 같이 적으면 같은 말을 두 번 하는 셈이다. */
+  appVersion.textContent='버전 '+release.version;
   if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('app:ready');
 }
 /* 도움말이 띄우는 미리보기 프레임은 서비스 워커를 건드리지 않는다.

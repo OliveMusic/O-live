@@ -1,4 +1,4 @@
-importScripts('./app-version.js?v=256');
+importScripts('./app-version.js?v=257');
 
 /* 파일을 갱신했는데 화면이 그대로라면 대개 이 파일 때문이다.
    예전 방식(캐시 우선)은 캐시에 있으면 네트워크를 아예 보지 않아
@@ -19,26 +19,26 @@ const ASSETS = [
   './guide.html',
   './privacy.html',
   './terms.html',
-  './info.css?v=256',
+  './info.css?v=257',
   './manifest.json',
-  './app-version.js?v=256',
+  './app-version.js?v=257',
   './cloud-config.js?v=92',
-  './cloud-sync.js?v=256',
-  './js/audio-runtime.js?v=256',
-  './js/core.js?v=256',
-  './js/metronome.js?v=256',
-  './js/tuner-engine.js?v=256',
-  './js/tuner.js?v=256',
-  './js/scales.js?v=256',
-  './js/ear-trainer.js?v=256',
-  './js/rhythm-trainer.js?v=256',
-  './js/recording-cache.js?v=256',
-  './js/recorder.js?v=256',
-  './js/practice-links.js?v=256',
-  './js/jam-session.js?v=256',
-  './js/practice-log.js?v=256',
-  './js/app-shell.js?v=256',
-  './vendor/soundtouch/soundtouch-processor.js?v=256',
+  './cloud-sync.js?v=257',
+  './js/audio-runtime.js?v=257',
+  './js/core.js?v=257',
+  './js/metronome.js?v=257',
+  './js/tuner-engine.js?v=257',
+  './js/tuner.js?v=257',
+  './js/scales.js?v=257',
+  './js/ear-trainer.js?v=257',
+  './js/rhythm-trainer.js?v=257',
+  './js/recording-cache.js?v=257',
+  './js/recorder.js?v=257',
+  './js/practice-links.js?v=257',
+  './js/jam-session.js?v=257',
+  './js/practice-log.js?v=257',
+  './js/app-shell.js?v=257',
+  './vendor/soundtouch/soundtouch-processor.js?v=257',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
@@ -88,9 +88,14 @@ self.addEventListener('fetch', (e) => {
     documentUrl.hash = '';
     const cacheKey = documentUrl.toString();
 
-    // 네트워크 우선 — 갱신이 바로 반영된다
+    /* 네트워크 우선 — 갱신이 바로 반영된다.
+       다만 그냥 fetch(req)를 쓰면 브라우저의 HTTP 캐시가 먼저 답한다. GitHub
+       Pages가 문서에 max-age=600을 붙이므로, 배포한 지 10분이 안 된 사이에는
+       예전 문서를 그대로 내주어 '네트워크 우선'이라는 말이 무색해졌다 — 고쳐
+       올렸는데 앱에서는 그대로이던 까닭이다. 서버에 반드시 물어보게 한다.
+       바뀐 것이 없으면 304라 값은 거의 들지 않는다. */
     e.respondWith(
-      fetch(req)
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
         .then(async (res) => {
           if (res.ok) {
             const copy = res.clone();

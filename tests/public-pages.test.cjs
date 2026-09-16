@@ -83,9 +83,10 @@ for(const [label,text] of [['index.html',indexHtml],['guide.html',guide]]){
 }
 /* 버전은 이제 아무 동작도 없다. 누를 수 있게 보이면 안 된다. */
 assert.match(index,/<p class="app-version" id="appVersion"><\/p>/);
-/* 빌드까지 적는다. 버전만 적으면 같은 버전으로 여러 번 배포했을 때 지금 기기에
-   무엇이 깔렸는지 화면에서 알 수 없다. */
-assert.match(index,/appVersion\.textContent='버전 '\+release\.version\+' · '\+release\.build/);
+/* 버전만 적는다. 빌드는 캐시를 가르는 내부 번호다 — 배포할 때마다 버전도 함께
+   올리므로 화면에 둘을 같이 적으면 같은 말을 두 번 하는 셈이다. */
+assert.match(index,/appVersion\.textContent='버전 '\+release\.version;/);
+assert.doesNotMatch(index,/appVersion\.textContent=[^;]*release\.build/,'화면에는 빌드를 적지 않는다');
 assert.doesNotMatch(index,/진단 기록 복사/,'진단 복사 UI는 걷어냈다');
 assert.doesNotMatch(index,/exportText/,'내보내기 경로도 남기지 않는다');
 /* 추적은 메모리에만 남고 기기에 저장하지 않는다. 예전 기록은 한 번 지운다. */
@@ -94,8 +95,20 @@ assert.match(index,/localStorage\.removeItem\('olive-audio-diagnostics-v1'\)/);
 assert.match(index,/media-action:seekforward/);
 assert.match(index,/tempo:applied/);
 assert.doesNotMatch(index,new RegExp(`빌드 ${release.build}`));
+/* 녹음·업로드 재생과 잠금화면 유지용 무음은 모두 blob: URL을 <audio>에 건다.
+   media-src가 없으면 default-src 'self'가 대신 쓰이는데 blob:은 'self'로 치지
+   않아 크로미움에서 통째로 막힌다 — 저장한 녹음이 소리 없이 실패했다. */
+assert.match(indexHtml,/media-src 'self' blob:;/);
+assert.match(recorder,/URL\.createObjectURL\(blob\)/,'재생은 blob URL로 건다');
+
 assert.match(worker,/url\.origin !== self\.location\.origin/);
 assert.match(worker,/documentUrl\.search = ''/);
+/* '네트워크 우선'이라 해 놓고 그냥 fetch(req)를 쓰면 브라우저의 HTTP 캐시가 먼저
+   답한다. GitHub Pages가 문서에 max-age=600을 붙이므로 배포한 지 10분이 안 된
+   사이에는 예전 문서가 그대로 나왔다 — 고쳐 올렸는데 앱에서는 그대로이던 까닭이다.
+   서버에 반드시 물어보게 한다. 바뀐 것이 없으면 304라 값은 거의 들지 않는다. */
+assert.match(worker,/fetch\(req\.url, \{ cache: 'no-cache', credentials: 'same-origin' \}\)/);
+assert.doesNotMatch(worker,/respondWith\(\s*\n\s*fetch\(req\)/,'문서는 맨 fetch로 받지 않는다');
 assert.doesNotMatch(worker,/addAll\(ASSETS\)\)\.catch/);
 assert.doesNotMatch(worker,/'\.\/og\.png'/);
 assert.equal(manifest.id,'./');
