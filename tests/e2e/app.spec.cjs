@@ -1720,6 +1720,8 @@ test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',as
 test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{
   await preparePage(page);
   await page.locator('.tab-btn[data-tab="trainer"]').click();
+  /* 트레이너는 트랙에서 열린다. 청음은 골라서 들어간다. */
+  await page.locator('#trainerSeg .seg-btn[data-mode="ear"]').click();
 
   const intervalHeight=await page.locator('#earChoices .choice-row').first().evaluate(
     element=>element.getBoundingClientRect().height,
@@ -1745,6 +1747,7 @@ test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유
 test('청음 오답 후 선택지를 같은 루트로 비교하고 올리브로 다음 문제를 시작한다',async({page})=>{
   await preparePage(page);
   await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn[data-mode="ear"]').click();
   await page.evaluate(()=>{
     Math.random=()=>0;
     window.__earTones=[];

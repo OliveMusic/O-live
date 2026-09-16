@@ -2547,14 +2547,16 @@
     <!-- TRAINER (청음 + 리듬) -->
     <section class="tabpanel" id="tab-trainer">
       <div class="card" style="padding:10px;">
+        <!-- 트랙이 맨 앞이고 트레이너를 열면 여기에 선다. 아래 pane 블록은
+             소스 순서를 그대로 두었다 — 보이는 것은 active 하나뿐이다. -->
         <div class="seg" id="trainerSeg">
-          <button class="seg-btn active" data-mode="ear">청음</button>
+          <button class="seg-btn active" data-mode="record">트랙</button>
+          <button class="seg-btn" data-mode="ear">청음</button>
           <button class="seg-btn" data-mode="rhythm">리듬</button>
-          <button class="seg-btn" data-mode="record">트랙</button>
         </div>
       </div>
 
-      <div class="trainer-pane active" id="pane-ear">
+      <div class="trainer-pane" id="pane-ear">
       <div class="card">
         <h2>훈련 종류</h2>
         <div class="pill-group" id="earModes"></div>
@@ -2644,7 +2646,7 @@
     
       </div>
 
-      <div class="trainer-pane" id="pane-record">
+      <div class="trainer-pane active" id="pane-record">
         <div class="card">
           <div class="record-signin" id="recordGuest">
             <span class="record-olive-static" aria-hidden="true">
@@ -3007,23 +3009,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=260"></script>
+<script src="app-version.js?v=261"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=260"></script>
-<script src="js/audio-runtime.js?v=260"></script>
-<script src="js/core.js?v=260"></script>
-<script src="js/metronome.js?v=260"></script>
-<script src="js/tuner-engine.js?v=260"></script>
-<script src="js/tuner.js?v=260"></script>
-<script src="js/scales.js?v=260"></script>
-<script src="js/ear-trainer.js?v=260"></script>
-<script src="js/rhythm-trainer.js?v=260"></script>
-<script src="js/recording-cache.js?v=260"></script>
-<script src="js/recorder.js?v=260"></script>
-<script src="js/practice-links.js?v=260"></script>
-<script src="js/jam-session.js?v=260"></script>
-<script src="js/practice-log.js?v=260"></script>
-<script src="js/app-shell.js?v=260"></script>
+<script src="cloud-sync.js?v=261"></script>
+<script src="js/audio-runtime.js?v=261"></script>
+<script src="js/core.js?v=261"></script>
+<script src="js/metronome.js?v=261"></script>
+<script src="js/tuner-engine.js?v=261"></script>
+<script src="js/tuner.js?v=261"></script>
+<script src="js/scales.js?v=261"></script>
+<script src="js/ear-trainer.js?v=261"></script>
+<script src="js/rhythm-trainer.js?v=261"></script>
+<script src="js/recording-cache.js?v=261"></script>
+<script src="js/recorder.js?v=261"></script>
+<script src="js/practice-links.js?v=261"></script>
+<script src="js/jam-session.js?v=261"></script>
+<script src="js/practice-log.js?v=261"></script>
+<script src="js/app-shell.js?v=261"></script>
 </body>
 </html>

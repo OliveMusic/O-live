@@ -1,4 +1,4 @@
-/* ===== 트레이너: 청음 / 리듬 전환 ===== */
+/* ===== 트레이너: 트랙 / 청음 / 리듬 전환 ===== */
 (function(){
   const seg=document.getElementById('trainerSeg');
   if(!seg) return;

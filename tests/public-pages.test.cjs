@@ -444,7 +444,24 @@ assert.match(guide,/\(parseFloat\(shape\.radius\)\+pad\)\+'px'/);
    전체 둘러보기에서는 그 흐름이 뜻을 갖는다. */
 assert.match(guide,/const single=keys\.length===1;/);
 assert.match(guide,/if\(single && step\.nav\) return;/);
-assert.equal((guide.match(/nav:true/g)||[]).length,7,'챕터를 여는 길잡이 단계 일곱 개 — 메트로놈은 앱이 열리는 화면이라 없다');
+assert.equal((guide.match(/nav:true/g)||[]).length,6,
+  '챕터를 여는 길잡이 단계 여섯 개 — 메트로놈과 트랙은 그 화면에서 바로 시작한다');
+
+/* ---------- 트랙이 트레이너의 맨 앞이다 ----------
+   트레이너 탭을 누르면 바로 트랙에 선다. 그러니 '트랙을 고르세요' 단계를 따로 두면
+   들어서자마자 통과해 버려 헛돈다 — 탭으로 들어가는 길잡이를 트랙이 맡고, 청음과
+   리듬은 세그먼트를 고르는 단계만 갖는다. */
+assert.match(indexHtml,/<button class="seg-btn active" data-mode="record">트랙<\/button>\s*\n\s*<button class="seg-btn" data-mode="ear">청음<\/button>\s*\n\s*<button class="seg-btn" data-mode="rhythm">리듬<\/button>/);
+assert.match(indexHtml,/<div class="trainer-pane active" id="pane-record">/);
+assert.doesNotMatch(indexHtml,/<div class="trainer-pane active" id="pane-ear">/);
+assert.doesNotMatch(guide,/title:'트랙을 고릅니다'/,'들어서자마자 통과할 단계는 두지 않는다');
+assert.match(guide,/hint:'청음을 누르세요',\s*\n\s*check:doc=>seg\(doc\)==='ear'/);
+assert.match(guide,/hint:'리듬을 누르세요', check:doc=>seg\(doc\)==='rhythm'/);
+/* 도움말 차례도 앱과 같아야 한다. 트랙 → 청음 → 리듬. */
+assert.ok(guide.indexOf("key:'record'")<guide.indexOf("key:'ear'")
+  && guide.indexOf("key:'ear'")<guide.indexOf("key:'rhythm'")
+  && guide.indexOf("key:'rhythm'")<guide.indexOf("key:'jam'"),'트랙이 트레이너 셋 중 맨 앞이다');
+assert.doesNotMatch(guide+about,/청음·리듬·트랙/,'차례가 바뀌었으면 적힌 차례도 바뀐다');
 
 /* 트랙은 배울 것이 가장 많아 열여덟 단계지만 한 챕터로 둔다. 녹음해서 목록에
    남기고 그 트랙으로 연습하는 것은 한 흐름이고, 끝까지 가도 1분 남짓이다. */
@@ -528,7 +545,7 @@ assert.match(guide,/계정 없이 이용할 수 있습니다/);
    요약하면 어중간하다. 다만 그 문장은 방침에 반드시 남아 있어야 한다. */
 assert.match(privacy,/저장하기 전에 버린 녹음은 서버로 전송되지 않습니다/);
 /* 앱은 그 자리를 '트랙'이라 부른다. 문서만 '녹음'으로 남으면 화면과 어긋난다. */
-assert.match(indexHtml,/<button class="seg-btn" data-mode="record">트랙<\/button>/);
+assert.match(indexHtml,/data-mode="record">트랙<\/button>/);
 for(const page of [about,privacy,terms]) assert.doesNotMatch(page,/녹음 탭|녹음 트레이너/);
 /* 잠금화면 10초 버튼은 iOS와 같은 모양이다. 원을 그리고 좌우로 뒤집어 쓴다. */
 assert.match(guide,/\.mock-skip\.fwd svg\{ transform:scaleX\(-1\); \}/);
