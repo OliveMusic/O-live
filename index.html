@@ -930,30 +930,9 @@
     font-variant-numeric:tabular-nums;
   }
   .log-total.log-empty{ color:var(--ink-3); font-weight:500; font-size:0.625rem; }
-  .log-more{
-    flex:0 0 auto; border:0; background:transparent; padding:4px 0 4px 8px;
-    color:var(--ink-3); font-size:0.625rem; font-weight:500; cursor:pointer;
-    display:flex; align-items:center; gap:5px;
-  }
   /* 정해 둔 display는 UA의 [hidden]{display:none}을 이긴다. 숨기라고 했는데
      그대로 보이던 자리가 예전에도 있었다. */
-  .log-more[hidden], .log-full[hidden]{ display:none; }
-  .log-more::after{
-    content:''; width:5px; height:5px;
-    border-right:1.4px solid var(--ink-3); border-bottom:1.4px solid var(--ink-3);
-    transform:rotate(45deg) translate(-1px,-1px);
-    transition:transform .18s var(--ease-out);
-  }
-  .log-more[aria-expanded="true"]::after{ transform:rotate(225deg) translate(-1px,-1px); }
-  .log-brief{
-    display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
-    gap:5px; margin-top:9px; color:var(--ink-2);
-    font-size:0.625rem; font-weight:500; font-variant-numeric:tabular-nums;
-  }
-  .log-brief:empty{ display:none; }
-  .log-brief span{ white-space:nowrap; }
-  .log-brief b{ margin-right:3px; color:var(--ink-3); font-weight:500; }
-
+  .log-full[hidden]{ display:none; }
   .log-full{
     margin-top:11px; padding-top:10px; border-top:1px solid var(--line-soft);
     display:flex; flex-direction:column; gap:9px;
@@ -2907,9 +2886,7 @@
     <div class="log-detail">
       <div class="log-detail-head">
         <span class="log-total" id="practiceLogTotal">날짜를 누르면 그날 기록을 볼 수 있습니다</span>
-        <button class="log-more" id="practiceLogMore" type="button" aria-expanded="false" hidden>자세히</button>
       </div>
-      <div class="log-brief" id="practiceLogBrief"></div>
       <div class="log-full" id="practiceLogFull" hidden></div>
     </div>
 
@@ -3026,23 +3003,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=258"></script>
+<script src="app-version.js?v=259"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=258"></script>
-<script src="js/audio-runtime.js?v=258"></script>
-<script src="js/core.js?v=258"></script>
-<script src="js/metronome.js?v=258"></script>
-<script src="js/tuner-engine.js?v=258"></script>
-<script src="js/tuner.js?v=258"></script>
-<script src="js/scales.js?v=258"></script>
-<script src="js/ear-trainer.js?v=258"></script>
-<script src="js/rhythm-trainer.js?v=258"></script>
-<script src="js/recording-cache.js?v=258"></script>
-<script src="js/recorder.js?v=258"></script>
-<script src="js/practice-links.js?v=258"></script>
-<script src="js/jam-session.js?v=258"></script>
-<script src="js/practice-log.js?v=258"></script>
-<script src="js/app-shell.js?v=258"></script>
+<script src="cloud-sync.js?v=259"></script>
+<script src="js/audio-runtime.js?v=259"></script>
+<script src="js/core.js?v=259"></script>
+<script src="js/metronome.js?v=259"></script>
+<script src="js/tuner-engine.js?v=259"></script>
+<script src="js/tuner.js?v=259"></script>
+<script src="js/scales.js?v=259"></script>
+<script src="js/ear-trainer.js?v=259"></script>
+<script src="js/rhythm-trainer.js?v=259"></script>
+<script src="js/recording-cache.js?v=259"></script>
+<script src="js/recorder.js?v=259"></script>
+<script src="js/practice-links.js?v=259"></script>
+<script src="js/jam-session.js?v=259"></script>
+<script src="js/practice-log.js?v=259"></script>
+<script src="js/app-shell.js?v=259"></script>
 </body>
 </html>

@@ -2537,11 +2537,10 @@ test('연습 기록은 소리가 난 시간만 세고 튜너는 세지 않는다
   await expect(page.locator('#practiceLogBtn')).toHaveAttribute('aria-expanded','true');
   await expect(page.locator('#practiceLogGrid .log-day.today')).toHaveCount(1);
   await expect(page.locator('#practiceLogTotal')).toContainText('분');
-  await expect(page.locator('#practiceLogBrief')).toContainText('메트로놈');
 
-  // 접힌 상태에서는 도구별 시간만, 펼치면 어떻게 연습했는지가 나온다.
-  await expect(page.locator('#practiceLogFull')).toBeHidden();
-  await page.locator('#practiceLogMore').click();
+  // 접었다 펴지 않는다. 날짜를 누르면 도구별로 그대로 다 보인다.
+  await expect(page.locator('#practiceLogMore')).toHaveCount(0);
+  await expect(page.locator('#practiceLogBrief')).toHaveCount(0);
   await expect(page.locator('#practiceLogFull')).toBeVisible();
   await expect(page.locator('#practiceLogFull')).toContainText('메트로놈');
   await expect(page.locator('#practiceLogFull')).not.toContainText('BPM');

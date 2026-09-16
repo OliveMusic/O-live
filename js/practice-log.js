@@ -32,8 +32,6 @@
   const gridEl=document.getElementById('practiceLogGrid');
   const legendEl=document.getElementById('practiceLogLegend');
   const totalEl=document.getElementById('practiceLogTotal');
-  const moreEl=document.getElementById('practiceLogMore');
-  const briefEl=document.getElementById('practiceLogBrief');
   const fullEl=document.getElementById('practiceLogFull');
   const app=document.getElementById('app');
 
@@ -222,7 +220,6 @@
   let shownMonth=new Date();
   shownMonth=new Date(shownMonth.getFullYear(),shownMonth.getMonth(),1);
   let selectedKey=todayKey();
-  let expanded=false;
 
   function buildLegend(){
     if(legendEl.childElementCount) return;
@@ -380,32 +377,22 @@
     if(!total && !ear){
       totalEl.textContent=`${month}월 ${date}일 · 기록 없음`;
       totalEl.classList.add('log-empty');
-      moreEl.hidden=true;
-      briefEl.innerHTML='';
       fullEl.hidden=true; fullEl.innerHTML='';
       return;
     }
     totalEl.textContent=`${month}월 ${date}일 · ${total>0?formatSpan(total):'소리 없는 연습'}`;
     totalEl.classList.remove('log-empty');
 
-    briefEl.innerHTML=TOOL_ORDER
-      .filter(tool=>Number(day&&day[tool]))
-      .slice(0,3)
-      .map(tool=>`<span><b>${TOOL_NAMES[tool]}</b>${formatSpan(day[tool])}</span>`)
-      .join('');
-
+    /* 접었다 펴지 않는다. 하루를 훑어보려고 연 화면인데 한 번 더 눌러야
+       내용이 나오면 그만큼 멀다. 앞에 세 개만 따로 적던 줄도 함께 걷었다 —
+       바로 아래에 전부 있는데 그 셋만 두 번 적히고 있었다. */
     const lines=detailLines(day||{},ear);
-    moreEl.hidden=!lines.length;
-    moreEl.setAttribute('aria-expanded',expanded?'true':'false');
-    moreEl.textContent=expanded?'접기':'자세히';
-    fullEl.hidden=!expanded;
-    fullEl.innerHTML=expanded
-      ? lines.map(line=>(
-          `<div class="log-row"><i class="log-sw ${line.swatch||('log-seg-'+line.tool)}"></i>`+
-          `<span class="log-who">${line.name}</span>`+
-          `<span class="log-what">${line.text}</span></div>`
-        )).join('')
-      : '';
+    fullEl.hidden=!lines.length;
+    fullEl.innerHTML=lines.map(line=>(
+      `<div class="log-row"><i class="log-sw ${line.swatch||('log-seg-'+line.tool)}"></i>`+
+      `<span class="log-who">${line.name}</span>`+
+      `<span class="log-what">${line.text}</span></div>`
+    )).join('');
   }
 
   function render(){
@@ -423,7 +410,6 @@
     selectedKey=todayKey();
     shownMonth=new Date();
     shownMonth=new Date(shownMonth.getFullYear(),shownMonth.getMonth(),1);
-    expanded=false;
     sheetTrigger=document.activeElement && typeof document.activeElement.focus==='function'
       ? document.activeElement : null;
     render();
@@ -529,11 +515,9 @@
   gridEl.addEventListener('click',event=>{
     const cell=event.target.closest('.log-day');
     if(!cell || !cell.dataset.key) return;
-    if(cell.dataset.key===selectedKey) expanded=!expanded;
-    else{ selectedKey=cell.dataset.key; expanded=false; }
+    selectedKey=cell.dataset.key;
     render();
   });
-  moreEl.addEventListener('click',()=>{ expanded=!expanded; renderDetail(); });
 
   window.OlivePracticeLog={
     /* 청음 트레이너가 답을 적을 때마다 부른다. 창이 닫혀 있으면 할 일이 없다. */

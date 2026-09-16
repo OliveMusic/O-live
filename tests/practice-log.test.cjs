@@ -81,8 +81,14 @@ assert.match(log,/className='log-rest'/);
 assert.match(index,/\.log-rest\{ background:var\(--line\); height:2px/);
 
 /* 정해 둔 display는 UA의 [hidden]{display:none}을 이긴다. 이 줄이 없으면
-   접어 둔 상세가 그대로 펼쳐진 채로 보인다. */
-assert.match(index,/\.log-more\[hidden\], \.log-full\[hidden\]\{ display:none; \}/);
+   기록 없는 날에도 빈 상세 상자가 보인다. */
+assert.match(index,/\.log-full\[hidden\]\{ display:none; \}/);
+/* 접었다 펴지 않는다. 하루를 훑어보려고 연 화면인데 한 번 더 눌러야 내용이
+   나오면 그만큼 멀다. 앞에 세 개만 따로 적던 줄도 함께 걷었다 — 바로 아래에
+   전부 있는데 그 셋만 두 번 적히고 있었다. */
+assert.doesNotMatch(index,/practiceLogMore|practiceLogBrief/,'접는 단추도 요약 줄도 없다');
+assert.doesNotMatch(log,/moreEl|briefEl/);
+assert.doesNotMatch(index,/\.log-brief\{/,'모양도 함께 걷는다');
 
 /* ---------- 달력은 청음 기록 것을 그대로 쓴다 ---------- */
 assert.match(index,/<div class="ear-calendar-grid log-grid" id="practiceLogGrid">/);
