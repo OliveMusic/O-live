@@ -424,26 +424,18 @@ assert.match(guide,/\(parseFloat\(shape\.radius\)\+pad\)\+'px'/);
    전체 둘러보기에서는 그 흐름이 뜻을 갖는다. */
 assert.match(guide,/const single=keys\.length===1;/);
 assert.match(guide,/if\(single && step\.nav\) return;/);
-assert.equal((guide.match(/nav:true/g)||[]).length,7,'챕터를 여는 길잡이 단계 일곱 개 — 메트로놈과 트랙 목록은 없다');
+assert.equal((guide.match(/nav:true/g)||[]).length,7,'챕터를 여는 길잡이 단계 일곱 개 — 메트로놈은 앱이 열리는 화면이라 없다');
 
-/* ---------- 트랙은 두 챕터다 ----------
-   한 챕터에 담으면 열아홉 단계가 되어, 중간에 그만두면 뒤쪽 절반은 영영 보이지
-   않았다. '만들고 연습한다'(트랙 트레이너)와 '모아 두고 정리한다'(트랙 목록)로
-   갈라 필요한 쪽만 골라 볼 수 있게 한다. */
-assert.match(guide,/key:'record', icon:'trainer', name:'트랙 트레이너', blurb:'녹음하고 구간 반복으로 연습'/);
-assert.match(guide,/key:'tracks', icon:'list', name:'트랙 목록', blurb:'YouTube 링크 담기와 정리'/);
-assert.match(guide,/list:'<rect /,'목록 아이콘이 있어야 두 챕터가 구별된다');
-assert.ok(guide.indexOf("key:'record'")<guide.indexOf("key:'tracks'")
-  && guide.indexOf("key:'tracks'")<guide.indexOf("key:'jam'"),'트랙 목록은 트랙 트레이너 바로 뒤다');
-/* 갈라지는 자리: 재생기까지가 앞 챕터, 즐겨찾기부터가 뒤 챕터다. */
-assert.ok(guide.indexOf("title:'조옮김과 속도'")<guide.indexOf("key:'tracks'")
-  && guide.indexOf("key:'tracks'")<guide.indexOf("title:'즐겨찾기 올리브'"),'가르는 자리');
-/* 뒤 챕터에는 여는 길잡이 단계를 두지 않는다. 한 기능만 볼 때는 어차피 건너뛰고,
-   전체 둘러보기에서는 바로 앞이 트랙 트레이너라 이미 그 화면에 와 있다. */
-assert.doesNotMatch(guide.slice(guide.indexOf("key:'tracks'"),guide.indexOf("key:'jam'")),
-  /nav:true/,'양쪽 다 헛도는 단계다');
-/* 뒤 챕터의 첫 단계도 혼자 설 수 있어야 한다 — 목록을 스스로 연다. */
-assert.match(guide,/before:doc=>\{ stopRowPlayback\(doc\); openList\(doc\); \}, title:'즐겨찾기 올리브'/);
+/* 트랙은 배울 것이 가장 많아 열여덟 단계지만 한 챕터로 둔다. 녹음해서 목록에
+   남기고 그 트랙으로 연습하는 것은 한 흐름이고, 끝까지 가도 1분 남짓이다. */
+assert.match(guide,/key:'record', icon:'trainer', name:'트랙 트레이너', blurb:'녹음·업로드·YouTube로 연습'/);
+assert.equal((guide.match(/key:'[a-z]+', icon:/g)||[]).length,7,'챕터 일곱 개');
+assert.ok(guide.indexOf("title:'조옮김과 속도'")<guide.indexOf("title:'즐겨찾기 올리브'")
+  && guide.indexOf("title:'즐겨찾기 올리브'")<guide.indexOf("key:'jam'"),'재생기 다음이 목록 다루기다');
+
+/* 옆의 안내가 길면 버튼이 눌려 '건너뛰 / 기'로 접혔다. 글자는 한 줄로 둔다. */
+assert.match(guide,/white-space:nowrap; flex:none;/);
+assert.match(guide,/\.coach-hint\{[^}]*min-width:0;/,'줄바꿈은 안내 쪽이 받는다');
 
 /* 설정 창이 열리면 강조도 창으로 옮겨 간다. 작은 버튼만 계속 비추면
    정작 무엇이 열렸는지 어두워서 보이지 않는다. */
