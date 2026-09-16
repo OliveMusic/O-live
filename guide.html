@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=254">
+<link rel="stylesheet" href="info.css?v=255">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -490,6 +490,7 @@
     scales:'<path d="M3 6h14M3 10h14M3 14h14"/><circle cx="7" cy="6" r="1.6"/><circle cx="13" cy="14" r="1.6"/>',
     trainer:'<path d="M4 12a6 6 0 0 1 12 0"/><rect x="2.6" y="11.4" width="3" height="5" rx="1.4"/><rect x="14.4" y="11.4" width="3" height="5" rx="1.4"/>',
     jam:'<circle cx="6" cy="14.5" r="2.4"/><circle cx="15" cy="12.5" r="2.4"/><path d="M8.4 14.5v-10l9 -2v10"/>',
+    list:'<rect x="2.6" y="4" width="14.8" height="12" rx="2.4"/><path d="M5.8 8h8.4M5.8 11.6h5.2"/>',
   };
 
   /* ── 챕터 ──
@@ -677,7 +678,10 @@
       ],
     },
     {
-      key:'record', icon:'trainer', name:'트랙 트레이너', blurb:'녹음·업로드·YouTube로 연습',
+      /* 트랙은 배울 것이 가장 많아 한 챕터에 담으면 열아홉 단계가 된다. 중간에
+         그만두면 뒤쪽 절반은 영영 보이지 않았다. '만들고 연습한다'와 '모아 두고
+         정리한다'로 갈라, 필요한 쪽만 골라 볼 수 있게 한다. */
+      key:'record', icon:'trainer', name:'트랙 트레이너', blurb:'녹음하고 구간 반복으로 연습',
       steps:[
         {screen:'trainer', nav:true, target:'#trainerSeg', title:'트랙을 고릅니다',
          body:'녹음한 것, 올린 파일, YouTube 링크가 <b>한 목록</b>에 모입니다.', hint:'트랙을 누르세요',
@@ -754,6 +758,13 @@
          before:openPlayer, title:'조옮김과 속도',
          body:'위가 <b>조옮김</b>으로 왼쪽이 플랫 오른쪽이 샵, 아래가 <b>속도</b>로 0.5–1.5배입니다. 각각 <b>두 번 탭</b>하면 원래 키와 1배로 돌아옵니다.',
          advance:'next'},
+      ],
+    },
+    {
+      /* 여는 길잡이 단계가 없다. 한 기능만 볼 때는 어차피 건너뛰고, 전체 둘러보기에서는
+         바로 앞이 트랙 트레이너라 이미 그 화면에 와 있다 — 양쪽 다 헛도는 단계다. */
+      key:'tracks', icon:'list', name:'트랙 목록', blurb:'YouTube 링크 담기와 정리',
+      steps:[
         /* 올리브를 떼면 그 버튼 자체가 사라진다. 대상을 잃은 채로 두면 강조가 엉뚱한
            자리에 얼어붙으므로 그 행으로 옮겨 잡는다. 그리고 잠시 머물러, 올리브가
            사라지고 순서가 내려가는 것을 눈으로 보게 한다. */
