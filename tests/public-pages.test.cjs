@@ -453,6 +453,13 @@ assert.equal((guide.match(/nav:true/g)||[]).length,6,
    리듬은 세그먼트를 고르는 단계만 갖는다. */
 assert.match(indexHtml,/<button class="seg-btn active" data-mode="record">트랙<\/button>\s*\n\s*<button class="seg-btn" data-mode="ear">청음<\/button>\s*\n\s*<button class="seg-btn" data-mode="rhythm">리듬<\/button>/);
 assert.match(indexHtml,/<div class="trainer-pane active" id="pane-record">/);
+/* 상단 안전영역만큼은 body가 이미 패딩으로 비워 둔다. 그 위에 100dvh를 더 얹으면 앱
+   상자가 화면보다 그만큼 길어지고(다이나믹 아일랜드 기기에서 62px), 화면보다 큰 뿌리
+   레이어가 생긴다. 그 레이어에 그려지는 것은 상단바뿐이라(본문은 main의 스크롤 레이어,
+   탭바는 fixed로 각자 제 레이어를 갖는다) 상단바만 흐리게 래스터됐다. */
+assert.match(indexHtml,/padding-top:env\(safe-area-inset-top\);/);
+assert.match(indexHtml,/height:calc\(100vh - env\(safe-area-inset-top\)\);\s*\n\s*height:calc\(100dvh - env\(safe-area-inset-top\)\);/);
+assert.doesNotMatch(indexHtml,/#app\{display:flex; flex-direction:column; height:100vh; height:100dvh;\}/);
 assert.doesNotMatch(indexHtml,/<div class="trainer-pane active" id="pane-ear">/);
 assert.doesNotMatch(guide,/title:'트랙을 고릅니다'/,'들어서자마자 통과할 단계는 두지 않는다');
 /* 트랙은 계정이 있어야 쓸 수 있다. 로그인 전에는 '계정 연결' 화면부터 마주치므로

@@ -151,7 +151,18 @@
     overflow:hidden;
   }
 
-  #app{display:flex; flex-direction:column; height:100vh; height:100dvh;}
+  /* 상단 안전영역만큼은 body가 이미 패딩으로 비워 두었다. 그 위에 100dvh를 더 얹으면
+     앱 상자가 화면보다 그만큼(다이나믹 아일랜드 기기에서 62px) 길어진다. overflow:hidden이
+     잘라 주어 눈에는 안 띄었지만, 화면보다 큰 뿌리 레이어가 만들어진다.
+
+     그 레이어에 그려지는 것은 상단바뿐이다 — 본문은 main의 스크롤 레이어, 탭바는
+     position:fixed로 각자 제 레이어를 갖는다. 그래서 상단바만 흐리게 래스터되고 있었다.
+     화면 크기에 맞춰 두면 그럴 일이 없다. */
+  #app{
+    display:flex; flex-direction:column;
+    height:calc(100vh - env(safe-area-inset-top));
+    height:calc(100dvh - env(safe-area-inset-top));
+  }
 
   /* ---------- 시작 화면 ----------
      홈 화면에서 앱을 열 때 실제 내용이 준비되는 짧은 시간을 브랜드 화면으로 잇는다. */
@@ -3014,23 +3025,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=263"></script>
+<script src="app-version.js?v=264"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=263"></script>
-<script src="js/audio-runtime.js?v=263"></script>
-<script src="js/core.js?v=263"></script>
-<script src="js/metronome.js?v=263"></script>
-<script src="js/tuner-engine.js?v=263"></script>
-<script src="js/tuner.js?v=263"></script>
-<script src="js/scales.js?v=263"></script>
-<script src="js/ear-trainer.js?v=263"></script>
-<script src="js/rhythm-trainer.js?v=263"></script>
-<script src="js/recording-cache.js?v=263"></script>
-<script src="js/recorder.js?v=263"></script>
-<script src="js/practice-links.js?v=263"></script>
-<script src="js/jam-session.js?v=263"></script>
-<script src="js/practice-log.js?v=263"></script>
-<script src="js/app-shell.js?v=263"></script>
+<script src="cloud-sync.js?v=264"></script>
+<script src="js/audio-runtime.js?v=264"></script>
+<script src="js/core.js?v=264"></script>
+<script src="js/metronome.js?v=264"></script>
+<script src="js/tuner-engine.js?v=264"></script>
+<script src="js/tuner.js?v=264"></script>
+<script src="js/scales.js?v=264"></script>
+<script src="js/ear-trainer.js?v=264"></script>
+<script src="js/rhythm-trainer.js?v=264"></script>
+<script src="js/recording-cache.js?v=264"></script>
+<script src="js/recorder.js?v=264"></script>
+<script src="js/practice-links.js?v=264"></script>
+<script src="js/jam-session.js?v=264"></script>
+<script src="js/practice-log.js?v=264"></script>
+<script src="js/app-shell.js?v=264"></script>
 </body>
 </html>
