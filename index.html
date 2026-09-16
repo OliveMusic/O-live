@@ -183,8 +183,10 @@
   /* 헤더는 지금까지 내용만큼만 줄어들어 화면 가운데 놓였다. 로고와 화면 이름이
      앉는 자리는 그대로 두고, 폭만 프레임 전체로 늘려 오른쪽 끝을 쓸 수 있게 한다.
      justify-content:center가 예전의 가운데 정렬을 그대로 재현한다. */
+  /* 높이를 짝수로 둔다(15+19+14=48). 홀수면 오른쪽 끝 버튼을 세로 가운데에
+     맞출 때 반 픽셀에 앉아 글자와 아이콘이 흐려진다. */
   header.topbar{
-    padding:15px 18px 13px; display:flex; align-items:center; gap:9px; flex-shrink:0;
+    padding:15px 18px 14px; display:flex; align-items:center; gap:9px; flex-shrink:0;
     position:relative; width:100%; justify-content:center;
   }
   header.topbar .logo{
@@ -198,8 +200,11 @@
   }
   /* 상단바 오른쪽 끝은 지금까지 비어 있었다. 연습 기록은 어느 탭에서나
      열 수 있어야 하는데 하단 탭을 여섯 개로 늘릴 만큼 자주 쓰지는 않는다. */
+  /* top:50% + translateY(-50%)로 맞추면 반 픽셀에 앉는 데다 변형이 따로 한 겹을
+     만들어 글자가 흐려진다. 위아래를 0으로 붙이고 여백에 맡긴다 — 짝수 높이라
+     정확히 정수 자리에 앉고, 변형도 남지 않는다. */
   .topbar-log{
-    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    position:absolute; right:12px; top:0; bottom:0; margin-block:auto;
     width:44px; height:44px; padding:0;
     border:0; border-radius:50%; background:transparent; color:var(--ink-3);
     display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -217,8 +222,8 @@
   /* 계정을 연결하기 전에는 기록이 쌓일 곳이 없다. 빈 달력을 열어 주는 대신
      그 자리에서 바로 연결하게 한다. */
   .topbar-signin{
-    position:absolute; right:12px; top:50%; transform:translateY(-50%);
-    min-height:30px; padding:0 12px; border-radius:var(--r-pill);
+    position:absolute; right:12px; top:0; bottom:0; margin-block:auto;
+    height:30px; padding:0 12px; border-radius:var(--r-pill);
     border:1px solid var(--line); background:var(--key); color:var(--ink-2);
     font-family:inherit; font-size:0.625rem; font-weight:600;
     letter-spacing:0.0273em; cursor:pointer;
@@ -3009,23 +3014,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=262"></script>
+<script src="app-version.js?v=263"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=262"></script>
-<script src="js/audio-runtime.js?v=262"></script>
-<script src="js/core.js?v=262"></script>
-<script src="js/metronome.js?v=262"></script>
-<script src="js/tuner-engine.js?v=262"></script>
-<script src="js/tuner.js?v=262"></script>
-<script src="js/scales.js?v=262"></script>
-<script src="js/ear-trainer.js?v=262"></script>
-<script src="js/rhythm-trainer.js?v=262"></script>
-<script src="js/recording-cache.js?v=262"></script>
-<script src="js/recorder.js?v=262"></script>
-<script src="js/practice-links.js?v=262"></script>
-<script src="js/jam-session.js?v=262"></script>
-<script src="js/practice-log.js?v=262"></script>
-<script src="js/app-shell.js?v=262"></script>
+<script src="cloud-sync.js?v=263"></script>
+<script src="js/audio-runtime.js?v=263"></script>
+<script src="js/core.js?v=263"></script>
+<script src="js/metronome.js?v=263"></script>
+<script src="js/tuner-engine.js?v=263"></script>
+<script src="js/tuner.js?v=263"></script>
+<script src="js/scales.js?v=263"></script>
+<script src="js/ear-trainer.js?v=263"></script>
+<script src="js/rhythm-trainer.js?v=263"></script>
+<script src="js/recording-cache.js?v=263"></script>
+<script src="js/recorder.js?v=263"></script>
+<script src="js/practice-links.js?v=263"></script>
+<script src="js/jam-session.js?v=263"></script>
+<script src="js/practice-log.js?v=263"></script>
+<script src="js/app-shell.js?v=263"></script>
 </body>
 </html>

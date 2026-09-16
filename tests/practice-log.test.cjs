@@ -118,6 +118,17 @@ assert.match(index,/\.topbar-log\{[\s\S]{0,120}position:absolute; right:12px/);
 assert.match(index,/\.topbar-log\{[\s\S]{0,200}width:44px; height:44px/);
 /* 세이지는 창이 열려 있는 동안만. */
 assert.match(index,/\.topbar-log\[aria-expanded="true"\]\{ color:var\(--signal\); \}/);
+/* 상단바 높이는 짝수여야 한다(15+19+14=48). 홀수면 오른쪽 끝 버튼이 세로 가운데를
+   맞출 때 반 픽셀에 앉고, top:50%+translateY(-50%)는 변형이 한 겹을 더 만들어
+   글자와 아이콘이 흐려진다. 위아래를 0으로 붙이고 여백에 맡긴다. */
+assert.match(index,/header\.topbar\{\s*\n\s*padding:15px 18px 14px;/);
+for(const sel of ['.topbar-log','.topbar-signin']){
+  const escaped=sel.replace('.','\\.');
+  assert.match(index,new RegExp(`${escaped}\\{\\s*\\n\\s*position:absolute; right:12px; top:0; bottom:0; margin-block:auto;`),
+    `${sel}은 변형 없이 정수 자리에 앉는다`);
+}
+assert.doesNotMatch(index,/\.topbar-(log|signin)\{[^}]*translateY\(-50%\)/,
+  '상단바에는 반 픽셀에 앉히던 길을 남기지 않는다');
 assert.doesNotMatch(index,/data-tab="log"|data-tab="practice"/);
 assert.equal((index.match(/<button class="tab-btn/g)||[]).length,5,'하단 탭은 다섯 개 그대로');
 
