@@ -112,8 +112,10 @@ assert.match(index,/<div class="ear-calendar-grid log-grid" id="practiceLogGrid"
 assert.match(log,/cell\.className='ear-day log-day'/);
 
 /* ---------- 상단바 ----------
-   하단 탭은 다섯 개 그대로다. 헤더는 폭만 늘리고 제목이 앉는 자리는 그대로 둔다. */
-assert.match(index,/header\.topbar\{[^}]*position:relative; width:100%; justify-content:center;/);
+   하단 탭은 다섯 개 그대로다. 헤더는 폭만 늘리고 제목이 앉는 자리는 그대로 둔다.
+   position은 relative가 아니라 sticky다 — 오른쪽 끝 버튼을 앉히는 기준으로는 둘이
+   같지만, 제 레이어를 갖게 해서 흐리게 그려지지 않게 한다. 자리는 그대로다. */
+assert.match(index,/header\.topbar\{[^}]*position:sticky; top:0; z-index:20; background:var\(--body\);\s*\n\s*width:100%; justify-content:center;/);
 assert.match(index,/\.topbar-log\{[\s\S]{0,120}position:absolute; right:12px/);
 assert.match(index,/\.topbar-log\{[\s\S]{0,200}width:44px; height:44px/);
 /* 세이지는 창이 열려 있는 동안만. */

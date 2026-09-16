@@ -197,10 +197,17 @@
      앉는 자리는 그대로 두고, 폭만 프레임 전체로 늘려 오른쪽 끝을 쓸 수 있게 한다.
      justify-content:center가 예전의 가운데 정렬을 그대로 재현한다. */
   /* 높이를 짝수로 둔다(15+19+14=48). 홀수면 오른쪽 끝 버튼을 세로 가운데에
-     맞출 때 반 픽셀에 앉아 글자와 아이콘이 흐려진다. */
+     맞출 때 반 픽셀에 앉아 글자와 아이콘이 흐려진다.
+
+     position은 relative가 아니라 sticky다. 오른쪽 끝 버튼을 앉히는 기준으로는 둘이
+     같지만, 홈 화면 앱에서 이 줄만 흐리게 그려지는 것을 쫓다 보니 '제 레이어를 갖는
+     것은 모두 또렷하다'는 쪽으로 증거가 모였다 — 하단 탭바(fixed)도, 달력 시트(fixed)도,
+     도움말 머리말(sticky)도 또렷한데 상단바만 흐렸다. 스크롤은 main이 하므로 붙박이
+     동작은 달라지지 않고 자리도 그대로다. */
   header.topbar{
     padding:15px 18px 14px; display:flex; align-items:center; gap:9px; flex-shrink:0;
-    position:relative; width:100%; justify-content:center;
+    position:sticky; top:0; z-index:20; background:var(--body);
+    width:100%; justify-content:center;
   }
   header.topbar .logo{
     width:19px; height:19px; flex-shrink:0;
@@ -3031,23 +3038,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=266"></script>
+<script src="app-version.js?v=267"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=266"></script>
-<script src="js/audio-runtime.js?v=266"></script>
-<script src="js/core.js?v=266"></script>
-<script src="js/metronome.js?v=266"></script>
-<script src="js/tuner-engine.js?v=266"></script>
-<script src="js/tuner.js?v=266"></script>
-<script src="js/scales.js?v=266"></script>
-<script src="js/ear-trainer.js?v=266"></script>
-<script src="js/rhythm-trainer.js?v=266"></script>
-<script src="js/recording-cache.js?v=266"></script>
-<script src="js/recorder.js?v=266"></script>
-<script src="js/practice-links.js?v=266"></script>
-<script src="js/jam-session.js?v=266"></script>
-<script src="js/practice-log.js?v=266"></script>
-<script src="js/app-shell.js?v=266"></script>
+<script src="cloud-sync.js?v=267"></script>
+<script src="js/audio-runtime.js?v=267"></script>
+<script src="js/core.js?v=267"></script>
+<script src="js/metronome.js?v=267"></script>
+<script src="js/tuner-engine.js?v=267"></script>
+<script src="js/tuner.js?v=267"></script>
+<script src="js/scales.js?v=267"></script>
+<script src="js/ear-trainer.js?v=267"></script>
+<script src="js/rhythm-trainer.js?v=267"></script>
+<script src="js/recording-cache.js?v=267"></script>
+<script src="js/recorder.js?v=267"></script>
+<script src="js/practice-links.js?v=267"></script>
+<script src="js/jam-session.js?v=267"></script>
+<script src="js/practice-log.js?v=267"></script>
+<script src="js/app-shell.js?v=267"></script>
 </body>
 </html>
