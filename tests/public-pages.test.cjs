@@ -298,6 +298,12 @@ assert.match(guide,/el\.querySelector\('\.dd-menu:not\(\[hidden\]\)'\)/,'열린 
 assert.match(index,/const preview=\/\[\?&\]guide=1/);
 assert.match(index,/function read\(\)\{\s*if\(preview\) return \{data:\{\},updatedAt:''\};/);
 assert.match(index,/function write\(record\)\{\s*if\(preview\) return false;/);
+/* 앱은 메트로놈에서 열린다. 이미 와 있는 화면으로 가라고 탭부터 누르게 하면 첫 단계가
+   헛돈다. 탭바 설명은 다음 챕터인 튜너가 맡는다. */
+assert.doesNotMatch(guide,/메트로놈으로 갑니다/);
+assert.match(indexHtml,/<button class="tab-btn active" data-tab="metronome">/);
+assert.match(guide,/title:'튜너로 갑니다', body:'화면 아래 탭으로 다섯 기능을 오갑니다\./);
+
 /* 챕터를 시작할 때마다 앱을 새로 연다. 지웠던 예시 목록도 그때 돌아온다. */
 assert.match(guide,/frame\.contentWindow\.location\.replace\(src\)/);
 /* 시연에서도 실제로 지워져야 배운다. 지운 것은 다시 시작할 때 돌아온다. */
@@ -305,7 +311,7 @@ assert.match(cloud,/function guideRemove\(list,ids\)/);
 assert.match(cloud,/guideRemove\(guideState\(\)\.links,list\)/);
 assert.match(cloud,/guideRemove\(guideState\(\)\.recordings,rows\.map\(row=>row\.id\)\)/);
 /* 미뤄 둔 진행은 취소할 수 있어야 한다. 건너뛴 뒤 뒤늦게 터지면 한 단계를 삼킨다. */
-assert.match(guide,/function deferAdvance\(ms,graceMs\)/);
+assert.match(guide,/function deferAdvance\(ms,graceMs,auto\)/);
 assert.match(guide,/if\(mine===token\) advance\(\)/);
 assert.match(guide,/function stopListening\(\)\{ cancelDefer\(\); if\(pass\) pass\(\); \}/);
 assert.doesNotMatch(guide,/setTimeout\(advance,/,'진행은 반드시 취소 가능한 경로로만 미룬다');
@@ -393,6 +399,14 @@ assert.match(guide,/if\(also \|\| !el\) return null;/,'여러 곳을 묶는 단�
 /* 버튼을 비출 때는 반지름이 얼마든 그 버튼의 테두리를 따라간다. */
 assert.match(guide,/const button=el\.tagName==='BUTTON' \|\| el\.getAttribute\('role'\)==='button';/);
 assert.match(guide,/if\(!button && !round\) return null;/);
+/* 투명한 껍데기 안에 진짜 모양이 들어앉은 버튼이 있다 — 즐겨찾기는 28×28 버튼
+   한가운데에 17×14 올리브가 기울어 앉아 있다. 껍데기를 따라 그리면 올리브 둘레로
+   네모가 생긴다. 칠도 테두리도 없이 가운데에 하나만 놓인 자식이면 그것을 따라간다. */
+assert.match(guide,/function shapeSource\(el,view\)/);
+assert.match(guide,/const src=shapeSource\(el,view\);\s*\n\s*const style=view\.getComputedStyle\(src\);/);
+assert.match(guide,/const width=src\.offsetWidth, height=src\.offsetHeight;/);
+assert.match(indexHtml,/\.record-row-favorite\{\s*\n\s*width:28px; height:28px; padding:0; border:0; background:transparent;/);
+assert.match(indexHtml,/\.record-row-olive\{[\s\S]{0,140}?border-radius:50%;[\s\S]{0,80}?transform:rotate\(-11deg\);/);
 /* 변형에서 이동 성분은 떼어낸다. 자리는 이미 바깥 상자의 가운데로 잡았으므로
    translate가 남으면 그만큼 한 번 더 밀린다 — 상단바의 달력 버튼은
    translateY(-50%)로 세로를 맞추고 있어 강조가 위로 떠올랐다. */
@@ -410,7 +424,7 @@ assert.match(guide,/\(parseFloat\(shape\.radius\)\+pad\)\+'px'/);
    전체 둘러보기에서는 그 흐름이 뜻을 갖는다. */
 assert.match(guide,/const single=keys\.length===1;/);
 assert.match(guide,/if\(single && step\.nav\) return;/);
-assert.equal((guide.match(/nav:true/g)||[]).length,8,'챕터를 여는 길잡이 단계 여덟 개');
+assert.equal((guide.match(/nav:true/g)||[]).length,7,'챕터를 여는 길잡이 단계 일곱 개 — 메트로놈은 앱이 열리는 화면이라 없다');
 
 /* 설정 창이 열리면 강조도 창으로 옮겨 간다. 작은 버튼만 계속 비추면
    정작 무엇이 열렸는지 어두워서 보이지 않는다. */
@@ -514,6 +528,11 @@ assert.match(guide,/button\.style\.opacity=on\?'\.3':''/);
 assert.match(guide,/function stopRowPlayback\(doc\)/);
 assert.match(guide,/rec\.stopPlayback\(\)/);
 assert.match(recorder,/stopPlayback:stopPlaybackForOtherTool/,'도움말이 부르는 이름이다');
+/* 곧바로 한 줄만 비추면 그 줄이 무엇의 일부인지 알 수 없다. 목록 전체를 한 번
+   보여 주고 나서 한 줄로 좁힌다. */
+assert.match(guide,/target:'#recordList', before:openList,\s*\n\s*title:'한 목록에 모입니다'/);
+assert.ok(guide.indexOf("title:'한 목록에 모입니다'")<guide.indexOf("title:'행을 누르면 재생기'"),
+  '목록 전체가 한 행보다 먼저 온다');
 assert.match(guide,/before:doc=>\{ stopRowPlayback\(doc\); openList\(doc\); \}, title:'즐겨찾기 올리브'/);
 /* ••• 시트가 열리면 강조는 즐겨찾기 한 줄로 옮겨 간다. 시트 전체를 비추면
    어디를 눌러야 할지 알 수 없고 이름 변경·삭제까지 손이 닿는다. */
@@ -531,7 +550,7 @@ assert.match(guide,/hint:'삭제를 눌러 보세요', linger:3000/);
 /* 상자만 비춰서는 무엇이 달라졌는지 알기 어렵다. 해야 할 일을 적던 자리에
    무엇이 달라졌는지를 한 줄로 적고, 그 글을 읽을 만큼 머문다. */
 assert.match(guide,/function announce\(text\)\{[\s\S]{0,160}?coachHint\.classList\.add\('done'\)/);
-assert.match(guide,/announce\(step\.done\);\s*\n\s*deferAdvance\(step\.linger\|\|0\)/);
+assert.match(guide,/announce\(step\.done\);\s*\n\s*deferAdvance\(step\.linger\|\|0,step\.keepOpen\?SEAL_NEVER:0,step\.auto\)/);
 assert.match(guide,/coachHint\.classList\.remove\('done'\)/,'다음 단계에서는 다시 할 일을 적는다');
 assert.match(guide,/\.coach-hint\.done::before\{ content:'✓ '; \}/);
 /* 현 음은 소리를 들을 틈을 준다. 다만 여기서는 잠그지 않는다 — 현을 몇 개 돌아가며
@@ -547,13 +566,21 @@ assert.match(guide,/hint:'눌러서 마이크를 켜 보세요', linger:2500, do
 assert.match(guide,/button\.classList\.contains\('on'\)/,'앱이 마이크 켜짐을 표시하는 방식');
 assert.match(tuner,/tunerStart\.classList\.add\('on'\)/);
 assert.match(guide,/if\(mic && mic\.classList\.contains\('on'\)\) mic\.click\(\)/);
-assert.match(guide,/function deferAdvance\(ms,graceMs\)/);
+assert.match(guide,/function deferAdvance\(ms,graceMs,auto\)/);
 assert.match(guide,/if\(holds && graceMs!==SEAL_NEVER\)\{/,'여운이 길면 봉한다 — 견줘 봐야 하는 단계만 뺀다');
+/* 여운에는 두 종류가 있다. 글을 읽으라고 세워 둔 곳은 사람이 넘기고, 화면이 움직이는
+   것을 보여 주려고 세워 둔 곳은 시간이 넘긴다 — 꾹 누른 채 BPM이 10씩 오르는 동안이
+   그렇다. 뒤쪽은 봉하지도 않는다. 봉하면 손 뗀 신호가 앱에 닿지 않아 반복이 안 멈춘다. */
+assert.match(guide,/const holds=span>=SEAL_AFTER && !auto;/);
+assert.match(guide,/hint:'꾹 눌러 보세요', linger:1500, auto:true/);
+assert.match(guide,/function releaseTempoKeys\(doc\)/);
+assert.match(guide,/before:doc=>\{ releaseTempoKeys\(doc\); if\(bpm\(doc\)===90\) press\(doc,'#bpmPlus'\); \}/);
+assert.match(core,/el\.addEventListener\('pointercancel', end\)/,'앱이 반복을 멈추는 길이다');
 /* 여운 동안에는 아무것도 눌리지 않는다. 다만 구멍을 눌러 넘어가는 길은 pointerdown에서
    불리므로, 그 자리에서 봉하면 방금 그 탭의 click까지 삼켜 버튼이 아무 일도 하지 않는다 —
    청음의 올리브가 그래서 먹통이었다. 그 길만 손이 떨어질 틈을 두고 봉한다. */
 assert.match(guide,/const SEAL_GRACE=260;/);
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\?SEAL_NEVER:SEAL_GRACE\)/);
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\?SEAL_NEVER:SEAL_GRACE,step\.auto\)/);
 assert.match(guide,/sealTimer=setTimeout\(\(\)=>\{ sealTimer=0; if\(mine===token\) sealFrame\(true\); \},grace\)/);
 assert.match(guide,/if\(sealTimer\)\{ clearTimeout\(sealTimer\); sealTimer=0; \}/,'그만두면 봉인 예약도 거둔다');
 for(const said of ['즐겨찾기가 해제되었습니다','즐겨찾기가 다시 설정되었습니다','목록에서 삭제되었습니다']){
@@ -665,7 +692,7 @@ assert.doesNotMatch(guide,/8비트|포크 스트럼|보사노바|레게|왈츠/,
 for(const label of ['초급','중급','고급']) assert.ok(earTrainer.includes(`label:'${label}'`));
 assert.match(guide,/초급부터 고급까지 있습니다/);
 assert.match(earTrainer,/newQuestion\(true\), 1500\)/,'맞히면 1.5초 뒤');
-assert.match(guide,/맞히면 1\.5초 뒤/);
+assert.match(guide,/1\.5초 뒤에 다음 문제가 저절로 나옵니다/,'맞혔을 때를 가르치는 단계가 말한다');
 for(const label of ['기타 표준','기타 드롭 D','베이스 4현','우쿨렐레','만돌린']) assert.ok(tuner.includes(label));
 assert.match(guide,/기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다/);
 
@@ -762,16 +789,41 @@ assert.match(indexHtml,/\.record-player-tool:disabled\{ opacity:\.34/,'꺼진 �
 assert.match(guide,/target:'#tunerSens', also:'\.tuner-monitor'/);
 assert.match(indexHtml,/<div class="tuner-monitor"/);
 
-/* 알약 사이의 빈 곳도 상자 안이라 눌리면 넘어갔다. 고른 것이 바뀌었는지 본다. */
-assert.match(guide,/function pillOf\(doc,selector,key\)/);
-assert.match(guide,/memo:doc=>pillOf\(doc,'#earModes','mode'\), check:\(doc,memo\)=>pillOf\(doc,'#earModes','mode'\)!==memo/);
-assert.match(guide,/memo:doc=>pillOf\(doc,'#earLevels','level'\), check:\(doc,memo\)=>pillOf\(doc,'#earLevels','level'\)!==memo/);
+/* '고른 것이 바뀌었는가'로 보면 이미 켜져 있는 음정과 초급은 아무리 눌러도 넘어가지
+   못한다. 기본값을 고르려던 사람만 갇히는 셈이다. 알약을 실제로 눌렀는지로 본다 —
+   알약 사이의 빈 곳은 hitOn이 걸러 준다. */
+assert.doesNotMatch(guide,/pillOf/,'바뀌었는지로 판정하던 길은 남기지 않는다');
+assert.match(guide,/target:'#earModes', hitOn:'\.pill'/);
+assert.match(guide,/target:'#earLevels', hitOn:'\.pill'/);
+assert.match(guide,/if\(step\.hitOn && !\(event\.target\.closest && event\.target\.closest\(step\.hitOn\)\)\) return;/);
 assert.match(earTrainer,/classList\.toggle\('active', x\.dataset\.mode===mode\)/,'앱이 표시하는 방식이다');
 
-/* 소리가 끝나기도 전에 달력으로 넘어가면 뚝 끊긴 느낌이 든다. 가장 긴 음계가 2초 남짓이니
-   다 들려주고 1초를 더 둔다. 구멍을 눌러 넘어가는 길도 그 여운을 따른다. */
-assert.match(guide,/hint:'눌러서 들어 보세요', linger:3200\}/);
-assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\?SEAL_NEVER:SEAL_GRACE\)/);
+/* 한 번 누르면 곧바로 봉해 버려서 정작 '다시 듣기'를 눌러 볼 수가 없었다.
+   둘을 한 구멍에 넣고 여기서는 봉하지 않는다. 넘어가는 것은 사람이 정한다. */
+assert.match(guide,/target:'#earPlayBtn', also:'#earReplay'/);
+assert.match(guide,/hint:'눌러서 들어 보세요', keepOpen:true, linger:3200\}/);
+assert.match(indexHtml,/<button class="link-btn" id="earReplay">다시 듣기<\/button>/);
+
+/* 맞혔을 때와 틀렸을 때는 화면이 하는 일이 전혀 다르다. 한데 뭉뚱그리면 둘 다 흐려진다.
+   정답 표시는 도움말 미리보기에서만 붙으므로 앱에서는 정답이 새지 않는다. */
+assert.match(earTrainer,/const guidePreview = \/\[\?&\]guide=1\(\?:&\|\$\)\/\.test\(location\.search\);/);
+assert.match(earTrainer,/if\(guidePreview && item===answer\) b\.dataset\.answer='1';/);
+assert.match(guide,/target:doc=>doc\.querySelector\('#earChoices \.choice-row\[data-answer\]'\)/);
+assert.match(guide,/title:'맞혔을 때'/);
+assert.match(guide,/linger:2400, auto:true/,'다음 문제가 나온 뒤에 넘어간다');
+assert.match(earTrainer,/if\(correct\) nextTimer=setTimeout\(\(\)=>newQuestion\(true\), 1500\)/,'앱이 다음 문제를 내는 때');
+/* 틀린 뒤에는 보기가 그대로 살아 있다. 봉하지 않고 여운을 길게 두어 그 자리에서
+   정답과 내가 고른 것을 번갈아 눌러 보게 한다. */
+assert.match(guide,/title:'틀렸을 때'/);
+assert.match(guide,/hint:'일부러 틀린 것을 눌러 보세요', keepOpen:true, linger:4000/);
+assert.match(guide,/done:'보기를 눌러 두 소리를 비교해 보세요'/);
+assert.match(earTrainer,/if\(reviewingWrong\) playAnswer\(picked\);/,'틀린 뒤에는 보기가 소리를 낸다');
+assert.match(guide,/title:'올리브로 다음 문제'/);
+assert.match(earTrainer,/if\(reviewingWrong\) newQuestion\(true\);/,'올리브가 다음 문제가 되는 길');
+assert.match(guide,/if\(hit\) deferAdvance\(step\.linger\|\|420,step\.keepOpen\?SEAL_NEVER:SEAL_GRACE,step\.auto\)/);
+
+/* 한 번만 눌러 보면 만들어 준 그 패턴이 정해진 것인 줄 안다. 몇 번 눌러 보게 한다. */
+assert.match(guide,/hint:'세 번쯤 눌러 보세요', presses:3, linger:900/);
 
 /* 만들어만 놓고 끝나면 무엇을 만든 건지 모른 채 끝난다. 몇 마디 들려주고 나간다. */
 assert.match(guide,/target:'#rhyPlay', title:'들어 보기'/);

@@ -49,6 +49,11 @@
     {key:3, label:'고급'},
   ];
 
+  /* 도움말 미리보기에서만 정답 보기에 표시를 남긴다. 맞혔을 때와 틀렸을 때를
+     나눠서 가르치려면 어느 쪽을 누르라고 가리킬 수 있어야 한다. 앱에서는 붙지
+     않으므로 화면을 뜯어봐도 정답이 새지 않는다. */
+  const guidePreview = /[?&]guide=1(?:&|$)/.test(location.search);
+
   let mode = 'interval', level = 1;
   let current = null, answered = false, reviewingWrong = false, nextTimer = null, playFlash = null;
   let score = 0, total = 0, streak = 0;
@@ -265,6 +270,7 @@
       b.innerHTML = `<span class="choice-primary"><span class="ko">${item.ko}</span>${degrees}</span>`+
         `<span class="en">${item.en}</span>`;
       b.setAttribute('aria-label',item.ko+', '+item.en+(degrees?`, 구성 도수 ${item.degrees}`:''));
+      if(guidePreview && item===answer) b.dataset.answer='1';
       b.addEventListener('click', ()=>check(item, answer, b));
       earChoices.appendChild(b);
     });
