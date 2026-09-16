@@ -94,7 +94,18 @@ assert.match(recorder,/function needsPitchProcessing\(row\)/);
 assert.match(recorder,/function transposeRatio\(semitones\)/);
 assert.match(recorder,/Math\.pow\(2,\(Number\(semitones\)\|\|0\)\/12\)/);
 /* 배속이 1이어도 조옮김이 있으면 SoundTouch 경로가 필요하다. */
-assert.match(recorder,/if\(needsPitchProcessing\(row\) && typeof AudioWorkletNode==='function'\)/);
+assert.match(recorder,/const stretching=needsPitchProcessing\(row\) && typeof AudioWorkletNode==='function';/);
+
+/* ---------- 조옮김을 처음 걸 때의 버벅임 ----------
+   SoundTouch 파이프는 빈 출력 버퍼로 시작한다. 타임스트레처는 한 블록을 내놓기
+   전에 입력을 몇 블록 모아야 해서 처음 ¼초쯤 굶고, 굶은 스트레처는 그레인을
+   되풀이한다 — '아주 짧게 여러 번 처음으로 돌아가는' 소리가 그것이다.
+   재 보니 1300블록 중 언더런 60회 가운데 54회가 첫 100블록에 몰려 있었다.
+   그동안은 소리를 닫아 두고 실제 소리로 파이프를 채운다. */
+assert.match(recorder,/const STRETCH_PRIME_SECONDS=\.28;/);
+assert.match(recorder,/const prime=stretching \? STRETCH_PRIME_SECONDS : 0;/);
+/* 채우는 동안에도 소리는 흐르므로 그만큼 앞에서 시작해야 들리는 자리가 맞는다. */
+assert.match(recorder,/const backUp=Math\.min\(prime,Math\.max\(0,startAt\)\);\s*startAt-=backUp;/);
 assert.doesNotMatch(recorder,/if\(rate!==1 && typeof AudioWorkletNode/);
 assert.match(recorder,/stretchPitch\.value=transposeRatio\(rowTranspose\(row\)\)/);
 /* SoundTouch가 필요한지 판단하는 곳이 하나여야 한다. 워크릿 로드와 경로 선택이

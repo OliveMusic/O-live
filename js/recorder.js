@@ -1758,6 +1758,16 @@
     cloudDecodedLoad={id:row.id,ctx,promise};
     return promise;
   }
+  /* SoundTouch 파이프는 빈 출력 버퍼로 시작한다. 타임스트레처는 한 블록을 내놓기
+     전에 입력을 몇 블록 모아야 하므로, 처음 ¼초쯤은 요청한 128프레임을 채우지
+     못하고 굶는다. 굶은 스트레처는 그레인을 되풀이하는데 그게 '아주 짧게 여러 번
+     처음으로 돌아가는' 소리다.
+
+     재 보니 1300블록 중 언더런 60회가 났고 그중 54회가 첫 100블록(약 270ms)에
+     몰려 있었다. 그래서 그동안은 소리를 닫아 두고 파이프를 실제 소리로 채운 뒤에
+     연다. 조옮김을 처음 걸 때만 두드러졌던 이유는, 그 뒤로는 노드가 이미 있어
+     파라미터만 바뀌기 때문이다. */
+  const STRETCH_PRIME_SECONDS=.28;
   function startDecodedSource(ctx,buffer,row,token,offset,fadeIn){
     try{
       releaseCloudSource();
@@ -1776,17 +1786,29 @@
       }
       const level=rowPlaybackGain(row);
       gain.gain.value=level;
+      const stretching=needsPitchProcessing(row) && typeof AudioWorkletNode==='function';
       /* 네이티브 재생에서 갈아탈 때는 이미 스피커로 나간 소리와 새 소스의 첫 프레임이
-         겹쳐 아주 짧게 되울린 것처럼 들린다. 30여 밀리초만 열어 주면 그 이음매가 사라진다. */
-      if(fadeIn){
+         겹쳐 아주 짧게 되울린 것처럼 들린다. 30여 밀리초만 열어 주면 그 이음매가 사라진다.
+         스트레처를 새로 세울 때는 파이프가 찰 때까지 더 오래 닫아 둔다. */
+      /* 닫아 두는 시간과 물러서는 거리는 다른 값이다. 파이프는 언제나 채워야
+         하므로 닫는 시간은 늘 같고, 물러서는 것은 버퍼에 앞이 남아 있을 때만
+         할 수 있다. 물러설 수 있으면 귀에 들리기 시작하는 자리가 원래 자리와
+         같아지고, 파일 맨 앞이라 물러설 데가 없으면 그만큼 늦게 들어온다.
+         구간 앞으로 물러서도 된다 — loopEnd에 닿으면 정상적으로 구간을 돈다. */
+      const prime=stretching ? STRETCH_PRIME_SECONDS : 0;
+      const backUp=Math.min(prime,Math.max(0,startAt));
+      startAt-=backUp;
+      if(fadeIn || stretching){
         const open=ctx.currentTime;
+        const opens=open+prime;
         try{
           gain.gain.setValueAtTime(.0001,open);
-          gain.gain.linearRampToValueAtTime(Math.max(.0001,level),open+.035);
+          if(prime>0) gain.gain.setValueAtTime(.0001,opens);
+          gain.gain.linearRampToValueAtTime(Math.max(.0001,level),opens+.035);
         }catch(error){ gain.gain.value=level; }
       }
       try{ source.playbackRate.value=rate; }catch(error){}
-      if(needsPitchProcessing(row) && typeof AudioWorkletNode==='function'){
+      if(stretching){
         const stretch=new AudioWorkletNode(ctx,'soundtouch-processor',{
           numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],
           processorOptions:{sampleBufferType:'circular'},
