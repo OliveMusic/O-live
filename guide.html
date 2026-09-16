@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=257">
+<link rel="stylesheet" href="info.css?v=258">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -709,6 +709,14 @@
          gateSaid:'녹음 중입니다 — 잠시 뒤 넘어갈 수 있습니다', done:'5초가 담겼습니다',
          body:'왼쪽 <b>메트로놈 버튼</b>을 켜 두면 한 마디를 세고 시작하고, 녹음하는 내내 박이 들립니다. 클릭음은 녹음 파일에는 담기지 않습니다. 녹음 중에는 화면을 <b>직접 잠그지 마세요.</b> 자동으로 꺼지는 것은 막아 줍니다.',
          hint:'눌러서 녹음해 보세요', linger:2000,
+         /* 아직 오는 중인가. 앱은 카운트인 동안에도 isRecording()을 참으로 두고,
+            시작에 실패하면(권한 거절·다른 앱이 마이크 사용 중) 곧바로 거짓으로 내린다. */
+         pending:doc=>{
+           try{
+             const rec=doc.defaultView && doc.defaultView.OliveRecorder;
+             return Boolean(rec && rec.isRecording());
+           }catch(e){ return false; }
+         },
          check:doc=>{
            try{
              const rec=doc.defaultView && doc.defaultView.OliveRecorder;
@@ -1290,6 +1298,26 @@
     coach.style.left='50%';
     coach.style.transform='translateX(-50%)';
   }
+  /* 앱은 위에 제목 줄, 아래에 탭바가 떠 있다. 그 밑에 깔리면 강조 표시가 잘려 보인다.
+     가운데 띠를 벗어나면 끌어와 가운데에 세운다.
+     들어설 때 한 번만으로는 모자랐다 — 즐겨찾기를 떼면 그 줄이 목록 맨 아래로
+     내려가 탭바에 가렸고, 강조는 가려진 자리를 가리킨 채 멈춰 있었다. 그릴 때마다
+     지킨다. 이미 띠 안이면 아무 일도 하지 않는다. */
+  const SAFE_TOP=84, SAFE_BOTTOM=104;
+  function recenter(el){
+    if(!el || !el.isConnected) return;
+    try{
+      const view=el.ownerDocument.documentElement.clientHeight||0;
+      if(!view) return;
+      const box=el.getBoundingClientRect();
+      if(box.top>=SAFE_TOP && box.bottom<=view-SAFE_BOTTOM) return;
+      /* 띠보다 큰 것은 어차피 다 담을 수 없다. 화면에 걸쳐 있기만 하면 그대로 둔다 —
+         매번 끌어오면 제자리에서 계속 들썩인다. */
+      if(box.height>view-SAFE_TOP-SAFE_BOTTOM
+         && box.bottom>SAFE_TOP && box.top<view-SAFE_BOTTOM) return;
+      el.scrollIntoView({block:'center',inline:'nearest'});
+    }catch(e){}
+  }
   /* 앱이 목록을 다시 그리면 붙잡아 둔 요소는 문서에서 떨어져 나간다. 그러면 구멍이
      그 자리에 얼어붙는다. 그래서 요소가 아니라 찾는 법을 들고 매번 다시 찾는다. */
   function repaint(){
@@ -1297,7 +1325,7 @@
     if(!tracked || !doc) return;
     let el=null;
     try{ el=resolveTarget(doc,tracked); }catch(e){}
-    if(el && el.isConnected) paint(el,trackedAlso);
+    if(el && el.isConnected){ recenter(el); paint(el,trackedAlso); }
   }
   let nudge=null, nudgeDoc=null;
   function dropNudge(){
@@ -1374,8 +1402,12 @@
     coachNext.classList.remove('quiet');
     coachNext.disabled=false;
   }
-  /* 끝내 녹음이 시작되지 않으면(마이크를 막았다든지) 가둬 두지 않는다. 잠금만 푼다. */
-  const GATE_GIVE_UP=14000;
+  /* 끝내 시작되지 않으면(마이크를 막았다든지) 가둬 두지 않는다. 다만 '얼마를 기다릴까'로
+     재면 안 된다 — 카운트인은 한 마디라서 30 BPM 12/8이면 25초까지 간다. 넉넉하다고
+     고른 수가 그보다 짧으면 세는 도중에 잠금이 풀려 애초에 막으려던 일이 그대로 일어난다.
+     기다리는 것은 시계가 아니라 기척이다: 오는 중이면(step.pending) 얼마가 걸리든 기다리고,
+     기척이 끊기면 그때부터 이만큼만 두고 푼다. */
+  const GATE_FAILED_AFTER=1500;
   function cancelDefer(){
     if(deferTimer){ clearTimeout(deferTimer); deferTimer=0; }
     if(sealTimer){ clearTimeout(sealTimer); sealTimer=0; }
@@ -1467,16 +1499,7 @@
       return waitFor(()=>resolveTarget(frameDoc(),step.target)).then(el=>{
       if(!running || mine!==token) return;
       if(!el){ advance(); return; }
-      /* 앱은 위에 제목 줄, 아래에 탭바가 떠 있다. 그 밑에 깔리면 강조 표시가 잘려 보인다.
-         가운데 띠를 벗어나면 한 번 끌어와 가운데에 세운다. */
-      try{
-        const box=el.getBoundingClientRect();
-        const view=frameDoc().documentElement.clientHeight||0;
-        const safeTop=84, safeBottom=104;
-        if(view && (box.top<safeTop || box.bottom>view-safeBottom)){
-          el.scrollIntoView({block:'center',inline:'nearest'});
-        }
-      }catch(e){}
+      recenter(el);
       coachTitle.textContent=step.title;
       coachBody.innerHTML=step.body;
       const needsTap=step.advance!=='next';
@@ -1523,13 +1546,13 @@
       /* 누른 순간과 볼 것이 생기는 순간이 다른 단계가 있다 — 녹음은 카운트인이 끝나야
          비로소 돌아간다. gate가 걸린 단계는 누르는 즉시 '다음'을 잠그고, 해낸 상태가
          그만큼 이어진 뒤에 푼다. 도중에 멈추면 처음부터 다시 센다. */
-      let armed=0, held=0;
+      let armed=0, held=0, idle=0;
       if(step.gate){
         const armTarget=resolveTarget(doc,step.target);
         const onArm=event=>{
           if(armed || !armTarget) return;
           if(armTarget!==event.target && !armTarget.contains(event.target)) return;
-          armed=Date.now();
+          armed=Date.now(); idle=armed;
           coachNext.disabled=true;
         };
         doc.addEventListener('pointerdown',onArm,true);
@@ -1544,7 +1567,11 @@
           if(!armed) return;
           if(!ok){
             held=0;
-            if(Date.now()-armed>GATE_GIVE_UP){ clearInterval(timer); timer=0; coachNext.disabled=false; }
+            let coming=false;
+            if(step.pending){ try{ coming=Boolean(step.pending(now)); }catch(e){} }
+            if(coming){ idle=0; return; }          /* 오는 중이면 얼마가 걸리든 기다린다 */
+            if(!idle) idle=Date.now();
+            if(Date.now()-idle>GATE_FAILED_AFTER){ clearInterval(timer); timer=0; coachNext.disabled=false; }
             return;
           }
           if(!held){ held=Date.now(); announce(step.gateSaid); }

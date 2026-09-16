@@ -26,6 +26,7 @@ const appShell=read('js/app-shell.js');
 const infoCss=read('info.css');
 const worklet=read('vendor/soundtouch/soundtouch-processor.js');
 const core=read('js/core.js');
+const metronome=read('js/metronome.js');
 const audioRuntime=read('js/audio-runtime.js');
 const worker=read('service-worker.js');
 const manifest=JSON.parse(read('manifest.json'));
@@ -328,9 +329,15 @@ assert.match(guide,/function deferAdvance\(ms,graceMs,auto\)/);
 assert.match(guide,/if\(mine===token\) advance\(\)/);
 assert.match(guide,/function stopListening\(\)\{ cancelDefer\(\); if\(pass\) pass\(\); \}/);
 assert.doesNotMatch(guide,/setTimeout\(advance,/,'진행은 반드시 취소 가능한 경로로만 미룬다');
-/* 앱은 위에 제목 줄, 아래에 탭바가 떠 있다. 그 밑에 깔리면 강조가 잘려 보인다. */
-assert.match(guide,/const safeTop=84, safeBottom=104;/);
+/* 앱은 위에 제목 줄, 아래에 탭바가 떠 있다. 그 밑에 깔리면 강조가 잘려 보인다.
+   들어설 때 한 번만으로는 모자랐다 — 즐겨찾기를 떼면 그 줄이 목록 맨 아래로 내려가
+   탭바에 가렸고, 강조는 가려진 자리를 가리킨 채 멈춰 있었다. 그릴 때마다 지킨다. */
+assert.match(guide,/const SAFE_TOP=84, SAFE_BOTTOM=104;/);
+assert.match(guide,/function recenter\(el\)/);
+assert.match(guide,/if\(el && el\.isConnected\)\{ recenter\(el\); paint\(el,trackedAlso\); \}/);
 assert.match(guide,/el\.scrollIntoView\(\{block:'center',inline:'nearest'\}\)/);
+/* 띠보다 큰 것은 어차피 다 담을 수 없다. 매번 끌어오면 제자리에서 계속 들썩인다. */
+assert.match(guide,/if\(box\.height>view-SAFE_TOP-SAFE_BOTTOM/);
 /* 앱으로 나갈 때 도움말을 방문 기록에 남기지 않는다. 아이폰에서 옆으로 쓸면 되돌아간다. */
 assert.match(guide,/a\[href\^="index\.html"\]/);
 assert.match(guide,/location\.replace\(appLink\.getAttribute\('href'\)\)/);
@@ -575,9 +582,19 @@ assert.match(guide,/if\(!held\)\{ held=Date\.now\(\); announce\(step\.gateSaid\)
 assert.match(guide,/if\(Date\.now\(\)-held<step\.gate\) return;/);
 assert.match(guide,/coachNext\.disabled=true;/,'누른 순간부터 잠근다');
 assert.match(guide,/\.coach-next:disabled\{ opacity:\.4; cursor:default; \}/);
-/* 끝내 시작되지 않으면(마이크를 막았다든지) 가둬 두지 않는다. */
-assert.match(guide,/const GATE_GIVE_UP=14000;/);
-assert.match(guide,/if\(Date\.now\(\)-armed>GATE_GIVE_UP\)\{ clearInterval\(timer\); timer=0; coachNext\.disabled=false; \}/);
+/* 끝내 시작되지 않으면(마이크를 막았다든지) 가둬 두지 않는다. 다만 '얼마를 기다릴까'로
+   재면 안 된다 — 카운트인은 한 마디라서 30 BPM 12/8이면 25초까지 간다. 넉넉하다고 고른
+   수가 그보다 짧으면 세는 도중에 잠금이 풀려 애초에 막으려던 일이 그대로 일어난다.
+   기다리는 것은 시계가 아니라 기척이다. */
+assert.match(guide,/const GATE_FAILED_AFTER=1500;/);
+assert.doesNotMatch(guide,/GATE_GIVE_UP/,'시계로 재던 길은 남기지 않는다');
+assert.match(guide,/if\(coming\)\{ idle=0; return; \}/,'오는 중이면 얼마가 걸리든 기다린다');
+assert.match(guide,/if\(Date\.now\(\)-idle>GATE_FAILED_AFTER\)\{ clearInterval\(timer\); timer=0; coachNext\.disabled=false; \}/);
+/* 앱이 쓰는 신호: 카운트인 중에도 참이고, 시작에 실패하면 곧바로 거짓이 된다. */
+assert.match(guide,/pending:doc=>\{/);
+assert.match(recorder,/isRecording:\(\)=>recording \|\| startPending/);
+assert.match(recorder,/startPending=false; recording=false;/,'실패하면 곧바로 내린다');
+assert.match(metronome,/\{label:'12\/8', beats:12/,'가장 긴 마디');
 assert.match(guide,/function offerNext\(\)\{[\s\S]{0,120}?coachNext\.disabled=false;/,'풀어 주는 곳은 한 군데다');
 
 /* 곧바로 한 줄만 비추면 그 줄이 무엇의 일부인지 알 수 없다. 목록 전체를 한 번
