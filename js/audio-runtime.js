@@ -19,6 +19,7 @@ let __backgroundStreamCtx = null;
 let __backgroundUsesStream = false;
 let __backgroundMediaActionMode = '';
 let __audioSessionMode = '';
+let __pausedClock = null, __pausedAt = 0;
 let __externalMediaSessionOwner = '';
 
 /* 잠금 화면의 원격 명령이 실제로 도착했는지, 엔진이 어떤 순서로 깨어났는지는
@@ -476,6 +477,13 @@ function pauseBackgroundPlayback(){
   __backgroundMediaPaused=true;
   __backgroundResumeSequence++;
   __backgroundMediaArmed=false;
+  /* 임시: 멈출 때의 오디오 시계와 벽시계를 적어 둔다. 재개할 때 둘을 견주면 엔진이
+     실제로 살아 있었는지 알 수 있다 — 상태가 running이어도 시계가 안 흘렀으면 죽은
+     것이다. 원인을 잡고 고치면 이 기록은 판단에 쓰고 진단 출력만 지운다. */
+  try{
+    __pausedClock=audioCtx ? audioCtx.currentTime : null;
+    __pausedAt=Date.now();
+  }catch(e){ __pausedClock=null; }
   setBackgroundTransportsPaused(true);
   if(__backgroundAudio && !__backgroundAudio.paused){
     __stoppingBackgroundMedia=true;
@@ -530,7 +538,16 @@ function resumeBackgroundPlayback(){
   // 합류시키지 않고 세대 번호로 무효화하면, 늦게 끝난 작업이 최신 상태를 덮지 않는다.
   if(__backgroundResumePromise) recordAudioDiagnostic('transport:resume-superseded');
   const resumeSequence=++__backgroundResumeSequence;
-  recordAudioDiagnostic('transport:resume-start');
+  /* 임시: 쉬는 동안 오디오 시계가 벽시계만큼 흘렀는지. 한참 모자라면 엔진이 죽어
+     있었다는 뜻이고, 그때 play()와 resume()은 끝나지 않는 프라미스를 준다. */
+  let clockMoved=null, wallMoved=null;
+  try{
+    if(__pausedClock!=null && audioCtx){
+      clockMoved=Number((audioCtx.currentTime-__pausedClock).toFixed(2));
+      wallMoved=Number(((Date.now()-__pausedAt)/1000).toFixed(2));
+    }
+  }catch(e){}
+  recordAudioDiagnostic('transport:resume-start',{clockMoved,wallMoved});
   const task=(async()=>{
     let audio=__backgroundAudio;
     if(!audio) throw new Error('BackgroundAudioUnavailable');
