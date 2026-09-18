@@ -442,7 +442,7 @@ function refreshBackgroundAudioForResume(ctx){
   }catch(error){
     try{ audio.srcObject=mediaStream; }catch(e){}
     recordAudioDiagnostic('media-element:refresh-failed',{
-      error:String(error&&error.name||error&&error.message||error).slice(0,80),
+      error:String(error&&error.message||error&&error.name||error).slice(0,80),
     });
   }finally{
     __stoppingBackgroundMedia=false;
@@ -549,15 +549,30 @@ function resumeBackgroundPlayback(){
       configureBackgroundMediaSession(activeBackgroundLabel(),true);
     }
     let mediaReady=Promise.resolve(), firstResume=Promise.resolve();
+    const startedAt=Date.now();
     try{
       const result=audio.play();
       if(result && typeof result.then==='function') mediaReady=result;
     }catch(error){ mediaReady=Promise.reject(error); }
+    /* 임시: play()와 resume()이 각각 어떻게 끝나는지 따로 남긴다. 둘을 한 덩어리로
+       기다리면 무엇이 막혔는지 알 수 없다. 원인을 잡으면 지운다. */
+    mediaReady.then(
+      ()=>recordAudioDiagnostic('play:ok',{ms:Date.now()-startedAt}),
+      error=>recordAudioDiagnostic('play:rejected',{
+        ms:Date.now()-startedAt,
+        error:String(error&&error.message||error&&error.name||error).slice(0,80),
+      }));
     try{
       // 구형 경로의 suspend()가 아직 끝나지 않았어도 원격 버튼의 사용자 제스처
       // 안에서 resume()을 먼저 요청한다. 완료 뒤에도 상태를 다시 확인한다.
       firstResume=Promise.resolve(ctx.resume());
     }catch(error){ firstResume=Promise.reject(error); }
+    firstResume.then(
+      ()=>recordAudioDiagnostic('ctxresume:ok',{ms:Date.now()-startedAt}),
+      error=>recordAudioDiagnostic('ctxresume:rejected',{
+        ms:Date.now()-startedAt,
+        error:String(error&&error.message||error&&error.name||error).slice(0,80),
+      }));
     const suspendSettled=__backgroundSuspendPromise
       ? __backgroundSuspendPromise.catch(()=>{}) : Promise.resolve();
     const contextReady=Promise.all([suspendSettled,firstResume.catch(()=>{})]).then(()=>{
@@ -599,7 +614,8 @@ function resumeBackgroundPlayback(){
       __stoppingBackgroundMedia=false;
       try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
       recordAudioDiagnostic('transport:resume-failed',{
-        error:String(error&&error.name||error&&error.message||error).slice(0,80),
+        ms:Date.now()-startedAt,
+        error:String(error&&error.message||error&&error.name||error).slice(0,80),
       });
       throw error;
     }

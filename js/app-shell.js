@@ -131,6 +131,7 @@ function bindAudioDiagnostics(trigger){
       if(entry.out) bits.push('out='+entry.out);
       if(entry.same===false) bits.push('ctx다름');
       if(entry.visibility) bits.push(entry.visibility);
+      if(entry.ms!=null) bits.push(entry.ms+'ms');
       if(entry.error) bits.push('ERR '+entry.error);
       return at+'  '+bits.join(' · ');
     });
