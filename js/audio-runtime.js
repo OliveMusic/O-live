@@ -557,10 +557,16 @@ function resumeBackgroundPlayback(){
      것은 원인이 아니라 결과였다.
 
      상태는 못 믿어도 시계는 믿을 수 있다. 멈출 때 두 시계를 적어 뒀으니 제스처 안에서
-     바로 셈이 된다: 쉰 시간이 9초를 넘었거나(동결은 10.7초에 온다) 오디오 시계가
-     벽시계보다 0.3초 넘게 뒤처졌으면 엔진은 이미 죽은 것이다. */
-  const engineStalled=wallMoved!=null &&
-    (wallMoved>=9 || (clockMoved!=null && wallMoved-clockMoved>0.3));
+     바로 셈이 된다 — **오디오 시계가 벽시계보다 뒤처진 만큼이 엔진이 쉰 시간이다.**
+
+     쉰 시간으로 재면 안 된다. 9.8초 쉬고 누른 판에서 시계는 9.83 대 9.8로 완벽히
+     맞았다. 동결은 10.7초에 오므로 그때 엔진은 멀쩡히 살아 있었는데, 시간으로 재던
+     기준이 죽었다고 단정하고 멀쩡한 엔진을 걷어찼다. 재 둔 값으로 가른다:
+     성한 판은 -0.03과 0.02초, 죽은 판은 0.56과 0.87초였다. 0.3초가 그 사이에 있다.
+
+     어긋남으로 재면 스스로 바로잡히기도 한다. 한 번 되살린 뒤 다시 누르면 그동안
+     흐른 시계가 셈에 들어와 어긋남이 줄고, 성한 엔진을 두 번 걷어차지 않는다. */
+  const engineStalled=wallMoved!=null && clockMoved!=null && wallMoved-clockMoved>0.3;
   const task=(async()=>{
     let audio=__backgroundAudio;
     if(!audio) throw new Error('BackgroundAudioUnavailable');
@@ -588,10 +594,11 @@ function resumeBackgroundPlayback(){
        기다리지 않고 걸어만 둔다. 아래 audio.play()는 같은 동기 구간에서 불려야
        제스처를 잃지 않는다. 엔진이 되살아나 스트림에 다시 소리가 흐르면, 매달려 있던
        play()도 그때 풀린다. */
+    let enginePrimed=Promise.resolve();
     if(engineStalled && ctx.state==='running'){
       recordAudioDiagnostic('engine:stalled',{clockMoved,wallMoved});
       try{
-        Promise.resolve(ctx.suspend())
+        enginePrimed=Promise.resolve(ctx.suspend())
           .then(()=>ctx.resume())
           .then(
             ()=>recordAudioDiagnostic('engine:kicked',{ms:Date.now()-startedAt}),
@@ -662,7 +669,11 @@ function resumeBackgroundPlayback(){
 
     const suspendSettled=__backgroundSuspendPromise
       ? __backgroundSuspendPromise.catch(()=>{}) : Promise.resolve();
-    const contextReady=Promise.all([suspendSettled,firstResume.catch(()=>{})]).then(()=>{
+    /* 되살리는 동안은 컨텍스트가 잠깐 suspended가 된다. 그 틈에 아래 완료 검사가
+       끼어들면 우리가 일부러 재운 것을 두고 실패를 선언하고, 실패 처리가 방금 건
+       재생을 도로 멈춘다 — 잠금화면의 재생 단추가 안 눌리는 것처럼 보이던 것이
+       그것이다. 기록으로도 6ms 차이였다: resume-failed가 35ms, engine:kicked가 41ms. */
+    const contextReady=Promise.all([suspendSettled,enginePrimed,firstResume.catch(()=>{})]).then(()=>{
       if(ctx!==audioCtx) throw new Error('AudioContextChanged');
       return ctx.state==='running' ? ctx : ctx.resume();
     });
