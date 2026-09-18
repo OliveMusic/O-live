@@ -586,6 +586,18 @@ assert.match(audioRuntime,/out\.gain\.exponentialRampToValueAtTime\(0\.0001,now\
 assert.match(earTrainer,/if\(typeof stopVoices==='function'\) stopVoices\(\);/);
 assert.doesNotMatch(read('js/scales.js'),/stopVoices/,'건반은 겹쳐 울려야 글리산도가 된다');
 
+/* ---------- 올리브는 첫 박에 굴러 나간다 ----------
+   parkOlive()는 rollRight를 잠깐 true로 바꿔 늘 '왼쪽' 자세를 그리지만, drawRoll은
+   살아 있는 rollRight를 본다. 그래서 시작 직후 첫 프레임이 p=0·rollRight=false로
+   그려져 올리브를 오른쪽 끝(x 80.8)에 옮겨 놓았다가, 첫 박에서 왼쪽(x 18.2)으로
+   되돌아온 뒤에야 굴렀다 — 눌렀을 때 튀어 보이던 것이 그것이다.
+   첫 박이 오기 전에는 그리지 않는다. */
+assert.match(metronome,/if\(rollBeat>0 && beatSpan>0\) drawRoll\(\(now-beatAt\)\/beatSpan\);/);
+assert.doesNotMatch(metronome,/\n\s*if\(beatSpan>0\) drawRoll/,'첫 박 전에 그리던 길은 남기지 않는다');
+/* 세워 둔 자리가 왼쪽이므로, 첫 박에서 뒤집혀 오른쪽으로 가려면 시작 때 거짓이어야 한다. */
+assert.match(metronome,/rollBeat=0;\s*\n(\s*\/\*[\s\S]*?\*\/\s*\n)?\s*rollRight=false;/);
+assert.match(metronome,/rollRight = false; parkOlive\(\);/,'멈출 때도 왼쪽에 세운다');
+
 /* ---------- 메트로놈 첫 클릭 ----------
    끄면 컨텍스트가 정리되므로 켤 때는 늘 막 열린 경로다(재 보면 currentTime이 0.000,
    clockAwake가 거짓이다). 막 열린 경로는 첫 소리를 작게 내므로 들리지 않는 음으로

@@ -354,7 +354,11 @@
           dots[b.beatIndex].classList.add(b.level===2?'accent-on':b.level===1?'mid-on':'on');
       }
     }
-    if(beatSpan>0) drawRoll((now-beatAt)/beatSpan);
+    /* 첫 박이 오기 전에는 그리지 않는다. parkOlive()는 늘 왼쪽 자세를 그리지만
+       drawRoll은 살아 있는 rollRight를 보므로, 시작 직후 한 프레임이 올리브를
+       오른쪽으로 옮겨 놓았다 — 눌렀을 때 오른쪽으로 튀었다가 왼쪽으로 돌아와서
+       구르던 것이 그것이다. 세워 둔 자세 그대로 첫 박을 기다린다. */
+    if(rollBeat>0 && beatSpan>0) drawRoll((now-beatAt)/beatSpan);
     requestAnimationFrame(()=>visualLoop(gen));
   }
 
@@ -379,6 +383,9 @@
       isPlaying=true;
       currentStep=0;
       rollBeat=0;
+      /* 세워 둔 자리는 왼쪽이다. 첫 박에서 뒤집히므로 여기서는 거짓이어야
+         왼쪽에서 오른쪽으로 구르기 시작한다. */
+      rollRight=false;
       scheduledBeats=[];
       /* 버튼 반응은 즉시 느껴지되 Web Audio가 첫 박을 놓치지 않을 최소 여유만 둔다.
          녹음 카운트인처럼 첫 박이 온전히 들려야 하는 쪽은 더 긴 여유를 달라고 한다.
@@ -454,6 +461,7 @@
     createMetroOutput(metroCtx);
     currentStep=0;
     rollBeat=0;
+    rollRight=false;
     scheduledBeats=[];
     /* 잠금에서 돌아와 다시 거는 자리다. 여기서도 경로가 막 열렸을 수 있다. */
     nextNoteTime=typeof noteStart==='function'
