@@ -79,24 +79,8 @@ function currentAudioDiagnosticState(){
     actionMode:__backgroundMediaActionMode||'none',
     transport:transport ? transport.label : 'none',
     tempo,
-    /* 임시: 잠금화면 재개 뒤 소리가 안 나는 것을 가리려고 둔다. 앱의 소리는
-       MediaStream을 거쳐 <audio>로 나간다. 그 통로가 죽으면 요소는 '재생 중'이라
-       보고하면서도 아무것도 내보내지 않는다 — 원인을 잡으면 이 줄을 지운다. */
-    track:trackHealth(),
-    /* 임시: 그래프에 신호가 실제로 흐르는지. 여기가 0이면 소리를 못 만들고 있는 것이고,
-       0이 아닌데 안 들리면 만든 소리가 밖으로 못 나가는 것이다. 원인을 잡으면 지운다. */
-    peak:appSignalPeak(),
     gain:__appOutput ? Number(__appOutput.gain.value.toFixed(3)) : null,
   };
-}
-function trackHealth(){
-  try{
-    const dest=__backgroundStreamDestination;
-    if(!dest || !dest.stream) return null;
-    const track=dest.stream.getAudioTracks()[0];
-    if(!track) return 'no-track';
-    return track.readyState+(track.muted?' muted':'')+(track.enabled?'':' disabled');
-  }catch(e){ return 'err'; }
 }
 function recordAudioDiagnostic(event,details={}){
   try{
@@ -168,52 +152,6 @@ function getAppOutput(ctx){
   __appOutputCtx=ctx;
   __appOutput.connect(ctx.destination);
   return __appOutput;
-}
-
-/* 임시: 앱이 만든 소리가 실제로 흐르는지 재는 자리. 마스터와 출력 사이에 끼운다 —
-   분석기는 소리를 그대로 통과시키므로 들리는 것은 달라지지 않고, 출력 노드의 연결은
-   건드리지 않아 라우팅을 보는 눈도 그대로다. 원인을 잡으면 지운다. */
-let __appMeter=null, __appMeterCtx=null;
-function meteredOutput(ctx){
-  const out=getAppOutput(ctx);
-  try{
-    if(!__appMeter || __appMeterCtx!==ctx){
-      __appMeter=ctx.createAnalyser();
-      __appMeter.fftSize=512;
-      __appMeterCtx=ctx;
-      __appMeter.connect(out);
-    }
-    return __appMeter;
-  }catch(e){
-    __appMeter=null; __appMeterCtx=null;
-    return out;
-  }
-}
-function appSignalPeak(){
-  try{
-    if(!__appMeter) return null;
-    const buf=new Float32Array(__appMeter.fftSize);
-    __appMeter.getFloatTimeDomainData(buf);
-    let p=0;
-    for(let i=0;i<buf.length;i++){ const v=Math.abs(buf[i]); if(v>p) p=v; }
-    return Number(p.toFixed(4));
-  }catch(e){ return null; }
-}
-
-/* 임시: 한 순간의 값은 쓸모가 없다 — 클릭은 45ms짜리라 예약하는 순간에 재면 늘 0이다.
-   몇 초를 훑어 최대치를 남긴다. 원인을 잡으면 지운다. */
-let __signalWatch=0;
-function watchSignal(label,seconds){
-  clearInterval(__signalWatch);
-  let top=0, left=Math.round((seconds||3)*1000/100);
-  __signalWatch=setInterval(()=>{
-    const p=appSignalPeak();
-    if(p!=null && p>top) top=p;
-    if(--left<=0){
-      clearInterval(__signalWatch); __signalWatch=0;
-      recordAudioDiagnostic('signal:'+label,{peakMax:Number(top.toFixed(4))});
-    }
-  },100);
 }
 
 function routeAppOutput(destination){
@@ -402,9 +340,6 @@ function createBackgroundAudioElement(){
       return;
     }
     recordAudioDiagnostic('media-element:playing');
-    /* 임시: 처음 켤 때와 재개할 때 같은 잣대로 잰다. 잘 되는 판의 기준선이 있어야
-       실패한 판과 견줄 수 있다. 원인을 잡으면 지운다. */
-    watchSignal(__backgroundMediaPaused?'resume':'start',3);
     // 오래 잠근 뒤에는 <audio>가 먼저 playing이 되어도 AudioContext는 아직
     // suspended일 수 있다. 박자를 먼저 열지 말고 엔진 복구가 끝날 때까지 기다린다.
     if(__backgroundMediaPaused){
@@ -523,9 +458,8 @@ function pauseBackgroundPlayback(){
   __backgroundMediaPaused=true;
   __backgroundResumeSequence++;
   __backgroundMediaArmed=false;
-  /* 임시: 멈출 때의 오디오 시계와 벽시계를 적어 둔다. 재개할 때 둘을 견주면 엔진이
-     실제로 살아 있었는지 알 수 있다 — 상태가 running이어도 시계가 안 흘렀으면 죽은
-     것이다. 원인을 잡고 고치면 이 기록은 판단에 쓰고 진단 출력만 지운다. */
+  /* 멈출 때의 오디오 시계와 벽시계를 적어 둔다. 재개할 때 둘을 견주면 엔진이 그동안
+     실제로 돌았는지 알 수 있다 — 상태가 running이어도 시계가 안 흘렀으면 멈춘 것이다. */
   try{
     __pausedClock=audioCtx ? audioCtx.currentTime : null;
     __pausedAt=Date.now();
@@ -600,8 +534,8 @@ function resumeBackgroundPlayback(){
   __keepAliveRestored=false;
   if(__backgroundResumePromise) recordAudioDiagnostic('transport:resume-superseded');
   const resumeSequence=++__backgroundResumeSequence;
-  /* 임시: 쉬는 동안 오디오 시계가 벽시계만큼 흘렀는지. 한참 모자라면 엔진이 죽어
-     있었다는 뜻이고, 그때 play()와 resume()은 끝나지 않는 프라미스를 준다. */
+  /* 쉬는 동안 오디오 시계가 벽시계만큼 흘렀는지. 뒤처진 만큼이 엔진이 멈춰 있던
+     시간이다. */
   let clockMoved=null, wallMoved=null;
   try{
     if(__pausedClock!=null && audioCtx){
@@ -678,14 +612,6 @@ function resumeBackgroundPlayback(){
       const result=audio.play();
       if(result && typeof result.then==='function') mediaReady=result;
     }catch(error){ mediaReady=Promise.reject(error); }
-    /* 임시: play()와 resume()이 각각 어떻게 끝나는지 따로 남긴다. 둘을 한 덩어리로
-       기다리면 무엇이 막혔는지 알 수 없다. 원인을 잡으면 지운다. */
-    mediaReady.then(
-      ()=>recordAudioDiagnostic('play:ok',{ms:Date.now()-startedAt}),
-      error=>recordAudioDiagnostic('play:rejected',{
-        ms:Date.now()-startedAt,
-        error:String(error&&error.message||error&&error.name||error).slice(0,80),
-      }));
     /* 스트림 경로는 일시정지할 때 컨텍스트를 재우지 않는다 — 아래 pauseBackgroundPlayback의
        suspend()는 구형 경로에서만 돈다. 그러니 이미 돌고 있는 엔진에 resume()을 부를
        까닭이 없는데, 기록을 보면 바로 그 호출 언저리에서 엔진 시계가 얼어붙었다.
@@ -702,33 +628,7 @@ function resumeBackgroundPlayback(){
         // 안에서 resume()을 먼저 요청한다. 완료 뒤에도 상태를 다시 확인한다.
         firstResume=Promise.resolve(ctx.resume());
       }catch(error){ firstResume=Promise.reject(error); }
-      firstResume.then(
-        ()=>recordAudioDiagnostic('ctxresume:ok',{ms:Date.now()-startedAt}),
-        error=>recordAudioDiagnostic('ctxresume:rejected',{
-          ms:Date.now()-startedAt,
-          error:String(error&&error.message||error&&error.name||error).slice(0,80),
-        }));
-    }else{
-      recordAudioDiagnostic('ctxresume:skipped');
     }
-    /* 임시: play()가 매달려 있는 동안 요소가 어디까지 갔는지 훔쳐본다. 엔진도 트랙도
-       살아 있는데 요소만 안 움직이므로, 막힌 칸이 '재생 요청'인지 '재생 장치'인지를
-       가려야 한다. paused가 참으로 남으면 iOS가 요청을 막은 것이고, paused는 풀렸는데
-       elTime이 안 흐르면 요소의 렌더러가 죽은 것이다. 원인을 잡으면 지운다. */
-    [250,900,2200,4000].forEach(delay=>setTimeout(()=>{
-      if(resumeSequence!==__backgroundResumeSequence) return;
-      try{
-        recordAudioDiagnostic('resume:probe',{
-          elapsed:Date.now()-startedAt,
-          elPaused:audio.paused,
-          elReady:audio.readyState,
-          elTime:Number(audio.currentTime.toFixed(2)),
-          elError:audio.error?('code'+audio.error.code):null,
-          ctxTime:Number(ctx.currentTime.toFixed(2)),
-        });
-      }catch(e){}
-    },delay));
-
     const suspendSettled=__backgroundSuspendPromise
       ? __backgroundSuspendPromise.catch(()=>{}) : Promise.resolve();
     /* 되살리는 동안은 컨텍스트가 잠깐 suspended가 된다. 그 틈에 아래 완료 검사가

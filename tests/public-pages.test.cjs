@@ -167,13 +167,8 @@ assert.match(index,/getTempo:\(\)=>bpm,[\s\S]*?adjustTempo,/);
 assert.match(index,/getTempo:\(\)=>jamBpm,[\s\S]*?adjustTempo:adjustJamTempo,/);
 assert.match(index,/audio\.addEventListener\('pause',[\s\S]*?pauseBackgroundPlayback\(\)/);
 assert.match(index,/ctx\.suspend\(\)/);
-/* 마스터 → 컴프레서 → 앱 출력. 지금은 그 사이에 임시 분석기(meteredOutput)가 하나
-   끼어 있다 — 소리는 그대로 통과하고, 원인을 잡으면 getAppOutput(ctx)로 되돌린다. */
-assert.match(index,/__master\.connect\(comp\)\.connect\(\s*\n?\s*typeof meteredOutput==='function' \? meteredOutput\(ctx\) : getAppOutput\(ctx\)\)/);
-assert.match(audioRuntime,/function meteredOutput\(ctx\)/);
-assert.match(audioRuntime,/__appMeter\.connect\(out\);/,'분석기는 출력 앞에 끼운다');
-assert.doesNotMatch(audioRuntime,/__appMeter\.connect\(ctx\.destination\)/,
-  '출력 노드의 연결은 건드리지 않는다 — E2E가 거기서 라우팅을 본다');
+/* 마스터 → 컴프레서 → 앱 출력. 사이에 아무것도 끼우지 않는다. */
+assert.match(index,/__master\.connect\(comp\)\.connect\(getAppOutput\(ctx\)\);/);
 assert.match(index,/playClick\(time - metroCtx\.currentTime, level, metroCtx, metroOutput\)/);
 assert.match(index,/metroOutput\.disconnect\(\)/);
 assert.match(index,/if\(paused\)\{[\s\S]*?releaseMetroOutput\(\)[\s\S]*?return;[\s\S]*?createMetroOutput\(metroCtx\)[\s\S]*?currentStep=0/);

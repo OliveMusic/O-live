@@ -68,9 +68,7 @@
     try{ metroOutput.disconnect(); }catch(e){}
     metroOutput=null;
   }
-  let loggedFirstClick=false;   /* 임시 진단용 — 원인을 잡으면 지운다 */
   function createMetroOutput(ctx){
-    loggedFirstClick=false;
     releaseMetroOutput();
     metroOutput=ctx.createGain();
     metroOutput.connect(getMaster(ctx));
@@ -276,17 +274,6 @@
                 : midBeats.has(beatIndex) ? 1 : 0;
     if(sub.hits.indexOf(pos) >= 0){
       playClick(time - metroCtx.currentTime, level, metroCtx, metroOutput);
-      /* 임시: 재개 뒤에 스케줄러가 실제로 도는지 한 번만 적는다. 매 박 적으면
-         기록이 그것만으로 가득 찬다. 원인을 잡으면 지운다. */
-      if(!loggedFirstClick){
-        loggedFirstClick=true;
-        try{
-          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('metro:click',{
-            out:metroOutput?'있음':'없음',
-            same:metroCtx===audioCtx,
-          });
-        }catch(e){}
-      }
     }
     scheduledBeats.push({step, time, isBeatStart, beatIndex, level});
   }
