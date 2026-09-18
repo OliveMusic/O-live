@@ -953,6 +953,19 @@
   }
   .log-legend i{ width:17px; height:9px; border-radius:2px; display:block; }
 
+  /* 임시 진단 창. 원인을 잡으면 이 규칙도 함께 지운다. */
+  .diag-note{
+    margin:2px 0 10px; text-align:center;
+    color:var(--ink-3); font-size:0.625rem; line-height:1.6;
+  }
+  .diag-log{
+    margin:0 0 12px; padding:11px; border-radius:10px;
+    background:var(--key); color:var(--ink-2);
+    font:11px/1.5 ui-monospace,Menlo,monospace;
+    white-space:pre-wrap; word-break:break-all;
+    max-height:46vh; overflow:auto; user-select:text; -webkit-user-select:text;
+  }
+
   .log-detail{ margin-top:12px; padding-top:11px; border-top:1px solid var(--line-soft); }
   .log-detail-head{
     display:flex; align-items:baseline; justify-content:space-between; gap:10px;
@@ -2862,6 +2875,20 @@
       <a href="terms.html">이용약관</a>
       <p class="app-version" id="appVersion"></p>
     </footer>
+
+    <!-- 임시: 잠금화면에서 오래 쉰 뒤 재생이 안 되는 것을 쫓는 동안만 둔다.
+         기록은 메모리에만 있고 소리·계정·개인정보는 담기지 않는다. 원인을 잡으면 지운다.
+         버전 줄을 1.5초 꾹 누르면 열린다 — 보이는 단추를 두지 않아 평소에는 없는 것과 같다. -->
+    <div class="cloud-sheet-backdrop" id="audioDiagSheet" hidden>
+      <div class="cloud-sheet log-sheet" role="dialog" aria-modal="true" aria-label="오디오 기록">
+        <div class="cloud-sheet-handle" aria-hidden="true"></div>
+        <button class="cloud-sheet-close" id="audioDiagClose" type="button" aria-label="닫기">&#215;</button>
+        <h2>오디오 기록</h2>
+        <p class="diag-note" id="audioDiagHead"></p>
+        <pre class="diag-log" id="audioDiagLog"></pre>
+        <button class="btn" id="audioDiagCopy" type="button">기록 복사하기</button>
+      </div>
+    </div>
   </main>
 
   <nav class="tabbar">
@@ -3038,23 +3065,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=273"></script>
+<script src="app-version.js?v=274"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=273"></script>
-<script src="js/audio-runtime.js?v=273"></script>
-<script src="js/core.js?v=273"></script>
-<script src="js/metronome.js?v=273"></script>
-<script src="js/tuner-engine.js?v=273"></script>
-<script src="js/tuner.js?v=273"></script>
-<script src="js/scales.js?v=273"></script>
-<script src="js/ear-trainer.js?v=273"></script>
-<script src="js/rhythm-trainer.js?v=273"></script>
-<script src="js/recording-cache.js?v=273"></script>
-<script src="js/recorder.js?v=273"></script>
-<script src="js/practice-links.js?v=273"></script>
-<script src="js/jam-session.js?v=273"></script>
-<script src="js/practice-log.js?v=273"></script>
-<script src="js/app-shell.js?v=273"></script>
+<script src="cloud-sync.js?v=274"></script>
+<script src="js/audio-runtime.js?v=274"></script>
+<script src="js/core.js?v=274"></script>
+<script src="js/metronome.js?v=274"></script>
+<script src="js/tuner-engine.js?v=274"></script>
+<script src="js/tuner.js?v=274"></script>
+<script src="js/scales.js?v=274"></script>
+<script src="js/ear-trainer.js?v=274"></script>
+<script src="js/rhythm-trainer.js?v=274"></script>
+<script src="js/recording-cache.js?v=274"></script>
+<script src="js/recorder.js?v=274"></script>
+<script src="js/practice-links.js?v=274"></script>
+<script src="js/jam-session.js?v=274"></script>
+<script src="js/practice-log.js?v=274"></script>
+<script src="js/app-shell.js?v=274"></script>
 </body>
 </html>

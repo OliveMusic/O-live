@@ -92,6 +92,88 @@
   else window.addEventListener('load',leaveWhenReady,{once:true});
 })();
 
+/* ===================== 임시: 오디오 기록 보기 =====================
+   잠금화면에서 오래 쉰 뒤 재생이 안 되는 것을 쫓는 동안만 둔다. 기록은
+   audio-runtime이 메모리에만 남기는 것이고, 소리·계정·개인정보는 담기지 않는다.
+   원인을 잡으면 이 블록과 index.html의 창을 함께 지운다.
+
+   보이는 단추를 두지 않는다 — 버전 줄을 1.5초 꾹 눌러야 열린다. 평소 쓰는 사람에게는
+   없는 것과 같고, 그 자리를 눌러 무엇이 되는 일도 없다. */
+const PAGE_OPENED_AT=Date.now();
+function bindAudioDiagnostics(trigger){
+  const sheet=document.getElementById('audioDiagSheet');
+  const head=document.getElementById('audioDiagHead');
+  const log=document.getElementById('audioDiagLog');
+  const copy=document.getElementById('audioDiagCopy');
+  const close=document.getElementById('audioDiagClose');
+  if(!trigger || !sheet || !head || !log || !copy || !close) return;
+
+  function text(){
+    const release=window.OLIVE_RELEASE||{};
+    const alive=Math.round((Date.now()-PAGE_OPENED_AT)/1000);
+    const entries=(window.OliveAudioDiagnostics
+      ? window.OliveAudioDiagnostics.read() : []) || [];
+    const lines=entries.map(entry=>{
+      const at=String(entry.at||'').slice(11,23);
+      const bits=[entry.event];
+      if(entry.context) bits.push('ctx='+entry.context);
+      if(entry.contextMode) bits.push('mode='+entry.contextMode);
+      if(entry.media) bits.push('media='+entry.media);
+      if(entry.mediaPaused) bits.push('mediaPaused');
+      if(entry.mediaArmed) bits.push('armed');
+      if(entry.stream) bits.push('stream');
+      if(entry.transport && entry.transport!=='none') bits.push(entry.transport);
+      if(entry.tempo!=null) bits.push(entry.tempo+'bpm');
+      if(entry.visibility) bits.push(entry.visibility);
+      if(entry.error) bits.push('ERR '+entry.error);
+      return at+'  '+bits.join(' · ');
+    });
+    return 'O\'live '+(release.version||'?')+' b'+(release.build||'?')
+      +' · 이 화면이 열린 지 '+alive+'초 · 기록 '+entries.length+'개\n'
+      +'(이 화면이 열린 지가 짧으면 잠금 중에 페이지가 새로 뜬 것이다)\n\n'
+      +(lines.length?lines.join('\n'):'기록 없음');
+  }
+  function render(){
+    const body=text();
+    head.textContent=body.split('\n').slice(0,2).join(' ');
+    log.textContent=body.split('\n').slice(2).join('\n').trim();
+  }
+  function open(){
+    render();
+    sheet.hidden=false;
+    requestAnimationFrame(()=>sheet.classList.add('open'));
+    document.body.classList.add('cloud-sheet-open');
+  }
+  function shut(){
+    sheet.classList.remove('open');
+    document.body.classList.remove('cloud-sheet-open');
+    setTimeout(()=>{ sheet.hidden=true; },200);
+  }
+  let timer=0;
+  const cancel=()=>{ if(timer){ clearTimeout(timer); timer=0; } };
+  trigger.addEventListener('pointerdown',event=>{
+    if(event.isPrimary===false) return;
+    cancel();
+    timer=setTimeout(()=>{ timer=0; open(); },1500);
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(type=>{
+    trigger.addEventListener(type,cancel);
+  });
+  trigger.addEventListener('contextmenu',event=>event.preventDefault());
+  close.addEventListener('click',shut);
+  sheet.addEventListener('click',event=>{ if(event.target===sheet) shut(); });
+  copy.addEventListener('click',async()=>{
+    const body=text();
+    try{
+      await navigator.clipboard.writeText(body);
+      copy.textContent='복사했습니다';
+    }catch(error){
+      copy.textContent='복사 실패 — 위 글을 길게 눌러 직접 선택해 주세요';
+    }
+    setTimeout(()=>{ copy.textContent='기록 복사하기'; },2200);
+  });
+}
+
 /* ===================== 서비스워커 등록 ===================== */
 const release=window.OLIVE_RELEASE||{version:'0.0.0',build:'dev'};
 const appVersion=document.getElementById('appVersion');
@@ -99,6 +181,7 @@ if(appVersion){
   /* 버전만 적는다. 빌드는 캐시를 가르는 내부 번호이고, 배포할 때마다 버전도 함께
      올리므로 화면에 둘을 같이 적으면 같은 말을 두 번 하는 셈이다. */
   appVersion.textContent='버전 '+release.version;
+  bindAudioDiagnostics(appVersion);
   if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('app:ready');
 }
 /* 도움말이 띄우는 미리보기 프레임은 서비스 워커를 건드리지 않는다.
