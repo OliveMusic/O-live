@@ -586,6 +586,32 @@ assert.match(audioRuntime,/out\.gain\.exponentialRampToValueAtTime\(0\.0001,now\
 assert.match(earTrainer,/if\(typeof stopVoices==='function'\) stopVoices\(\);/);
 assert.doesNotMatch(read('js/scales.js'),/stopVoices/,'건반은 겹쳐 울려야 글리산도가 된다');
 
+/* ---------- 잠금화면에서 오래 쉰 뒤 다시 재생 ----------
+   잠긴 채 몇 분을 쉬면 iOS가 오디오 엔진을 거둬 간다. 그때 컨텍스트 상태는
+   suspended 그대로라 closed/interrupted 검사에 걸리지 않고, resume()은 끝내 응답하지
+   않는다. 그래서 한 번은 컨텍스트를 새로 만들어 다시 걸어 본다 — 처음에 성공하는
+   길에서는 실행되지 않으므로 잘 되던 동작은 그대로다. */
+assert.match(audioRuntime,/const attempt=async\(rebuild\)=>\{/);
+assert.match(audioRuntime,/if\(rebuild \|\| !ctx \|\| ctx\.state==='closed' \|\| ctx\.state==='interrupted'\)\{/);
+assert.match(audioRuntime,/ready=await attempt\(false\);/);
+assert.match(audioRuntime,/ready=await attempt\(true\);/);
+assert.match(audioRuntime,/recordAudioDiagnostic\('transport:resume-retry'/);
+/* 더 최신 play/pause 요청이 있으면 그 실패는 과거의 것이다. 다시 시도하지 않는다. */
+assert.match(audioRuntime,/resumeSequence===__backgroundResumeSequence;\s*\n\s*if\(!retryable\)\{ giveUp\(first\); throw first; \}/);
+/* 끝내 못 걸어도 기능을 종료하지 않는다. 일시정지 상태를 보존해 다시 누를 수 있게 한다. */
+assert.match(audioRuntime,/const giveUp=error=>\{/);
+assert.match(audioRuntime,/recordAudioDiagnostic\('transport:resume-failed'/);
+
+/* 재개하지 못했으면 '재생 중'이라고 말하지 않는다. 예전에는 화면을 먼저 재생 중으로
+   칠하고 그 아래에서 조용히 포기해서, 테두리는 올리브색이고 글씨는 '정지'인데 소리는
+   나지 않는 상태로 남았다 — 잠금화면에서 몇 분 뒤 재생을 눌렀을 때 그 모습이다. */
+assert.match(metronome,/function showMediaPaused\(\)/);
+assert.match(metronome,/if\(!metroCtx \|\| metroCtx!==audioCtx \|\| metroCtx\.state!=='running'\)\{\s*\n\s*showMediaPaused\(\);\s*\n\s*return;\s*\n\s*\}/);
+assert.doesNotMatch(metronome,/metroStart\.classList\.toggle\('running',!paused\)/,
+  '확인하기 전에 재생 중으로 칠하던 길은 남기지 않는다');
+/* 못 걸었을 때는 일시정지 모습이라야 잠금화면 재생 버튼도 올리브도 다시 눌린다. */
+assert.match(metronome,/metroStart\.classList\.add\('media-paused'\);\s*\n\s*metroStart\.classList\.remove\('running','flash'\);\s*\n\s*orbLabel\.textContent='재생';/);
+
 /* ---------- 올리브는 첫 박에 굴러 나간다 ----------
    parkOlive()는 rollRight를 잠깐 true로 바꿔 늘 '왼쪽' 자세를 그리지만, drawRoll은
    살아 있는 rollRight를 본다. 그래서 시작 직후 첫 프레임이 p=0·rollRight=false로

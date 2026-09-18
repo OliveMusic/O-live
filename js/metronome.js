@@ -441,14 +441,21 @@
     beatDotsEl.querySelectorAll('.beat-dot').forEach(d=>d.classList.remove('on','mid-on','accent-on'));
     notifyPlaying();
   }
+  /* 재개하지 못했을 때 되돌아갈 자리. 일시정지 모습을 그대로 두어야 잠금화면의
+     재생 버튼도, 화면 속 올리브도 한 번 더 누를 수 있다. */
+  function showMediaPaused(){
+    metroStart.classList.add('media-paused');
+    metroStart.classList.remove('running','flash');
+    orbLabel.textContent='재생';
+    rollRight=false; parkOlive();
+  }
   function setMediaPaused(paused){
     if(!isPlaying) return;
-    metroStart.classList.toggle('media-paused',paused);
-    metroStart.classList.toggle('running',!paused);
-    metroStart.classList.remove('flash');
-    orbLabel.textContent=paused?'재생':'정지';
     clearTimeout(timerID);
     if(paused){
+      metroStart.classList.add('media-paused');
+      metroStart.classList.remove('running','flash');
+      orbLabel.textContent='재생';
       // 잠금 전에 예약해 둔 클릭음을 출력에서 떼어 재개 때 겹치지 않게 한다.
       releaseMetroOutput();
       scheduledBeats=[];
@@ -457,7 +464,18 @@
       rollRight=false; parkOlive();
       return;
     }
-    if(!metroCtx || metroCtx!==audioCtx || metroCtx.state!=='running') return;
+    /* 재개는 '실제로 걸 수 있을 때'만 재생 중이라고 말한다. 예전에는 위에서 먼저
+       화면을 재생 중으로 칠하고 여기서 조용히 포기했다 — 그래서 테두리는 올리브색,
+       글씨는 '정지'인데 소리는 안 나는 상태로 남았다. 잠금화면에서 몇 분 뒤 재생을
+       눌렀을 때 보이던 그 모습이다. 못 걸면 일시정지 모습으로 돌아가 다시 누를 수
+       있게 둔다. */
+    if(!metroCtx || metroCtx!==audioCtx || metroCtx.state!=='running'){
+      showMediaPaused();
+      return;
+    }
+    metroStart.classList.remove('media-paused','flash');
+    metroStart.classList.add('running');
+    orbLabel.textContent='정지';
     createMetroOutput(metroCtx);
     currentStep=0;
     rollBeat=0;
