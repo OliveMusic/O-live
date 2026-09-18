@@ -55,7 +55,20 @@ function currentAudioDiagnosticState(){
     actionMode:__backgroundMediaActionMode||'none',
     transport:transport ? transport.label : 'none',
     tempo,
+    /* 임시: 잠금화면 재개 뒤 소리가 안 나는 것을 가리려고 둔다. 앱의 소리는
+       MediaStream을 거쳐 <audio>로 나간다. 그 통로가 죽으면 요소는 '재생 중'이라
+       보고하면서도 아무것도 내보내지 않는다 — 원인을 잡으면 이 줄을 지운다. */
+    track:trackHealth(),
   };
+}
+function trackHealth(){
+  try{
+    const dest=__backgroundStreamDestination;
+    if(!dest || !dest.stream) return null;
+    const track=dest.stream.getAudioTracks()[0];
+    if(!track) return 'no-track';
+    return track.readyState+(track.muted?' muted':'')+(track.enabled?'':' disabled');
+  }catch(e){ return 'err'; }
 }
 function recordAudioDiagnostic(event,details={}){
   try{

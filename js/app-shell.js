@@ -124,6 +124,9 @@ function bindAudioDiagnostics(trigger){
       if(entry.stream) bits.push('stream');
       if(entry.transport && entry.transport!=='none') bits.push(entry.transport);
       if(entry.tempo!=null) bits.push(entry.tempo+'bpm');
+      if(entry.track) bits.push('track='+entry.track);
+      if(entry.out) bits.push('out='+entry.out);
+      if(entry.same===false) bits.push('ctx다름');
       if(entry.visibility) bits.push(entry.visibility);
       if(entry.error) bits.push('ERR '+entry.error);
       return at+'  '+bits.join(' · ');
