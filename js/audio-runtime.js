@@ -20,6 +20,7 @@ let __backgroundUsesStream = false;
 let __backgroundMediaActionMode = '';
 let __audioSessionMode = '';
 let __pausedClock = null, __pausedAt = 0;
+let __keepAlivePlayPending = false;
 let __externalMediaSessionOwner = '';
 
 /* 잠금 화면의 원격 명령이 실제로 도착했는지, 엔진이 어떤 순서로 깨어났는지는
@@ -364,6 +365,13 @@ function createBackgroundAudioElement(){
   audio.dataset.oliveBackgroundGeneration=String(++__backgroundAudioGeneration);
   audio.addEventListener('playing',()=>{
     if(audio!==__backgroundAudio) return;
+    /* 자리를 지키려고 무음을 흘리는 중이다. 이것을 재개 신호로 읽으면 사용자가 누르지도
+       않은 재생이 시작된다. */
+    if(__keepAlivePlayPending){
+      __keepAlivePlayPending=false;
+      recordAudioDiagnostic('media-element:keepalive-playing');
+      return;
+    }
     recordAudioDiagnostic('media-element:playing');
     /* 임시: 처음 켤 때와 재개할 때 같은 잣대로 잰다. 잘 되는 판의 기준선이 있어야
        실패한 판과 견줄 수 있다. 원인을 잡으면 지운다. */
@@ -485,12 +493,34 @@ function pauseBackgroundPlayback(){
     __pausedAt=Date.now();
   }catch(e){ __pausedClock=null; }
   setBackgroundTransportsPaused(true);
-  if(__backgroundAudio && !__backgroundAudio.paused){
+  if(!__backgroundUsesStream && __backgroundAudio && !__backgroundAudio.paused){
     __stoppingBackgroundMedia=true;
     try{ __backgroundAudio.pause(); }catch(e){}
     __stoppingBackgroundMedia=false;
   }
   try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+  /* iOS는 소리가 끊긴 페이지를 이윽고 통째로 재운다. 그러면 잠금화면의 재생 단추를
+     눌러도 페이지가 깨어날 때까지 아무 일도 일어나지 않는다. 기록이 그대로 말해 줬다 —
+     10초쯤 쉰 판에서는 play 명령이 잠긴 채로 처리되어 화면이 켜지기 8.7초·10.3초 전에
+     도착했는데, 29초와 36초를 쉰 판에서는 언제나 visibility:visible **51ms·42ms 전**에야
+     도착했다. 잠금화면에서 누른 순간이 아니라 잠금을 푸는 순간에 배달된 것이다.
+
+     그래서 스트림을 끊지 않고 계속 흘려 자리를 지킨다. 트랜스포트가 멈춰 있으므로
+     흐르는 것은 무음이고, 잠금화면에는 playbackState로 '정지'라고 알린다. 소리가
+     이어지면 10.7초의 엔진 동결도 오지 않는다 — 그 동결 역시 소리가 끊겨서 온 것이다. */
+  if(__backgroundUsesStream && __backgroundAudio && __backgroundAudio.paused){
+    /* 우리가 다시 트는 이 한 번만 삼킨다. 계속 삼키면 iOS가 요소를 직접 재생해
+       재개하는 길까지 막힌다 — 잠금화면이 Media Session 콜백 대신 <audio>만
+       건드리는 경우가 있고, e2e가 그 회귀를 잡아 줬다. */
+    __keepAlivePlayPending=true;
+    try{
+      const started=__backgroundAudio.play();
+      if(started && typeof started.catch==='function'){
+        started.catch(()=>{ __keepAlivePlayPending=false; });
+      }
+    }catch(e){ __keepAlivePlayPending=false; }
+    recordAudioDiagnostic('media-element:keepalive');
+  }
   if(!__backgroundUsesStream && audioCtx && audioCtx.state==='running'){
     const ctx=audioCtx;
     try{
@@ -536,6 +566,7 @@ function resumeBackgroundPlayback(){
   // 빠른 pause→play 반복으로 앞선 복구가 아직 끝나지 않았더라도 새 원격 play는
   // 그 사용자 제스처 안에서 즉시 audio.play()를 호출해야 한다. 앞선 Promise에
   // 합류시키지 않고 세대 번호로 무효화하면, 늦게 끝난 작업이 최신 상태를 덮지 않는다.
+  __keepAlivePlayPending=false;
   if(__backgroundResumePromise) recordAudioDiagnostic('transport:resume-superseded');
   const resumeSequence=++__backgroundResumeSequence;
   /* 임시: 쉬는 동안 오디오 시계가 벽시계만큼 흘렀는지. 한참 모자라면 엔진이 죽어
@@ -729,6 +760,7 @@ function isBackgroundMediaPaused(){ return __backgroundMediaPaused; }
 
 function stopBackgroundMedia(){
   recordAudioDiagnostic('media-element:stop');
+  __keepAlivePlayPending=false;
   __backgroundMediaPaused=false;
   __backgroundResumeSequence++;
   __backgroundResumePromise=null;

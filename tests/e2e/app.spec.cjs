@@ -1937,6 +1937,10 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
     audio.pause();
   });
   await expect(metro).toHaveClass(/media-paused/);
+  // 일시정지해도 스트림은 계속 흐른다. 소리가 끊기면 iOS가 10.7초 뒤 오디오 엔진을
+  // 멈추고 이윽고 페이지를 통째로 재워, 잠금화면에서 누른 재생이 잠금을 풀 때까지
+  // 배달되지 않는다. 흐르는 것은 무음이다 — 트랜스포트가 멈춰 있다.
+  await expect.poll(()=>backgroundAudio.evaluate(audio=>audio.paused)).toBe(false);
   await expect.poll(()=>page.evaluate(()=>([
     typeof window.__testMediaActions.seekbackward,
     typeof window.__testMediaActions.seekforward,
@@ -1965,11 +1969,15 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
     'media-action:play','media-element:refreshed','transport:resume-ready',
     'media-action:seekforward','tempo:applied',
   ]));
+  // 자리를 지키려고 되살린 재생은 딱 한 번만 삼킨다. 계속 삼키면 iOS가 <audio>를
+  // 직접 재생해 재개하는 길이 막힌다.
+  expect(resumedTempoTrace.map(entry=>entry.event)).toEqual(expect.arrayContaining([
+    'media-element:keepalive','media-element:keepalive-playing',
+  ]));
+  expect(resumedTempoTrace.filter(entry=>entry.event==='media-element:keepalive-playing')).toHaveLength(1);
   const firstRefreshIndex=resumedTempoTrace.findIndex(entry=>entry.event==='media-element:refreshed');
-  const firstPlayingIndex=resumedTempoTrace.findIndex((entry,index)=>
-    index>firstRefreshIndex && entry.event==='media-element:playing'
-  );
-  expect(firstPlayingIndex).toBeGreaterThan(firstRefreshIndex);
+  const keepAliveIndex=resumedTempoTrace.findIndex(entry=>entry.event==='media-element:keepalive');
+  expect(keepAliveIndex).toBeLessThan(firstRefreshIndex);
   expect(resumedTempoTrace.filter(entry=>entry.event==='tempo:applied').at(-1).after).toBe(115);
 
   // 빠르게 반복해도 DOM 플레이어는 하나를 유지하고 내부 리소스 세대만 갱신한다.
@@ -2164,11 +2172,13 @@ test('잠금 해제 후에도 일시정지한 메트로놈 애니메이션이 �
   await page.waitForTimeout(250);
   await backgroundAudio.evaluate(audio=>audio.pause());
   await expect(metro).toHaveClass(/media-paused/);
+  // 멈춘 것은 박자이지 스트림이 아니다. 스트림이 끊기면 iOS가 페이지를 재운다.
+  await expect.poll(()=>backgroundAudio.evaluate(audio=>audio.paused)).toBe(false);
   await setVisibility('visible');
   const pausedTransform=await page.locator('#mdOlive').getAttribute('transform');
   await page.waitForTimeout(450);
   await expect(page.locator('#mdOlive')).toHaveAttribute('transform',pausedTransform);
-  await backgroundAudio.evaluate(audio=>audio.play());
+  await page.evaluate(()=>window.__testMediaActions.play());
   await expect(metro).toHaveClass(/running/);
   await expect.poll(()=>page.locator('.beat-dot').first().evaluate(dot=>
     dot.classList.contains('accent-on')
