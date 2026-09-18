@@ -137,6 +137,7 @@
   let cloudTransportContext=null;
   let cloudTransportInternalPause=false;
   let cloudTransportArmed=false;
+  let cloudKeepAlivePending=false, cloudKeepAliveRestored=false;
   let cloudTransportPlayPromise=null;
   let cloudTransportPlayGeneration=0;
   let cloudStretchNode=null;
@@ -191,13 +192,33 @@
     audio.style.cssText='position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:.001;pointer-events:none';
     audio.dataset.oliveRecordingTransport='true';
     audio.addEventListener('playing',()=>{
+      /* 자리를 지키려고 무음을 흘리는 중이다. 이것을 재생 시작으로 읽으면 잠금화면이
+         '재생 중'으로 바뀐다. 딱 한 번만 삼킨다 — 계속 삼키면 iOS가 운반자를 직접
+         재생해 재개하는 길이 막힌다. */
+      if(cloudKeepAlivePending){
+        cloudKeepAlivePending=false;
+        updateCloudMediaSessionState();
+        if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark(
+          'recording-transport:keepalive-playing');
+        return;
+      }
       if(!cloudMediaId) return;
       cloudTransportArmed=true;
       updateCloudMediaSessionState();
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-transport:playing');
     });
     audio.addEventListener('pause',()=>{
-      if(cloudTransportInternalPause || !cloudTransportArmed || !cloudPlayingId) return;
+      if(cloudTransportInternalPause) return;
+      if(!cloudTransportArmed || !cloudPlayingId){
+        /* 이미 멈춘 상태인데 iOS가 운반자를 또 멈췄다. 그대로 두면 자리를 놓쳐
+           페이지가 잠든다. 쉬는 동안 한 번만 되살린다 — 무한히 되받으면 잠금화면
+           그림이 깜빡인다. */
+        if(cloudMediaId && cloudTransportDestination && !cloudKeepAliveRestored){
+          cloudKeepAliveRestored=true;
+          keepCloudTransportFlowing({restore:true});
+        }
+        return;
+      }
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-transport:pause');
       pauseCloudPlayback(true);
     });
@@ -327,7 +348,26 @@
       return null;
     }
   }
+  /* 멈춰도 운반자는 계속 흘려 둔다. 소리가 끊기면 iOS가 10.7초 뒤 오디오 엔진의
+     렌더링을 멈추고 이윽고 페이지를 통째로 재운다. 그러면 잠금화면에서 누른 재생이
+     잠금을 풀 때까지 배달되지 않는다 — 메트로놈에서 겪고 고친 것과 같은 사슬이다.
+     재생이 멈춰 있으므로 흐르는 것은 무음이다. audio-runtime.js의
+     keepBackgroundStreamFlowing()과 같은 처방이다. */
+  function keepCloudTransportFlowing(detail){
+    if(!cloudTransportDestination || !cloudTransportAudio.paused) return;
+    cloudKeepAlivePending=true;
+    try{
+      const started=cloudTransportAudio.play();
+      if(started && typeof started.catch==='function'){
+        started.catch(()=>{ cloudKeepAlivePending=false; });
+      }
+    }catch(error){ cloudKeepAlivePending=false; }
+    if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark(
+      'recording-transport:keepalive',detail);
+  }
   function armCloudTransport(ctx,row){
+    cloudKeepAlivePending=false;
+    cloudKeepAliveRestored=false;
     const destination=ensureCloudTransport(ctx);
     if(!destination) return Promise.resolve(false);
     if(cloudTransportPlayPromise){
@@ -537,6 +577,8 @@
     updateCloudMediaSessionPosition(row,target);
   }
   function resumeCloudPlaybackFromMediaSession(){
+    cloudKeepAlivePending=false;
+    cloudKeepAliveRestored=false;
     const row=rows.find(item=>item.id===cloudMediaId);
     if(!row || (!cloudMediaUsesPersistentNative && !cloudMediaSource && !cloudDecodedBuffer)) return;
     const token=++cloudPlayToken;
@@ -595,18 +637,17 @@
   }
   function installCloudMediaActions(actionMode){
     const play=setCloudMediaAction('play',()=>resumeCloudPlaybackFromMediaSession());
-    let pause=true;
-    if(actionMode==='stream'){
-      // 실제 운반자 요소가 먼저 멈추게 두면 잠금화면 버튼의 반응이 가장 빠르다.
-      setCloudMediaAction('pause',null);
-      setCloudMediaAction('stop',null);
-    }else{
-      pause=setCloudMediaAction('pause',()=>{
-        if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:pause');
-        pauseCloudPlayback();
-      });
-      setCloudMediaAction('stop',()=>stopCloudPlayback());
-    }
+    /* 일시정지도 우리가 받는다. 예전에는 스트림 모드에서 시스템에 맡겼는데, 맡기면
+       iOS가 운반자 요소를 직접 멈추고 잠금화면 단추 그림도 요소의 상태를 그대로
+       따라간다. 이제는 멈춘 뒤에도 무음을 계속 흘려야 하므로 요소는 '재생 중'이고,
+       맡겨 두면 단추가 영영 일시정지 모양으로 남는다. 우리가 받으면 playbackState가
+       그림을 정한다. */
+    const pause=setCloudMediaAction('pause',()=>{
+      if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:pause');
+      pauseCloudPlayback();
+    });
+    if(actionMode==='stream') setCloudMediaAction('stop',null);
+    else setCloudMediaAction('stop',()=>stopCloudPlayback());
     const backward=setCloudMediaAction('seekbackward',details=>{
       const amount=Number(details&&details.seekOffset)||10;
       seekCloudPlaybackBy(-amount);
@@ -1644,7 +1685,9 @@
       cloudNativeInternalPause=false;
     }
     else releaseCloudSource();
-    if(!transportAlreadyPaused){
+    /* 스트림 경로에서는 운반자를 멈추지 않는다. 멈추면 iOS가 엔진을, 이어서 페이지를
+       거두어 가고 잠금화면의 재생 단추가 먹지 않는다. */
+    if(!cloudTransportDestination && !transportAlreadyPaused){
       cloudTransportInternalPause=true;
       try{ cloudTransportAudio.pause(); }catch(error){}
       cloudTransportInternalPause=false;
@@ -1654,6 +1697,8 @@
     cloudTransportArmed=false;
     cloudPlaybackMode=isNativePlaybackMode()?'native-paused':'decoded-paused';
     cloudPlayingId='';
+    cloudKeepAliveRestored=false;
+    if(cloudTransportDestination) keepCloudTransportFlowing();
     setTabSounding('trainer',false,'recording-playback');
     if(cloudMediaUsesPersistentNative || cloudMediaSource || cloudDecodedBuffer){
       const row=rows.find(item=>item.id===id);

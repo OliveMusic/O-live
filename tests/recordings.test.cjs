@@ -326,7 +326,15 @@ assert.match(recorder,/cloudMediaSessionActionMode=installCloudMediaActions\(act
 assert.match(recorder,/function refreshCloudMediaSessionPosition\(minInterval=750\)/);
 assert.match(recorder,/audio\.addEventListener\('timeupdate',\(\)=>refreshCloudMediaSessionPosition\(750\)\)/);
 assert.match(recorder,/cloudMediaPositionUpdatedAt=0;[\s\S]*?refreshCloudMediaSessionPosition\(0\)/);
-assert.match(recorder,/setCloudMediaAction\('pause',null\)/);
+/* 일시정지는 우리가 받는다. 시스템에 맡기면 iOS가 운반자 요소를 직접 멈추고,
+   잠금화면 단추 그림이 요소의 상태를 따라간다 — 멈춘 뒤에도 무음을 흘려야 하므로
+   요소는 '재생 중'이고, 그러면 단추가 영영 일시정지 모양으로 남는다. */
+assert.match(recorder,/const pause=setCloudMediaAction\('pause',\(\)=>\{/);
+assert.match(recorder,/function keepCloudTransportFlowing\(detail\)/);
+assert.match(recorder,/if\(!cloudTransportDestination && !transportAlreadyPaused\)\{/,
+  '스트림 경로에서는 멈출 때 운반자를 멈추지 않는다');
+assert.match(recorder,/if\(cloudKeepAlivePending\)\{[\s\S]*?cloudKeepAlivePending=false;/,
+  '자리 지키려 다시 튼 재생은 한 번만 삼킨다');
 assert.match(recorder,/function ensureSoundTouchProcessor\(ctx\)/);
 assert.match(recorder,/new AudioWorkletNode\(ctx,'soundtouch-processor'/);
 assert.match(recorder,/source\.playbackRate\.value=rate/);

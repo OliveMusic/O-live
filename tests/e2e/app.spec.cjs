@@ -1264,7 +1264,10 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     pause:typeof window.__testMediaActions.pause,
     backward:typeof window.__testMediaActions.seekbackward,
     forward:typeof window.__testMediaActions.seekforward,
-  }))).toEqual({play:'function',pause:'undefined',backward:'function',forward:'function'});
+  // 일시정지도 우리가 받는다. 시스템에 맡기면 iOS가 운반자를 직접 멈추는데, 멈춘 뒤에도
+  // 무음을 흘려야 하므로(그래야 iOS가 페이지를 재우지 않는다) 요소는 '재생 중'이고
+  // 잠금화면 단추가 영영 일시정지 모양으로 남는다.
+  }))).toEqual({play:'function',pause:'function',backward:'function',forward:'function'});
   expect(await page.evaluate(()=>window.OliveAudioDiagnostics.read()
     .map(entry=>entry.event))).toEqual(expect.arrayContaining([
     'recording-media-actions:retry','recording-media-actions:installed',
@@ -1343,9 +1346,15 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     backward:window.__testMediaActionRegistrations.seekbackward,
     forward:window.__testMediaActionRegistrations.seekforward,
   }));
+  /* 멈춘 것은 재생이지 운반자가 아니다. 소리가 끊기면 iOS가 10.7초 뒤 오디오 엔진을,
+     이어서 페이지를 통째로 거두어 가 잠금화면의 재생 단추가 먹지 않는다. 이 판에서는
+     play()가 가짜라 요소가 실제로 돌지 않으므로, 계속 흘리라고 시켰는지를 센다. */
+  const keepAlives=()=>page.evaluate(()=>window.OliveAudioDiagnostics.read()
+    .filter(entry=>entry.event==='recording-transport:keepalive').length);
   await page.evaluate(()=>window.__recordingTransportMedia.dispatchEvent(new Event('pause')));
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
   await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('paused');
+  await expect.poll(keepAlives).toBe(1);
   await page.evaluate(()=>window.__testMediaActions.play());
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   expect(await page.evaluate(()=>({
@@ -1353,6 +1362,13 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     backward:window.__testMediaActionRegistrations.seekbackward,
     forward:window.__testMediaActionRegistrations.seekforward,
   }))).toEqual(actionRegistrations);
+  // 잠금화면의 일시정지 명령도 같은 약속을 지킨다 — 재생만 멈추고 운반자는 흐른다.
+  await page.evaluate(()=>window.__testMediaActions.pause());
+  await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
+  await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('paused');
+  await expect.poll(keepAlives).toBe(2);
+  await page.evaluate(()=>window.__testMediaActions.play());
+  await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   await page.evaluate(()=>{
     Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
     document.dispatchEvent(new Event('visibilitychange'));
