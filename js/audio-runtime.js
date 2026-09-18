@@ -301,14 +301,20 @@ function configureBackgroundMediaSession(label,usesStream=__backgroundUsesStream
     if(__backgroundMediaActionMode===actionMode) return;
     if(usesStream){
       // 실제 소리가 <audio>를 통과하므로 iOS의 기본 원격 제어가 가장 빠르다.
-      // 일시정지는 시스템에 맡기고, 잠든 오디오를 깨우도록 재생만 보강한다.
       try{ navigator.mediaSession.setActionHandler('play',()=>{
         recordAudioDiagnostic('media-action:play');
         resumeBackgroundPlayback().catch(()=>{});
       }); }catch(e){}
-      for(const action of ['pause','stop']){
-        try{ navigator.mediaSession.setActionHandler(action,null); }catch(e){}
-      }
+      /* 일시정지도 우리가 받는다. 예전에는 시스템에 맡겼는데, 그러면 iOS가 <audio>를
+         직접 멈추고 잠금화면 단추도 요소의 상태를 그대로 따라간다. 이제는 멈춘 뒤에도
+         무음을 계속 흘려야 하므로(그래야 iOS가 페이지를 재우지 않는다) 요소는 '재생 중'이고,
+         맡겨 두면 단추가 영영 일시정지 모양으로 남는다 — 눌러도 눌러도 재생 단추가
+         나오지 않던 것이 그것이다. 우리가 받으면 playbackState가 그림을 정한다. */
+      try{ navigator.mediaSession.setActionHandler('pause',()=>{
+        recordAudioDiagnostic('media-action:pause');
+        pauseBackgroundPlayback();
+      }); }catch(e){}
+      try{ navigator.mediaSession.setActionHandler('stop',null); }catch(e){}
     }else{
       try{ navigator.mediaSession.setActionHandler('play',()=>{
         recordAudioDiagnostic('media-action:play');

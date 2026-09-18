@@ -1815,7 +1815,10 @@ test('잠금 화면에서 메트로놈을 일시정지하고 다시 재생한다
   await page.waitForTimeout(350);
   await expect(metro).toHaveClass(/running/);
   await expect(page.locator('.tab-btn[data-tab="metronome"]')).toHaveClass(/sounding/);
-  await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.pause)).toBe('undefined');
+  // 일시정지도 우리가 받는다. 시스템에 맡기면 iOS가 <audio>를 직접 멈추고 잠금화면
+  // 단추가 요소의 상태를 따라가는데, 이제는 멈춘 뒤에도 무음을 계속 흘려야 해서
+  // 요소는 '재생 중'이다. 맡겨 두면 단추가 영영 일시정지 모양으로 남는다.
+  await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.pause)).toBe('function');
   await expect.poll(()=>page.evaluate(()=>typeof window.__testMediaActions.play)).toBe('function');
   await page.locator('audio[data-olive-background="true"]').evaluate(audio=>audio.pause());
   await expect(metro).toHaveClass(/media-paused/);
@@ -2110,7 +2113,7 @@ test('화면이 잠긴 상태에서도 잼 재생 상태를 유지한다',async(
   ))).toBeTruthy();
   await expect.poll(()=>page.evaluate(()=>(
     typeof window.__testMediaActions.play==='function' &&
-    typeof window.__testMediaActions.pause==='undefined'
+    typeof window.__testMediaActions.pause==='function'
   ))).toBeTruthy();
   await backgroundAudio.evaluate(audio=>audio.pause());
   await expect(jam).toHaveClass(/media-paused/);
