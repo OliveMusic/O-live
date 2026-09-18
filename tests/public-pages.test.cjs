@@ -586,6 +586,20 @@ assert.match(audioRuntime,/out\.gain\.exponentialRampToValueAtTime\(0\.0001,now\
 assert.match(earTrainer,/if\(typeof stopVoices==='function'\) stopVoices\(\);/);
 assert.doesNotMatch(read('js/scales.js'),/stopVoices/,'건반은 겹쳐 울려야 글리산도가 된다');
 
+/* ---------- 메트로놈 첫 클릭 ----------
+   끄면 컨텍스트가 정리되므로 켤 때는 늘 막 열린 경로다(재 보면 currentTime이 0.000,
+   clockAwake가 거짓이다). 막 열린 경로는 첫 소리를 작게 내므로 들리지 않는 음으로
+   깨워 두는데(primeAudioOutput), 그것이 흘러 나갈 틈이 있어야 한다 — 10ms로는 첫
+   클릭이 그 창에 그대로 걸렸다. 앱의 다른 음들과 같은 기준(noteStart)에 맡긴다. */
+assert.match(metronome,/if\(typeof primeAudioOutput==='function'\) primeAudioOutput\(ctx\);/);
+assert.match(metronome,/nextNoteTime=asked \? ctx\.currentTime\+asked\s*\n\s*: typeof noteStart==='function' \? noteStart\(ctx,START_LEAD_TIME\)/);
+assert.doesNotMatch(metronome,/nextNoteTime=ctx\.currentTime\+lead;/,'차가운 경로를 10ms로 잡던 길은 남기지 않는다');
+/* 잠금에서 돌아와 다시 거는 자리도 같다. */
+assert.match(metronome,/nextNoteTime=typeof noteStart==='function'\s*\n\s*\? noteStart\(metroCtx,START_LEAD_TIME\)/);
+/* 그 0.18초는 튜너 첫 현음이 작게 나던 것을 재서 정한 값이다. 한곳에만 둔다. */
+assert.match(core,/function noteStart\(ctx, lead\)\{\s*\n\s*const wake=clockAwake\(ctx\) \? \(lead\|\|0\.005\) : 0\.18;/);
+assert.match(core,/const CLOCK_AWAKE=0\.15;/);
+
 assert.match(audioRuntime,/function revealMuteSwitchNotes\(\)/);
 assert.match(audioRuntime,/const webkitSession=Boolean\(navigator\.audioSession\)/);
 assert.match(audioRuntime,/matchMedia\('\(pointer:coarse\)'\)/,'무음 스위치가 있는 기기에서만');

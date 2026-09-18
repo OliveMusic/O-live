@@ -98,7 +98,8 @@ assert.match(recorder,/const METRO_LEAD_IN_MS=1000;/);
 /* 여유는 자바스크립트 타이머가 아니라 오디오 시계 위에 얹혀 예약된다. */
 assert.match(recorder,/await metro\.start\(\{leadIn:METRO_LEAD_IN_MS\}\)/);
 assert.doesNotMatch(recorder,/setTimeout\(resolve,METRO_LEAD_IN_MS\)/);
-assert.match(metronome,/const lead=Number\(leadInMs\)>0 \? Number\(leadInMs\)\/1000 : START_LEAD_TIME;/);
+assert.match(metronome,/const asked=Number\(leadInMs\)>0 \? Number\(leadInMs\)\/1000 : 0;/);
+assert.match(metronome,/nextNoteTime=asked \? ctx\.currentTime\+asked/,'카운트인이 달라는 여유는 그대로 쓴다');
 /* 들리지 않을 만큼 작은 소리로 출력 경로를 먼저 깨운다. iOS는 막 열린 경로의
    첫 소리를 작게 낸다 — 튜너 첫 현음과 카운트인 첫 클릭이 그것이다. */
 assert.match(core,/function primeAudioOutput\(preparedCtx\)/);

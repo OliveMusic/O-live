@@ -382,9 +382,17 @@
       scheduledBeats=[];
       /* 버튼 반응은 즉시 느껴지되 Web Audio가 첫 박을 놓치지 않을 최소 여유만 둔다.
          녹음 카운트인처럼 첫 박이 온전히 들려야 하는 쪽은 더 긴 여유를 달라고 한다.
-         자바스크립트 타이머가 아니라 오디오 시계 위에 얹으므로 정확하다. */
-      const lead=Number(leadInMs)>0 ? Number(leadInMs)/1000 : START_LEAD_TIME;
-      nextNoteTime=ctx.currentTime+lead;
+         자바스크립트 타이머가 아니라 오디오 시계 위에 얹으므로 정확하다.
+
+         다만 10ms는 '경로가 이미 깨어 있을 때' 이야기다. 메트로놈을 끄면 컨텍스트가
+         정리되므로 켤 때는 대개 막 열린 경로이고, 그때 첫 클릭은 작게 난다. 바로 위에서
+         들리지 않는 음으로 깨워 두지만 그것이 흘러 나갈 틈이 있어야 한다. 앱의 다른
+         음들이 쓰는 것과 같은 기준(noteStart)에 맡긴다 — 시계가 깨어 있으면 10ms,
+         아니면 0.18초다. 그 값은 튜너 첫 현음이 작게 나던 것을 재서 정한 것이다. */
+      const asked=Number(leadInMs)>0 ? Number(leadInMs)/1000 : 0;
+      nextNoteTime=asked ? ctx.currentTime+asked
+        : typeof noteStart==='function' ? noteStart(ctx,START_LEAD_TIME)
+        : ctx.currentTime+START_LEAD_TIME;
       orbLabel.textContent='정지';
       metroStart.classList.remove('starting');
       metroStart.classList.remove('media-paused');
@@ -447,7 +455,10 @@
     currentStep=0;
     rollBeat=0;
     scheduledBeats=[];
-    nextNoteTime=metroCtx.currentTime+START_LEAD_TIME;
+    /* 잠금에서 돌아와 다시 거는 자리다. 여기서도 경로가 막 열렸을 수 있다. */
+    nextNoteTime=typeof noteStart==='function'
+      ? noteStart(metroCtx,START_LEAD_TIME)
+      : metroCtx.currentTime+START_LEAD_TIME;
     scheduler();
   }
   metroStart.addEventListener('click', ()=>{
