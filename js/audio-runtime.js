@@ -20,7 +20,29 @@ let __backgroundUsesStream = false;
 let __backgroundMediaActionMode = '';
 let __audioSessionMode = '';
 let __pausedClock = null, __pausedAt = 0;
-let __keepAlivePlayPending = false;
+let __keepAlivePlayPending = false, __keepAliveRestored = false;
+
+/* 무음을 다시 흘려 자리를 지킨다. 소리가 끊기면 iOS가 오디오 엔진을 멈추고 이윽고
+   페이지를 통째로 재워, 잠금화면에서 누른 재생이 잠금을 풀 때까지 배달되지 않는다. */
+function keepBackgroundStreamFlowing(detail){
+  const audio=__backgroundAudio;
+  if(!audio || !audio.paused) return;
+  __keepAlivePlayPending=true;
+  try{
+    const started=audio.play();
+    if(started && typeof started.catch==='function'){
+      started.catch(()=>{ __keepAlivePlayPending=false; });
+    }
+  }catch(e){ __keepAlivePlayPending=false; }
+  recordAudioDiagnostic('media-element:keepalive',detail);
+}
+
+/* 잠금화면의 단추 그림은 iOS가 요소의 실제 재생 상태로 되돌려 놓는다. 우리가 자리를
+   지키려 다시 튼 것까지 '재생 중'으로 읽으므로, playing 이벤트 뒤에 '정지'를 다시
+   알린다. 이것을 빼먹으면 첫 일시정지가 헛돈다 — 소리는 멈추는데 단추는 그대로다. */
+function declareBackgroundPaused(){
+  try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+}
 let __externalMediaSessionOwner = '';
 
 /* 잠금 화면의 원격 명령이 실제로 도착했는지, 엔진이 어떤 순서로 깨어났는지는
@@ -369,6 +391,7 @@ function createBackgroundAudioElement(){
        않은 재생이 시작된다. */
     if(__keepAlivePlayPending){
       __keepAlivePlayPending=false;
+      declareBackgroundPaused();
       recordAudioDiagnostic('media-element:keepalive-playing');
       return;
     }
@@ -402,7 +425,16 @@ function createBackgroundAudioElement(){
       recordAudioDiagnostic('transport:resume-cancelled');
       return;
     }
-    if(!__backgroundMediaArmed) return;
+    if(!__backgroundMediaArmed){
+      /* 이미 '정지'인데 iOS가 요소를 또 멈췄다. 그대로 두면 자리를 놓쳐 페이지가
+         잠들고, 잠금화면의 재생 명령이 잠금을 풀 때까지 배달되지 않는다. 한 번 쉬는
+         동안 한 번만 되살린다 — 무한히 되받으면 잠금화면 그림이 깜빡인다. */
+      if(__backgroundMediaPaused && __backgroundUsesStream && !__keepAliveRestored){
+        __keepAliveRestored=true;
+        keepBackgroundStreamFlowing({restore:true});
+      }
+      return;
+    }
     recordAudioDiagnostic('media-element:pause');
     __backgroundMediaArmed=false;
     pauseBackgroundPlayback();
@@ -498,7 +530,7 @@ function pauseBackgroundPlayback(){
     try{ __backgroundAudio.pause(); }catch(e){}
     __stoppingBackgroundMedia=false;
   }
-  try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+  declareBackgroundPaused();
   /* iOS는 소리가 끊긴 페이지를 이윽고 통째로 재운다. 그러면 잠금화면의 재생 단추를
      눌러도 페이지가 깨어날 때까지 아무 일도 일어나지 않는다. 기록이 그대로 말해 줬다 —
      10초쯤 쉰 판에서는 play 명령이 잠긴 채로 처리되어 화면이 켜지기 8.7초·10.3초 전에
@@ -508,19 +540,11 @@ function pauseBackgroundPlayback(){
      그래서 스트림을 끊지 않고 계속 흘려 자리를 지킨다. 트랜스포트가 멈춰 있으므로
      흐르는 것은 무음이고, 잠금화면에는 playbackState로 '정지'라고 알린다. 소리가
      이어지면 10.7초의 엔진 동결도 오지 않는다 — 그 동결 역시 소리가 끊겨서 온 것이다. */
-  if(__backgroundUsesStream && __backgroundAudio && __backgroundAudio.paused){
-    /* 우리가 다시 트는 이 한 번만 삼킨다. 계속 삼키면 iOS가 요소를 직접 재생해
-       재개하는 길까지 막힌다 — 잠금화면이 Media Session 콜백 대신 <audio>만
-       건드리는 경우가 있고, e2e가 그 회귀를 잡아 줬다. */
-    __keepAlivePlayPending=true;
-    try{
-      const started=__backgroundAudio.play();
-      if(started && typeof started.catch==='function'){
-        started.catch(()=>{ __keepAlivePlayPending=false; });
-      }
-    }catch(e){ __keepAlivePlayPending=false; }
-    recordAudioDiagnostic('media-element:keepalive');
-  }
+  /* 우리가 다시 트는 그 한 번만 삼킨다. 계속 삼키면 iOS가 요소를 직접 재생해
+     재개하는 길까지 막힌다 — 잠금화면이 Media Session 콜백 대신 <audio>만
+     건드리는 경우가 있고, e2e가 그 회귀를 잡아 줬다. */
+  __keepAliveRestored=false;
+  if(__backgroundUsesStream) keepBackgroundStreamFlowing();
   if(!__backgroundUsesStream && audioCtx && audioCtx.state==='running'){
     const ctx=audioCtx;
     try{
@@ -567,6 +591,7 @@ function resumeBackgroundPlayback(){
   // 그 사용자 제스처 안에서 즉시 audio.play()를 호출해야 한다. 앞선 Promise에
   // 합류시키지 않고 세대 번호로 무효화하면, 늦게 끝난 작업이 최신 상태를 덮지 않는다.
   __keepAlivePlayPending=false;
+  __keepAliveRestored=false;
   if(__backgroundResumePromise) recordAudioDiagnostic('transport:resume-superseded');
   const resumeSequence=++__backgroundResumeSequence;
   /* 임시: 쉬는 동안 오디오 시계가 벽시계만큼 흘렀는지. 한참 모자라면 엔진이 죽어
@@ -761,6 +786,7 @@ function isBackgroundMediaPaused(){ return __backgroundMediaPaused; }
 function stopBackgroundMedia(){
   recordAudioDiagnostic('media-element:stop');
   __keepAlivePlayPending=false;
+  __keepAliveRestored=false;
   __backgroundMediaPaused=false;
   __backgroundResumeSequence++;
   __backgroundResumePromise=null;
