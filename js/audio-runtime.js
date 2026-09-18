@@ -451,13 +451,11 @@ function resumeBackgroundPlayback(){
   if(__backgroundResumePromise) recordAudioDiagnostic('transport:resume-superseded');
   const resumeSequence=++__backgroundResumeSequence;
   recordAudioDiagnostic('transport:resume-start');
-
-  /* 한 번의 재개 시도. rebuild가 참이면 잠든 컨텍스트를 묻지 않고 새로 만든다. */
-  const attempt=async(rebuild)=>{
+  const task=(async()=>{
     let audio=__backgroundAudio;
     if(!audio) throw new Error('BackgroundAudioUnavailable');
     let ctx=audioCtx;
-    if(rebuild || !ctx || ctx.state==='closed' || ctx.state==='interrupted'){
+    if(!ctx || ctx.state==='closed' || ctx.state==='interrupted'){
       ctx=replaceDormantBackgroundContext();
       attachBackgroundStream(audio,ctx);
     }
@@ -486,68 +484,45 @@ function resumeBackgroundPlayback(){
       if(ctx!==audioCtx) throw new Error('AudioContextChanged');
       return ctx.state==='running' ? ctx : ctx.resume();
     });
-    // 긴 잠금 뒤에는 iOS가 오디오 엔진을 되살리는 데 시간이 더 걸릴 수 있다.
-    // 실제 엔진이 열린 뒤에만 첫 박부터 스케줄러와 애니메이션을 함께 연다.
-    let resumeReady=contextReady;
-    if(__backgroundUsesStream) resumeReady=Promise.all([contextReady,mediaReady]);
-    else mediaReady.catch(()=>{});
-    await withTimeout(resumeReady,4500);
-    if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return null;
-    if(resumeSequence!==__backgroundResumeSequence) return null;
-    if(__backgroundUsesStream && audio.paused) throw new Error('BackgroundAudioNotPlaying');
-    if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
-    return audio;
-  };
-
-  /* 한 번의 늦은 복구로 기능 자체를 종료하지 않는다. 일시정지 상태를 보존해
-     잠금화면의 재생 버튼을 다시 누르거나 화면을 열어 재시도할 수 있게 한다. */
-  const giveUp=error=>{
-    const audio=__backgroundAudio;
-    if(!audio || !hasBackgroundTransportPlaying()) return;
-    // 이미 더 최신 play/pause 요청이 있다면 이 실패는 과거 작업의 결과다.
-    // 현재 오디오를 다시 멈추거나 잠금화면 상태를 덮어쓰면 안 된다.
-    if(resumeSequence!==__backgroundResumeSequence){
-      recordAudioDiagnostic('transport:resume-obsolete');
-      return;
-    }
-    __backgroundMediaPaused=true;
-    __backgroundMediaArmed=false;
-    setBackgroundTransportsPaused(true);
-    __stoppingBackgroundMedia=true;
-    try{ audio.pause(); }catch(e){}
-    __stoppingBackgroundMedia=false;
-    try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
-    recordAudioDiagnostic('transport:resume-failed',{
-      error:String(error&&error.name||error&&error.message||error).slice(0,80),
-    });
-  };
-
-  const task=(async()=>{
-    let ready=null;
     try{
-      ready=await attempt(false);
-    }catch(first){
-      /* 잠긴 채 오래 쉬면 iOS가 오디오 엔진을 거둬 간다. 그때 상태는 suspended
-         그대로라 closed/interrupted 검사에 걸리지 않고, resume()은 끝내 응답하지
-         않는다. 그래서 한 번은 컨텍스트를 새로 만들어 다시 걸어 본다. 처음에
-         성공하는 길에서는 실행되지 않으므로 잘 되던 동작은 그대로다. */
-      const retryable=Boolean(__backgroundAudio) && hasBackgroundTransportPlaying() &&
-        resumeSequence===__backgroundResumeSequence;
-      if(!retryable){ giveUp(first); throw first; }
-      recordAudioDiagnostic('transport:resume-retry',{
-        error:String(first&&first.name||first&&first.message||first).slice(0,80),
+      // 긴 잠금 뒤에는 iOS가 오디오 엔진을 되살리는 데 시간이 더 걸릴 수 있다.
+      // 실제 엔진이 열린 뒤에만 첫 박부터 스케줄러와 애니메이션을 함께 연다.
+      let resumeReady=contextReady;
+      if(__backgroundUsesStream) resumeReady=Promise.all([contextReady,mediaReady]);
+      else mediaReady.catch(()=>{});
+      await withTimeout(resumeReady,4500);
+      if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
+      if(resumeSequence!==__backgroundResumeSequence) return;
+      if(__backgroundUsesStream && audio.paused) throw new Error('BackgroundAudioNotPlaying');
+      if(ctx!==audioCtx || ctx.state!=='running') throw new Error('AudioContextNotRunning');
+      __backgroundMediaPaused=false;
+      __backgroundMediaArmed=!audio.paused;
+      setBackgroundTransportsPaused(false);
+      // 액션은 play() 전에 설치했으므로 여기서는 표시 상태와 메타데이터만 맞춘다.
+      configureBackgroundMediaSession(activeBackgroundLabel(),__backgroundUsesStream);
+      recordAudioDiagnostic('transport:resume-ready');
+    }catch(error){
+      if(audio!==__backgroundAudio || !hasBackgroundTransportPlaying()) return;
+      // 이미 더 최신 play/pause 요청이 있다면 이 실패는 과거 작업의 결과다.
+      // 현재 오디오를 다시 멈추거나 잠금화면 상태를 덮어쓰면 안 된다.
+      if(resumeSequence!==__backgroundResumeSequence){
+        recordAudioDiagnostic('transport:resume-obsolete');
+        return;
+      }
+      // 한 번의 늦은 복구로 기능 자체를 종료하지 않는다. 일시정지 상태를 보존해
+      // 잠금화면의 재생 버튼을 다시 누르거나 화면을 열어 재시도할 수 있게 한다.
+      __backgroundMediaPaused=true;
+      __backgroundMediaArmed=false;
+      setBackgroundTransportsPaused(true);
+      __stoppingBackgroundMedia=true;
+      try{ audio.pause(); }catch(e){}
+      __stoppingBackgroundMedia=false;
+      try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+      recordAudioDiagnostic('transport:resume-failed',{
+        error:String(error&&error.name||error&&error.message||error).slice(0,80),
       });
-      try{
-        ready=await attempt(true);
-      }catch(second){ giveUp(second); throw second; }
+      throw error;
     }
-    if(!ready) return;
-    __backgroundMediaPaused=false;
-    __backgroundMediaArmed=!ready.paused;
-    setBackgroundTransportsPaused(false);
-    // 액션은 play() 전에 설치했으므로 여기서는 표시 상태와 메타데이터만 맞춘다.
-    configureBackgroundMediaSession(activeBackgroundLabel(),__backgroundUsesStream);
-    recordAudioDiagnostic('transport:resume-ready');
   })();
   const wrapped=task.finally(()=>{
     if(__backgroundResumePromise===wrapped) __backgroundResumePromise=null;
