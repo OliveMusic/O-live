@@ -548,6 +548,19 @@ function resumeBackgroundPlayback(){
     }
   }catch(e){}
   recordAudioDiagnostic('transport:resume-start',{clockMoved,wallMoved});
+  /* 기록 세 판이 같은 법칙을 보여 줬다. <audio>가 멈추고 **10.7초** 뒤에 오디오 엔진이
+     렌더링을 멈춘다 — 10.92 · 10.68 · 10.66초. 그런데 ctx.state는 그 뒤로도 running이라
+     답하므로 상태로는 가려낼 수 없다.
+
+     엔진이 멈추면 MediaStream에 아무것도 흐르지 않고, 그러면 <audio>는 재생을 시작하지도
+     실패하지도 못한 채 매달린다(요소=멈춤 · 준비=4로 10초 넘게 그대로). play()가 매달린
+     것은 원인이 아니라 결과였다.
+
+     상태는 못 믿어도 시계는 믿을 수 있다. 멈출 때 두 시계를 적어 뒀으니 제스처 안에서
+     바로 셈이 된다: 쉰 시간이 9초를 넘었거나(동결은 10.7초에 온다) 오디오 시계가
+     벽시계보다 0.3초 넘게 뒤처졌으면 엔진은 이미 죽은 것이다. */
+  const engineStalled=wallMoved!=null &&
+    (wallMoved>=9 || (clockMoved!=null && wallMoved-clockMoved>0.3));
   const task=(async()=>{
     let audio=__backgroundAudio;
     if(!audio) throw new Error('BackgroundAudioUnavailable');
@@ -567,6 +580,31 @@ function resumeBackgroundPlayback(){
     }
     let mediaReady=Promise.resolve(), firstResume=Promise.resolve();
     const startedAt=Date.now();
+    /* 멈춘 엔진은 깨워 달라고 하면 이미 깨어 있다고 답한다. 그러니 상태 기계를 억지로
+       한 바퀴 돌려 렌더링 스레드를 되살린다. 요소도 스트림도 건드리지 않으므로 272처럼
+       잠금화면의 자리를 놓칠 일은 없다 — 그때 탈이 났던 것은 컨텍스트를 통째로 새로
+       만들고 srcObject를 갈아 끼운 쪽이었다.
+
+       기다리지 않고 걸어만 둔다. 아래 audio.play()는 같은 동기 구간에서 불려야
+       제스처를 잃지 않는다. 엔진이 되살아나 스트림에 다시 소리가 흐르면, 매달려 있던
+       play()도 그때 풀린다. */
+    if(engineStalled && ctx.state==='running'){
+      recordAudioDiagnostic('engine:stalled',{clockMoved,wallMoved});
+      try{
+        Promise.resolve(ctx.suspend())
+          .then(()=>ctx.resume())
+          .then(
+            ()=>recordAudioDiagnostic('engine:kicked',{ms:Date.now()-startedAt}),
+            error=>recordAudioDiagnostic('engine:kick-failed',{
+              ms:Date.now()-startedAt,
+              error:String(error&&error.message||error&&error.name||error).slice(0,80),
+            }));
+      }catch(error){
+        recordAudioDiagnostic('engine:kick-failed',{
+          error:String(error&&error.message||error&&error.name||error).slice(0,80),
+        });
+      }
+    }
     try{
       const result=audio.play();
       if(result && typeof result.then==='function') mediaReady=result;
