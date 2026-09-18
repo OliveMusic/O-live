@@ -579,17 +579,31 @@ function resumeBackgroundPlayback(){
         ms:Date.now()-startedAt,
         error:String(error&&error.message||error&&error.name||error).slice(0,80),
       }));
-    try{
-      // 구형 경로의 suspend()가 아직 끝나지 않았어도 원격 버튼의 사용자 제스처
-      // 안에서 resume()을 먼저 요청한다. 완료 뒤에도 상태를 다시 확인한다.
-      firstResume=Promise.resolve(ctx.resume());
-    }catch(error){ firstResume=Promise.reject(error); }
-    firstResume.then(
-      ()=>recordAudioDiagnostic('ctxresume:ok',{ms:Date.now()-startedAt}),
-      error=>recordAudioDiagnostic('ctxresume:rejected',{
-        ms:Date.now()-startedAt,
-        error:String(error&&error.message||error&&error.name||error).slice(0,80),
-      }));
+    /* 스트림 경로는 일시정지할 때 컨텍스트를 재우지 않는다 — 아래 pauseBackgroundPlayback의
+       suspend()는 구형 경로에서만 돈다. 그러니 이미 돌고 있는 엔진에 resume()을 부를
+       까닭이 없는데, 기록을 보면 바로 그 호출 언저리에서 엔진 시계가 얼어붙었다.
+       쉬는 동안에는 시계가 벽시계와 나란히 갔고(10.51 / 10.53) 재개 직후부터 14.33에
+       멈춘 채 <audio>만 혼자 돌았다. 화면이 가려진 채로 오디오 세션을 다시 열라고 하면
+       iOS가 그 요청을 물리면서 렌더링까지 놓는 것으로 읽힌다.
+
+       구형 경로는 그대로 둔다. 거기서는 suspend()가 아직 날고 있는 동안에도 제스처
+       안에서 resume()을 먼저 걸어 두어야 하고, 그 길은 지금 잘 되고 있다. */
+    const needsContextResume=!(__backgroundUsesStream && ctx.state==='running');
+    if(needsContextResume){
+      try{
+        // 구형 경로의 suspend()가 아직 끝나지 않았어도 원격 버튼의 사용자 제스처
+        // 안에서 resume()을 먼저 요청한다. 완료 뒤에도 상태를 다시 확인한다.
+        firstResume=Promise.resolve(ctx.resume());
+      }catch(error){ firstResume=Promise.reject(error); }
+      firstResume.then(
+        ()=>recordAudioDiagnostic('ctxresume:ok',{ms:Date.now()-startedAt}),
+        error=>recordAudioDiagnostic('ctxresume:rejected',{
+          ms:Date.now()-startedAt,
+          error:String(error&&error.message||error&&error.name||error).slice(0,80),
+        }));
+    }else{
+      recordAudioDiagnostic('ctxresume:skipped');
+    }
     /* 임시: play()가 매달려 있는 동안 요소가 어디까지 갔는지 훔쳐본다. 엔진도 트랙도
        살아 있는데 요소만 안 움직이므로, 막힌 칸이 '재생 요청'인지 '재생 장치'인지를
        가려야 한다. paused가 참으로 남으면 iOS가 요청을 막은 것이고, paused는 풀렸는데
