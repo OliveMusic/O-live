@@ -590,6 +590,24 @@ function resumeBackgroundPlayback(){
         ms:Date.now()-startedAt,
         error:String(error&&error.message||error&&error.name||error).slice(0,80),
       }));
+    /* 임시: play()가 매달려 있는 동안 요소가 어디까지 갔는지 훔쳐본다. 엔진도 트랙도
+       살아 있는데 요소만 안 움직이므로, 막힌 칸이 '재생 요청'인지 '재생 장치'인지를
+       가려야 한다. paused가 참으로 남으면 iOS가 요청을 막은 것이고, paused는 풀렸는데
+       elTime이 안 흐르면 요소의 렌더러가 죽은 것이다. 원인을 잡으면 지운다. */
+    [250,900,2200,4000].forEach(delay=>setTimeout(()=>{
+      if(resumeSequence!==__backgroundResumeSequence) return;
+      try{
+        recordAudioDiagnostic('resume:probe',{
+          elapsed:Date.now()-startedAt,
+          elPaused:audio.paused,
+          elReady:audio.readyState,
+          elTime:Number(audio.currentTime.toFixed(2)),
+          elError:audio.error?('code'+audio.error.code):null,
+          ctxTime:Number(ctx.currentTime.toFixed(2)),
+        });
+      }catch(e){}
+    },delay));
+
     const suspendSettled=__backgroundSuspendPromise
       ? __backgroundSuspendPromise.catch(()=>{}) : Promise.resolve();
     const contextReady=Promise.all([suspendSettled,firstResume.catch(()=>{})]).then(()=>{
