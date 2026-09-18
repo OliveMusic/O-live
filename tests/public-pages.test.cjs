@@ -586,6 +586,21 @@ assert.match(audioRuntime,/out\.gain\.exponentialRampToValueAtTime\(0\.0001,now\
 assert.match(earTrainer,/if\(typeof stopVoices==='function'\) stopVoices\(\);/);
 assert.doesNotMatch(read('js/scales.js'),/stopVoices/,'건반은 겹쳐 울려야 글리산도가 된다');
 
+/* ---------- 잠금화면 재개는 시작할 때와 같은 모양이어야 한다 ----------
+   재개할 때 srcObject를 비우고 load()로 리셋한 뒤 같은 MediaStream을 다시 물리면,
+   WebKit에서 요소는 '재생 중'이라고 보고하면서도 아무것도 내보내지 않는다. 기기
+   기록이 그것을 가리켰다 — metro:click은 찍히고 track=live인데 소리가 없고, iOS는
+   아무것도 안 나온다고 보고 몇 초 뒤 미디어 박스를 거둬 갔다.
+   처음 시작할 때 쓰는 attachBackgroundStream()은 load()를 부르지 않고 늘 잘 된다. */
+assert.doesNotMatch(audioRuntime,/audio\.load\(\)/,'스트림을 문 요소를 리셋하지 않는다');
+assert.match(audioRuntime,/function refreshBackgroundAudioForResume\(ctx\)/);
+/* 살아 있는 스트림을 이미 물고 있으면 아무것도 건드리지 않는다. 여기서 pause()를
+   부르면 그 pause 이벤트가 비동기로 날아와 앱이 '사용자가 일시정지했다'로 읽고 방금
+   건 재생을 도로 멈춘다 — 예전에는 뒤따르던 load()가 그 이벤트를 삼켜 가려져 있었다. */
+assert.match(audioRuntime,/if\(audio\.srcObject!==mediaStream\)\{\s*\n\s*audio\.pause\(\);\s*\n\s*audio\.removeAttribute\('src'\);\s*\n\s*audio\.srcObject=mediaStream;\s*\n\s*\}/);
+/* 요소는 하나를 유지한다 — 여러 플레이어가 포커스를 다투지 않게 하려던 원래 뜻이다. */
+assert.match(audioRuntime,/const audio=__backgroundAudio;\s*\n\s*const destination=__backgroundStreamDestination;/);
+
 /* ---------- 올리브는 첫 박에 굴러 나간다 ----------
    parkOlive()는 rollRight를 잠깐 true로 바꿔 늘 '왼쪽' 자세를 그리지만, drawRoll은
    살아 있는 rollRight를 본다. 그래서 시작 직후 첫 프레임이 p=0·rollRight=false로

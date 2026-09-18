@@ -363,13 +363,27 @@ function refreshBackgroundAudioForResume(ctx){
   if(!mediaStream || typeof mediaStream.getAudioTracks!=='function' ||
      !mediaStream.getAudioTracks().length) return audio;
   const previousGeneration=Number(audio.dataset.oliveBackgroundGeneration)||null;
+  /* 여기서 srcObject를 비우고 load()를 부르면 안 된다. WebKit에서 그렇게 리셋한
+     요소에 같은 MediaStream을 다시 물리면 요소는 '재생 중'이라고 보고하면서도
+     아무것도 내보내지 않는다 — 잠금화면에서 재개했을 때 소리가 안 나던 것이 그것이다.
+     기록으로도 맞아떨어졌다: metro:click은 찍히고 track=live인데 소리만 없고, iOS는
+     아무것도 안 나온다고 보고 몇 초 뒤 미디어 박스를 거둬 갔다.
+
+     처음 시작할 때 쓰는 attachBackgroundStream()은 load()를 부르지 않는다. 그 길은
+     늘 잘 된다. 재개도 같은 모양으로 맞춘다 — 요소는 하나를 그대로 유지하므로
+     이 함수가 원래 막으려던 '여러 플레이어의 포커스 경쟁'도 그대로 막힌다. */
   __stoppingBackgroundMedia=true;
   try{
-    audio.pause();
-    audio.srcObject=null;
-    audio.removeAttribute('src');
-    audio.load();
-    audio.srcObject=mediaStream;
+    /* 이미 살아 있는 스트림을 물고 있으면 아무것도 건드리지 않는다. 여기서 pause()를
+       부르면 그 pause 이벤트가 비동기로 날아와 앱이 '사용자가 일시정지했다'로 읽고
+       방금 건 재생을 도로 멈춘다 — __stoppingBackgroundMedia 빗장은 동기 구간에서만
+       걸려 있어 그 이벤트를 덮지 못한다. 예전에는 뒤따르던 load()가 그 이벤트를
+       삼켜서 가려져 있었을 뿐이다. */
+    if(audio.srcObject!==mediaStream){
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.srcObject=mediaStream;
+    }
     audio.loop=false;
     audio.dataset.oliveBackgroundGeneration=String(++__backgroundAudioGeneration);
   }catch(error){
