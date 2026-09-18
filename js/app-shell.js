@@ -125,6 +125,9 @@ function bindAudioDiagnostics(trigger){
       if(entry.transport && entry.transport!=='none') bits.push(entry.transport);
       if(entry.tempo!=null) bits.push(entry.tempo+'bpm');
       if(entry.track) bits.push('track='+entry.track);
+      if(entry.peakMax!=null) bits.push('★ 신호최대='+entry.peakMax);
+      if(entry.peak!=null) bits.push('peak='+entry.peak);
+      if(entry.gain!=null && entry.gain!==1) bits.push('gain='+entry.gain);
       if(entry.out) bits.push('out='+entry.out);
       if(entry.same===false) bits.push('ctx다름');
       if(entry.visibility) bits.push(entry.visibility);

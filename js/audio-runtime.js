@@ -59,6 +59,10 @@ function currentAudioDiagnosticState(){
        MediaStream을 거쳐 <audio>로 나간다. 그 통로가 죽으면 요소는 '재생 중'이라
        보고하면서도 아무것도 내보내지 않는다 — 원인을 잡으면 이 줄을 지운다. */
     track:trackHealth(),
+    /* 임시: 그래프에 신호가 실제로 흐르는지. 여기가 0이면 소리를 못 만들고 있는 것이고,
+       0이 아닌데 안 들리면 만든 소리가 밖으로 못 나가는 것이다. 원인을 잡으면 지운다. */
+    peak:appSignalPeak(),
+    gain:__appOutput ? Number(__appOutput.gain.value.toFixed(3)) : null,
   };
 }
 function trackHealth(){
@@ -140,6 +144,52 @@ function getAppOutput(ctx){
   __appOutputCtx=ctx;
   __appOutput.connect(ctx.destination);
   return __appOutput;
+}
+
+/* 임시: 앱이 만든 소리가 실제로 흐르는지 재는 자리. 마스터와 출력 사이에 끼운다 —
+   분석기는 소리를 그대로 통과시키므로 들리는 것은 달라지지 않고, 출력 노드의 연결은
+   건드리지 않아 라우팅을 보는 눈도 그대로다. 원인을 잡으면 지운다. */
+let __appMeter=null, __appMeterCtx=null;
+function meteredOutput(ctx){
+  const out=getAppOutput(ctx);
+  try{
+    if(!__appMeter || __appMeterCtx!==ctx){
+      __appMeter=ctx.createAnalyser();
+      __appMeter.fftSize=512;
+      __appMeterCtx=ctx;
+      __appMeter.connect(out);
+    }
+    return __appMeter;
+  }catch(e){
+    __appMeter=null; __appMeterCtx=null;
+    return out;
+  }
+}
+function appSignalPeak(){
+  try{
+    if(!__appMeter) return null;
+    const buf=new Float32Array(__appMeter.fftSize);
+    __appMeter.getFloatTimeDomainData(buf);
+    let p=0;
+    for(let i=0;i<buf.length;i++){ const v=Math.abs(buf[i]); if(v>p) p=v; }
+    return Number(p.toFixed(4));
+  }catch(e){ return null; }
+}
+
+/* 임시: 한 순간의 값은 쓸모가 없다 — 클릭은 45ms짜리라 예약하는 순간에 재면 늘 0이다.
+   몇 초를 훑어 최대치를 남긴다. 원인을 잡으면 지운다. */
+let __signalWatch=0;
+function watchSignal(label,seconds){
+  clearInterval(__signalWatch);
+  let top=0, left=Math.round((seconds||3)*1000/100);
+  __signalWatch=setInterval(()=>{
+    const p=appSignalPeak();
+    if(p!=null && p>top) top=p;
+    if(--left<=0){
+      clearInterval(__signalWatch); __signalWatch=0;
+      recordAudioDiagnostic('signal:'+label,{peakMax:Number(top.toFixed(4))});
+    }
+  },100);
 }
 
 function routeAppOutput(destination){
@@ -314,6 +364,9 @@ function createBackgroundAudioElement(){
   audio.addEventListener('playing',()=>{
     if(audio!==__backgroundAudio) return;
     recordAudioDiagnostic('media-element:playing');
+    /* 임시: 처음 켤 때와 재개할 때 같은 잣대로 잰다. 잘 되는 판의 기준선이 있어야
+       실패한 판과 견줄 수 있다. 원인을 잡으면 지운다. */
+    watchSignal(__backgroundMediaPaused?'resume':'start',3);
     // 오래 잠근 뒤에는 <audio>가 먼저 playing이 되어도 AudioContext는 아직
     // suspended일 수 있다. 박자를 먼저 열지 말고 엔진 복구가 끝날 때까지 기다린다.
     if(__backgroundMediaPaused){
@@ -618,6 +671,7 @@ function releaseCtx(){
   }catch(e){}
   audioCtx = null; __ctxMode = null; __ctxResumePromise = null; __backgroundSuspendPromise = null;
   __appOutput = null; __appOutputCtx = null;
+  __appMeter = null; __appMeterCtx = null;
   __master = null; __send = null; __gtrCache.clear();
   const shut=()=>{
     try{

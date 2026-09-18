@@ -255,7 +255,11 @@ function getMaster(preparedCtx){
     const comp=ctx.createDynamicsCompressor();
     comp.threshold.value=-15; comp.knee.value=24; comp.ratio.value=4.5;
     comp.attack.value=0.005; comp.release.value=0.25;
-    __master.connect(comp).connect(getAppOutput(ctx));
+    /* 임시: meteredOutput()은 출력 앞에 분석기 하나를 끼운 것뿐이다. 소리는 그대로
+       통과한다. 잠금화면 재개 뒤 신호가 흐르는지 재려고 둔다 — 원인을 잡으면
+       getAppOutput(ctx)로 되돌린다. */
+    __master.connect(comp).connect(
+      typeof meteredOutput==='function' ? meteredOutput(ctx) : getAppOutput(ctx));
 
     // 리버브 센드
     try{
