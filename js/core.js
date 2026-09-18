@@ -121,6 +121,51 @@ function makeSplitDropdown(mount, items, selected, onSelect){
   return { set(i){ cur=i; render(); }, get:()=>cur, close };
 }
 
+/* ===================== 울리는 중인 음 =====================
+   한 번 울리고 사라지는 음(청음의 문제음, 튜너 기준음, 지판·건반, 잼 코드 미리듣기)은
+   전송 등록부에 올라가지 않는다. 그래서 audio-runtime은 '지금 아무것도 안 울린다'고
+   보고 컨텍스트를 닫아 버렸고, 울리던 파형이 한가운데서 잘려 '툭' 소리가 났다.
+   여기에 따로 적어 두고, 끊어야 할 때는 자르지 말고 짧게 줄여서 끈다. */
+const VOICE_FADE=0.018;      /* 사람 귀에 안 들릴 만큼 짧고, 클릭은 지울 만큼 길다 */
+let __voices=[];
+function keepVoice(ctx,gain,endsAt){
+  if(!ctx || !gain) return;
+  const now=ctx.currentTime;
+  __voices=__voices.filter(v=>v.ctx===ctx && v.endsAt>now-0.05);
+  __voices.push({ctx,gain,endsAt});
+}
+/* 아직 울리고 있는 음이 있나. 컨텍스트를 닫아도 되는지 판단하는 쪽이 쓴다. */
+function voicesRinging(){
+  if(!__voices.length) return 0;
+  const live=__voices.filter(v=>{
+    try{ return v.ctx.state==='running' && v.endsAt>v.ctx.currentTime; }catch(e){ return false; }
+  });
+  __voices=live;
+  if(!live.length) return 0;
+  const ctx=live[0].ctx;
+  return Math.max(0,live.reduce((at,v)=>Math.max(at,v.endsAt),0)-ctx.currentTime);
+}
+/* 울리는 중인 음을 짧게 줄여 끈다. 새 소리를 내기 전에 부르면 앞 소리와 겹치지도,
+   잘려서 튀지도 않는다. */
+function stopVoices(fade){
+  const span=Math.max(0.004,Number(fade)||VOICE_FADE);
+  /* 줄이는 동안에도 '아직 울리는 중'으로 남겨 둔다. 여기서 목록을 비워 버리면
+     컨텍스트를 닫아도 되는지 보는 쪽이 '이미 조용하다'고 읽고 줄이는 도중에
+     닫아 버린다 — 지우려던 그 '툭' 소리가 그대로 난다. */
+  __voices.forEach(v=>{
+    try{
+      if(v.ctx.state!=='running') return;
+      const now=v.ctx.currentTime;
+      const level=Math.max(0.0001,v.gain.gain.value||0.0001);
+      v.gain.gain.cancelScheduledValues(now);
+      v.gain.gain.setValueAtTime(level,now);
+      v.gain.gain.exponentialRampToValueAtTime(0.0001,now+span);
+      v.endsAt=now+span;
+    }catch(e){}
+  });
+  return span;
+}
+
 function playTone(freq, duration=0.6, when=0, type='sine', gainVal=0.43, preparedCtx){
   const ctx = preparedCtx || getCtx();
   const t0 = ctx.currentTime + Math.max(when,0);
@@ -134,6 +179,7 @@ function playTone(freq, duration=0.6, when=0, type='sine', gainVal=0.43, prepare
   osc.connect(gain).connect(getMaster());
   osc.start(t0);
   osc.stop(t0+duration+0.05);
+  keepVoice(ctx,gain,t0+duration+0.05);
   return {osc, gain};
 }
 // level: 0 약 · 1 중(묶음 첫 박) · 2 강(마디 첫 박). true/false도 받는다.
@@ -354,6 +400,7 @@ function guitarPluck(midi, dur=2.4, vol=0.62){
     sendTo(g, 0.24);
     const t=noteStart(ctx,0.005);
     src.start(t); src.stop(t+dur+0.05);
+    keepVoice(ctx,g,t+dur+0.05);
   });
 }
 function referenceTone(midi, dur=2.6){ guitarPluck(midi, dur, 0.78); }
@@ -411,6 +458,7 @@ function pianoNote(midi, when, dur, vol=0.19, destination, reverbAmount=0.3){
   ng.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
   ns.connect(nf).connect(ng).connect(tone);
   ns.start(t); ns.stop(t+0.06);
+  keepVoice(ctx,bus,t+dur+0.06);
 }
 function pianoChord(midis, when, dur, vol=0.28, destination, reverbAmount=0.3){
   midis.forEach((m,i)=> pianoNote(

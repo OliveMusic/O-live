@@ -557,6 +557,35 @@ assert.match(guide,/무음 모드를 꺼 보세요/);
 assert.equal((indexHtml.match(/class="hint mute-note"/g)||[]).length,3,'튜너 현·스케일 건반·잼 코드');
 assert.match(indexHtml,/<p class="hint mute-note" hidden style="margin-top:4px;">무음 모드에서는 들리지 않을 수 있습니다<\/p>/);
 assert.match(indexHtml,/\.hint\.mute-note\{ word-break:keep-all; \}/,'마지막 글자가 홀로 떨어지지 않게');
+/* ---------- 소리는 자르지 말고 줄여서 끈다 ----------
+   한 번 울리고 사라지는 음(청음 문제음·튜너 기준음·지판·잼 미리듣기)은 전송 등록부에
+   올라가지 않는다. 그래서 '지금 아무것도 안 울린다'고 보고 컨텍스트를 닫아 버렸고,
+   울리던 파형이 한가운데서 잘려 '툭' 소리가 났다 — 청음에서 문제음이 나는 중에
+   '다시 듣기'를 누르면 나던 그 소리다. */
+assert.match(core,/function keepVoice\(ctx,gain,endsAt\)/);
+assert.match(core,/function voicesRinging\(\)/);
+assert.match(core,/function stopVoices\(fade\)/);
+/* 음을 내는 함수는 모두 적어 둔다. 하나라도 빠지면 그 소리만 잘린다. */
+assert.match(core,/osc\.stop\(t0\+duration\+0\.05\);\s*\n\s*keepVoice\(ctx,gain,t0\+duration\+0\.05\);/,'playTone');
+assert.match(core,/src\.start\(t\); src\.stop\(t\+dur\+0\.05\);\s*\n\s*keepVoice\(ctx,g,t\+dur\+0\.05\);/,'guitarPluck');
+assert.match(core,/ns\.start\(t\); ns\.stop\(t\+0\.06\);\s*\n\s*keepVoice\(ctx,bus,t\+dur\+0\.06\);/,'pianoNote');
+/* 줄이는 동안에도 '아직 울리는 중'으로 남겨야 한다. 여기서 목록을 비우면 줄이는
+   도중에 컨텍스트가 닫혀 지우려던 그 소리가 그대로 난다. */
+assert.match(core,/v\.endsAt=now\+span;/);
+assert.doesNotMatch(core,/exponentialRampToValueAtTime\(0\.0001,now\+span\);\s*\n\s*\}catch\(e\)\{\}\s*\n\s*\}\);\s*\n\s*__voices=\[\];/);
+/* 울리는 음이 남아 있으면 닫지 않고 기다린다. */
+assert.match(audioRuntime,/releaseWhenQuiet\(\);\s*\n\s*\}\s*\n\}/);
+assert.match(audioRuntime,/function releaseWhenQuiet\(\)/);
+assert.match(audioRuntime,/typeof voicesRinging==='function' \? voicesRinging\(\) : 0/,
+  'core가 없어도 무너지지 않는다');
+/* 그래도 닫아야 할 때는 20ms만 줄이고 닫는다. */
+assert.match(audioRuntime,/const CLOSE_FADE=0\.02;/);
+assert.match(audioRuntime,/out\.gain\.exponentialRampToValueAtTime\(0\.0001,now\+CLOSE_FADE\);/);
+/* 청음은 다시 누르면 앞 소리를 짧게 줄여 끈다 — 겹치지도, 잘리지도 않는다.
+   지판의 글리산도처럼 겹쳐야 뜻이 있는 곳에서는 부르지 않는다. */
+assert.match(earTrainer,/if\(typeof stopVoices==='function'\) stopVoices\(\);/);
+assert.doesNotMatch(read('js/scales.js'),/stopVoices/,'건반은 겹쳐 울려야 글리산도가 된다');
+
 assert.match(audioRuntime,/function revealMuteSwitchNotes\(\)/);
 assert.match(audioRuntime,/const webkitSession=Boolean\(navigator\.audioSession\)/);
 assert.match(audioRuntime,/matchMedia\('\(pointer:coarse\)'\)/,'무음 스위치가 있는 기기에서만');

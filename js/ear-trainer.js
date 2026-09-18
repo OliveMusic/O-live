@@ -313,6 +313,10 @@
   /* ---------- 재생 ---------- */
   function playAnswer(answer, flashButton=false){
     if(!current) return;
+    /* 앞 문제가 아직 울리는 중에 '다시 듣기'를 누르면 두 소리가 겹치거나, 잘려서
+       '툭' 튄다. 자르지 말고 짧게 줄여서 끈다 — 새 음의 어택과 겹쳐 이어진다.
+       지판의 글리산도처럼 겹쳐야 뜻이 있는 곳에서는 부르지 않는다. */
+    if(typeof stopVoices==='function') stopVoices();
     let playback;
     try{
       playback=beginForegroundPlaybackFromGesture();

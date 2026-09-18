@@ -570,17 +570,36 @@ function stopBackgroundMedia(){
 
 /* 컨텍스트를 통째로 버린다. 여기에 매달려 있던 것들도 같이 놓아야
    다음에 만들 때 새 컨텍스트의 노드로 다시 세워진다. */
+const CLOSE_FADE=0.02;
 function releaseCtx(){
   stopBackgroundMedia();
   if(!audioCtx) return Promise.resolve();
   const old = audioCtx;
+  /* 소리가 나던 중에 close()하면 파형이 한가운데서 잘려 '툭' 소리가 난다. 20ms만
+     줄이고 닫는다 — 들리지 않을 만큼 짧고, 클릭은 지울 만큼 길다. audioCtx는 먼저
+     비우므로 다음 재생은 기다리지 않고 새 컨텍스트를 만든다. */
+  let fade=0;
+  try{
+    if(old.state==='running'){
+      const out=getAppOutput(old);
+      const now=old.currentTime;
+      out.gain.cancelScheduledValues(now);
+      out.gain.setValueAtTime(Math.max(0.0001,out.gain.value||1),now);
+      out.gain.exponentialRampToValueAtTime(0.0001,now+CLOSE_FADE);
+      fade=CLOSE_FADE;
+    }
+  }catch(e){}
   audioCtx = null; __ctxMode = null; __ctxResumePromise = null; __backgroundSuspendPromise = null;
   __appOutput = null; __appOutputCtx = null;
   __master = null; __send = null; __gtrCache.clear();
-  try{
-    const closing=old.close();
-    return closing && typeof closing.catch==='function' ? closing.catch(()=>{}) : Promise.resolve();
-  }catch(e){ return Promise.resolve(); }
+  const shut=()=>{
+    try{
+      const closing=old.close();
+      return closing && typeof closing.catch==='function' ? closing.catch(()=>{}) : Promise.resolve();
+    }catch(e){ return Promise.resolve(); }
+  };
+  if(!fade) return shut();
+  return new Promise(resolve=>setTimeout(()=>resolve(shut()),Math.round(fade*1000)+6));
 }
 
 function createCtx(mode='ambient'){
@@ -1008,8 +1027,30 @@ function setTabSounding(tab,on,source){
     setAudioSession('ambient');
     // 잠금 중에는 몇 박을 미리 예약한다. 마지막 재생을 멈출 때 컨텍스트를
     // 닫아 두면 그 예약음도 즉시 취소되어 뒤늦게 틱 소리가 남지 않는다.
-    releaseCtx();
+    releaseWhenQuiet();
   }
+}
+
+/* 한 번 울리고 사라지는 음(청음 문제음·튜너 기준음·지판·잼 미리듣기)은 전송
+   등록부에 올라가지 않는다. 그래서 '아무것도 안 울린다'고 보고 바로 닫으면 울리던
+   파형이 한가운데서 잘려 '툭' 소리가 났다 — 청음에서 문제가 나는 중에 '다시 듣기'를
+   누르면 나던 그 소리다. 남은 음이 다 사라진 뒤에 닫는다. */
+let __quietTimer=0;
+function releaseWhenQuiet(){
+  clearTimeout(__quietTimer);
+  let left=0;
+  try{ left=typeof voicesRinging==='function' ? voicesRinging() : 0; }catch(e){ left=0; }
+  if(left<=0){ releaseCtx(); return; }
+  __quietTimer=setTimeout(()=>{
+    __quietTimer=0;
+    /* 기다리는 사이에 뭔가 다시 울리기 시작했으면 닫지 않는다. */
+    const recording=Boolean(window.OliveRecorder && window.OliveRecorder.isRecording());
+    if(anySounding() || recording || hasHiddenSafeTransportPlaying()) return;
+    releaseWhenQuiet();
+  },Math.min(4000,Math.round(left*1000)+60));
+}
+function cancelQuietRelease(){
+  if(__quietTimer){ clearTimeout(__quietTimer); __quietTimer=0; }
 }
 
 document.addEventListener('visibilitychange',()=>{
