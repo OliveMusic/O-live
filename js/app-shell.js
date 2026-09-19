@@ -168,15 +168,60 @@ function bindAudioDiagnostics(trigger){
   trigger.addEventListener('contextmenu',event=>event.preventDefault());
   close.addEventListener('click',shut);
   sheet.addEventListener('click',event=>{ if(event.target===sheet) shut(); });
-  copy.addEventListener('click',async()=>{
-    const body=text();
+  /* 사파리의 navigator.clipboard는 홈 화면 앱에서 잠자코 막히는 일이 있다. 손짓이
+     살아 있는 동안 동기로 끝나는 옛길을 먼저 쓴다 — 글을 임시 상자에 담아 잡고
+     복사 명령을 보낸다. 둘 다 막히면 글만 잡아 둔다. */
+  function copyBySelection(body){
+    const area=document.createElement('textarea');
+    area.value=body;
+    area.setAttribute('readonly','');
+    area.style.cssText='position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;';
+    document.body.appendChild(area);
+    let ok=false;
     try{
-      await navigator.clipboard.writeText(body);
-      copy.textContent='복사했습니다';
-    }catch(error){
-      copy.textContent='복사 실패 — 위 글을 길게 눌러 직접 선택해 주세요';
+      area.contentEditable='true';
+      const range=document.createRange();
+      range.selectNodeContents(area);
+      const selection=window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      area.setSelectionRange(0,body.length);
+      ok=document.execCommand('copy');
+    }catch(error){ ok=false; }
+    try{ document.body.removeChild(area); }catch(error){}
+    return ok;
+  }
+  function say(message,hold){
+    copy.textContent=message;
+    setTimeout(()=>{ copy.textContent='기록 복사하기'; },hold||2200);
+  }
+  copy.addEventListener('click',()=>{
+    let body='';
+    try{ body=text(); }
+    catch(error){
+      say('기록을 못 만듦 — '+String(error&&error.message||error).slice(0,60),5000);
+      return;
     }
-    setTimeout(()=>{ copy.textContent='기록 복사하기'; },2200);
+    if(copyBySelection(body)){ say('복사했습니다'); return; }
+    let pending=null;
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        pending=navigator.clipboard.writeText(body);
+      }
+    }catch(error){ pending=null; }
+    const giveUp=()=>{
+      /* 마지막 길: 화면의 글을 잡아 둔다. 길게 눌러 '복사'를 고르면 된다. */
+      try{
+        const range=document.createRange();
+        range.selectNodeContents(log);
+        const selection=window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }catch(error){}
+      say('글을 잡아 뒀습니다 — 길게 눌러 복사를 고르세요',6000);
+    };
+    if(pending && pending.then) pending.then(()=>say('복사했습니다'),giveUp);
+    else giveUp();
   });
 }
 
