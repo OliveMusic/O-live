@@ -142,7 +142,7 @@ function bindAudioDiagnostics(trigger){
   function render(){
     const body=text();
     head.textContent=body.split('\n').slice(0,2).join(' ');
-    log.textContent=body.split('\n').slice(2).join('\n').trim();
+    log.value=body.split('\n').slice(2).join('\n').trim();
   }
   function open(){
     render();
@@ -166,40 +166,20 @@ function bindAudioDiagnostics(trigger){
     trigger.addEventListener(type,cancel);
   });
   trigger.addEventListener('contextmenu',event=>event.preventDefault());
-  /* 기록을 한 번 누르면 통째로 잡아 준다. 손가락으로 끌어 고르기가 어렵다. */
-  log.addEventListener('click',()=>{
-    try{
-      const range=document.createRange();
-      range.selectNodeContents(log);
-      const selection=window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }catch(error){}
-  });
+  /* 한 번 누르면 통째로 잡아 준다. 그다음 길게 눌러 '복사'를 고르면 된다. */
+  function selectAll(){
+    try{ log.focus(); log.setSelectionRange(0,log.value.length); return true; }
+    catch(error){ return false; }
+  }
+  log.addEventListener('click',selectAll);
   close.addEventListener('click',shut);
   sheet.addEventListener('click',event=>{ if(event.target===sheet) shut(); });
   /* 사파리의 navigator.clipboard는 홈 화면 앱에서 잠자코 막히는 일이 있다. 손짓이
      살아 있는 동안 동기로 끝나는 옛길을 먼저 쓴다 — 글을 임시 상자에 담아 잡고
      복사 명령을 보낸다. 둘 다 막히면 글만 잡아 둔다. */
-  function copyBySelection(body){
-    const area=document.createElement('textarea');
-    area.value=body;
-    area.setAttribute('readonly','');
-    area.style.cssText='position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;';
-    document.body.appendChild(area);
-    let ok=false;
-    try{
-      area.contentEditable='true';
-      const range=document.createRange();
-      range.selectNodeContents(area);
-      const selection=window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      area.setSelectionRange(0,body.length);
-      ok=document.execCommand('copy');
-    }catch(error){ ok=false; }
-    try{ document.body.removeChild(area); }catch(error){}
-    return ok;
+  function copyBySelection(){
+    try{ return selectAll() && document.execCommand('copy'); }
+    catch(error){ return false; }
   }
   function say(message,hold){
     copy.textContent=message;
@@ -212,7 +192,7 @@ function bindAudioDiagnostics(trigger){
       say('기록을 못 만듦 — '+String(error&&error.message||error).slice(0,60),5000);
       return;
     }
-    if(copyBySelection(body)){ say('복사했습니다'); return; }
+    if(copyBySelection()){ say('복사했습니다'); return; }
     let pending=null;
     try{
       if(navigator.clipboard && navigator.clipboard.writeText){
@@ -220,14 +200,8 @@ function bindAudioDiagnostics(trigger){
       }
     }catch(error){ pending=null; }
     const giveUp=()=>{
-      /* 마지막 길: 화면의 글을 잡아 둔다. 길게 눌러 '복사'를 고르면 된다. */
-      try{
-        const range=document.createRange();
-        range.selectNodeContents(log);
-        const selection=window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }catch(error){}
+      /* 마지막 길: 글을 잡아 둔다. 길게 눌러 '복사'를 고르면 된다. */
+      selectAll();
       say('글을 잡아 뒀습니다 — 길게 눌러 복사를 고르세요',6000);
     };
     if(pending && pending.then) pending.then(()=>say('복사했습니다'),giveUp);

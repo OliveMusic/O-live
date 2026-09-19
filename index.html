@@ -958,6 +958,19 @@
     margin:2px 0 10px; text-align:center;
     color:var(--ink-3); font-size:0.625rem; line-height:1.6;
   }
+  /* 글상자로 둔다. body에 user-select:none이 걸려 있어 <pre>로는 손가락으로 고를 수가
+     없다 — 폼 요소는 그 제약을 받지 않고 iOS의 복사 메뉴도 제대로 뜬다. */
+  .diag-log{
+    display:block; width:100%; box-sizing:border-box;
+    margin:0 0 12px; padding:11px; border:0; border-radius:10px;
+    background:var(--key); color:var(--ink-2);
+    font:11px/1.5 ui-monospace,Menlo,monospace;
+    white-space:pre; height:46vh; resize:none;
+    overflow:auto; touch-action:pan-y; -webkit-overflow-scrolling:touch;
+    user-select:text; -webkit-user-select:text;
+  }
+  /* 창이 떠 있는 동안 뒤 화면이 따라 움직이지 않게 한다. */
+  #audioDiagSheet{ touch-action:none; overscroll-behavior:contain; }
 
 
   .log-detail{ margin-top:12px; padding-top:11px; border-top:1px solid var(--line-soft); }
@@ -2879,7 +2892,8 @@
         <button class="cloud-sheet-close" id="audioDiagClose" type="button" aria-label="닫기">&#215;</button>
         <h2>오디오 기록</h2>
         <p class="diag-note" id="audioDiagHead"></p>
-        <pre class="diag-log" id="audioDiagLog"></pre>
+        <textarea class="diag-log" id="audioDiagLog" readonly
+          aria-label="오디오 기록" spellcheck="false"></textarea>
         <button class="btn" id="audioDiagCopy" type="button">기록 복사하기</button>
       </div>
     </div>
@@ -3059,23 +3073,23 @@
   </section>
 </div>
 
-<script src="app-version.js?v=294"></script>
+<script src="app-version.js?v=295"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=294"></script>
-<script src="js/audio-runtime.js?v=294"></script>
-<script src="js/core.js?v=294"></script>
-<script src="js/metronome.js?v=294"></script>
-<script src="js/tuner-engine.js?v=294"></script>
-<script src="js/tuner.js?v=294"></script>
-<script src="js/scales.js?v=294"></script>
-<script src="js/ear-trainer.js?v=294"></script>
-<script src="js/rhythm-trainer.js?v=294"></script>
-<script src="js/recording-cache.js?v=294"></script>
-<script src="js/recorder.js?v=294"></script>
-<script src="js/practice-links.js?v=294"></script>
-<script src="js/jam-session.js?v=294"></script>
-<script src="js/practice-log.js?v=294"></script>
-<script src="js/app-shell.js?v=294"></script>
+<script src="cloud-sync.js?v=295"></script>
+<script src="js/audio-runtime.js?v=295"></script>
+<script src="js/core.js?v=295"></script>
+<script src="js/metronome.js?v=295"></script>
+<script src="js/tuner-engine.js?v=295"></script>
+<script src="js/tuner.js?v=295"></script>
+<script src="js/scales.js?v=295"></script>
+<script src="js/ear-trainer.js?v=295"></script>
+<script src="js/rhythm-trainer.js?v=295"></script>
+<script src="js/recording-cache.js?v=295"></script>
+<script src="js/recorder.js?v=295"></script>
+<script src="js/practice-links.js?v=295"></script>
+<script src="js/jam-session.js?v=295"></script>
+<script src="js/practice-log.js?v=295"></script>
+<script src="js/app-shell.js?v=295"></script>
 </body>
 </html>
