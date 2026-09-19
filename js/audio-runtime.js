@@ -49,6 +49,13 @@ function declareBackgroundPaused(){ setBackgroundPlaybackState('paused'); }
    빠져 있었다. */
 function setBackgroundPlaybackState(state){
   try{
+    /* 임시 계측: 잠금화면 아이콘이 어긋나는 것을 쫓는다. 주인이 있어 물러난 것까지
+       남겨야 누가 마지막에 썼는지 알 수 있다. 원인을 잡으면 이 기록만 지운다. */
+    recordAudioDiagnostic('transport:state',{
+      상태:state,
+      주인:__externalMediaSessionOwner||'없음',
+      썼나:__externalMediaSessionOwner?'아니오':'예',
+    });
     if(__externalMediaSessionOwner) return;
     if(navigator.mediaSession) navigator.mediaSession.playbackState=state;
   }catch(e){}

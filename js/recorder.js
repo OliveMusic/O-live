@@ -606,7 +606,17 @@
       if(!navigator.mediaSession) return;
       const active=row||rows.find(item=>item.id===cloudMediaId);
       if(!active) return;
-      navigator.mediaSession.playbackState=cloudPlayingId===active.id?'playing':'paused';
+      const state=cloudPlayingId===active.id?'playing':'paused';
+      navigator.mediaSession.playbackState=state;
+      /* 임시 계측: 잠금화면 아이콘이 어긋나는 것을 쫓는다. 마지막에 무엇을 썼는지와
+         그때의 두 id를 함께 남긴다. 원인을 잡으면 지운다. */
+      if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:state',{
+        상태:state,
+        재생중id:cloudPlayingId||'없음',
+        화면id:cloudMediaId||'없음',
+        같은가:cloudPlayingId===active.id?'예':'아니오',
+        모드:cloudPlaybackMode||'없음',
+      });
       updateCloudMediaSessionPosition(active);
     }catch(error){}
   }
