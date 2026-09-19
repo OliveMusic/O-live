@@ -331,6 +331,13 @@ assert.match(recorder,/cloudMediaPositionUpdatedAt=0;[\s\S]*?refreshCloudMediaSe
    요소는 '재생 중'이고, 그러면 단추가 영영 일시정지 모양으로 남는다. */
 assert.match(recorder,/const pause=setCloudMediaAction\('pause',\(\)=>\{/);
 assert.match(recorder,/function keepCloudTransportFlowing\(detail\)/);
+/* 파형 탐색은 통로를 비우고 연다. MediaStream을 받는 <audio>는 흘러 들어온 것을 쌓아
+   두었다가 내보내므로, 비우지 않으면 소스를 갈아 끼워도 이전 대목이 1초쯤 더 난다. */
+assert.match(recorder,/function flushCloudTransport\(\)/);
+assert.match(recorder,/updatePlayerProgress\(row\.id,offset\);\s*\n\s*flushCloudTransport\(\);/,
+  '파형 탐색은 소스를 갈아 끼우기 전에 통로를 비운다');
+assert.match(recorder,/if\(cloudTransportFlushes>0\)\{ cloudTransportFlushes--; return; \}/,
+  'pause 이벤트는 비동기로 오므로 동기 빗장 대신 세어서 지나 보낸다');
 assert.match(recorder,/const keepCarrier=shouldKeepCloudTransportFlowing\(\);\s*\n\s*if\(!keepCarrier && !transportAlreadyPaused\)\{/,
   '가려진 동안에만 멈출 때 운반자를 그대로 흘린다');
 assert.match(recorder,/document\.visibilityState==='hidden'/,

@@ -166,6 +166,16 @@ function bindAudioDiagnostics(trigger){
     trigger.addEventListener(type,cancel);
   });
   trigger.addEventListener('contextmenu',event=>event.preventDefault());
+  /* 기록을 한 번 누르면 통째로 잡아 준다. 손가락으로 끌어 고르기가 어렵다. */
+  log.addEventListener('click',()=>{
+    try{
+      const range=document.createRange();
+      range.selectNodeContents(log);
+      const selection=window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }catch(error){}
+  });
   close.addEventListener('click',shut);
   sheet.addEventListener('click',event=>{ if(event.target===sheet) shut(); });
   /* 사파리의 navigator.clipboard는 홈 화면 앱에서 잠자코 막히는 일이 있다. 손짓이

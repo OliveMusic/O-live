@@ -138,6 +138,7 @@
   let cloudTransportInternalPause=false;
   let cloudTransportArmed=false;
   let cloudKeepAlivePending=false, cloudKeepAliveRestored=false;
+  let cloudTransportFlushes=0;
   /* 임시 계측: 소리는 MediaStream을 거쳐 <audio>로 나간다. 그 통로에 얼마가 담겨
      있는지는 '만든 양'과 '내보낸 양'의 차로만 잰다 — 운반자가 돌기 시작한 순간의
      두 시계를 적어 두고 탐색할 때 견준다. 원인을 잡으면 지운다. */
@@ -229,6 +230,8 @@
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-transport:playing');
     });
     audio.addEventListener('pause',()=>{
+      /* 통로를 비우려고 우리가 멈춘 것이다. 재생을 멈추라는 뜻이 아니다. */
+      if(cloudTransportFlushes>0){ cloudTransportFlushes--; return; }
       if(cloudTransportInternalPause) return;
       if(!cloudTransportArmed || !cloudPlayingId){
         /* 이미 멈춘 상태인데 iOS가 운반자를 또 멈췄다. 그대로 두면 자리를 놓쳐
@@ -381,6 +384,28 @@
   function shouldKeepCloudTransportFlowing(){
     return Boolean(cloudTransportDestination) &&
       typeof document!=='undefined' && document.visibilityState==='hidden';
+  }
+  /* 통로에 남은 소리를 버린다. MediaStream을 받는 <audio>는 흘러 들어온 것을 쌓아
+     두었다가 내보내므로, 소스를 갈아 끼워도 **이미 담긴 것은 마저 난다** — 파형을
+     탭하고 1초쯤 이전 대목이 그대로 이어지던 것이 그것이다. 잠깐 멈췄다 다시 틀면
+     쌓인 것이 버려지고 새 자리가 곧바로 들린다.
+
+     pause()가 부르는 이벤트는 비동기로 온다. 동기 구간에만 걸리는 빗장으로는 덮지
+     못하므로(cloudTransportInternalPause가 그렇다) 세어서 그 한 번을 지나 보낸다. */
+  function flushCloudTransport(){
+    if(!cloudTransportDestination || cloudTransportAudio.paused) return;
+    cloudTransportFlushes++;
+    try{ cloudTransportAudio.pause(); }catch(error){ cloudTransportFlushes--; return; }
+    try{
+      const started=cloudTransportAudio.play();
+      if(started && typeof started.catch==='function'){
+        started.catch(error=>{
+          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark(
+            'recording-transport:flush-failed',
+            {error:String(error&&error.name||error&&error.message||error).slice(0,80)});
+        });
+      }
+    }catch(error){}
   }
   function keepCloudTransportFlowing(detail){
     if(!cloudTransportDestination || !cloudTransportAudio.paused) return;
@@ -596,6 +621,7 @@
     const duration=rowDurationSeconds(row);
     const target=clamp(currentCloudPosition()+Number(seconds||0),0,duration);
     playbackPositions.set(row.id,target);
+    if(cloudPlayingId===row.id) flushCloudTransport();
     if(isNativePlaybackMode()) prepareNativeOffset(target,activeCloudAudio());
     else if(cloudPlayingId===row.id && cloudPlaybackMode==='decoded' &&
             cloudDecodedBuffer && cloudDecodedContext){
@@ -2193,6 +2219,7 @@
     if(cloudPlayingId===row.id && seeking){
       playbackPositions.set(row.id,offset);
       updatePlayerProgress(row.id,offset);
+      flushCloudTransport();
       if(isNativePlaybackMode()){
         prepareNativeOffset(offset);
         return;

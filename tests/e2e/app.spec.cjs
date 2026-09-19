@@ -224,8 +224,13 @@ async function preparePage(page,{
       HTMLMediaElement.prototype.play=function(){
         window.__mediaPlayCalls=(window.__mediaPlayCalls||0)+1;
         window.__lastPlayedMedia=this;
-        if(this.dataset.oliveRecordingTransport==='true') window.__recordingTransportMedia=this;
-        else window.__lastRecordingContentMedia=this;
+        if(this.dataset.oliveRecordingTransport==='true'){
+          window.__recordingTransportMedia=this;
+          window.__transportPlayCalls=(window.__transportPlayCalls||0)+1;
+        }else{
+          window.__lastRecordingContentMedia=this;
+          window.__contentPlayCalls=(window.__contentPlayCalls||0)+1;
+        }
         const media=this;
         if(micMode!=='playback-stalled' || media.dataset.oliveRecordingPlayback!=='true'){
           setTimeout(()=>{
@@ -1274,12 +1279,14 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   ]));
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/5[01-3]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('0:51');
-  const playCallsBeforeSeek=await page.evaluate(()=>window.__mediaPlayCalls||0);
+  /* 탐색이 다시 열어서는 안 되는 것은 **내용** 요소다. 운반자는 통로를 비우려고
+     잠깐 멈췄다 다시 트므로 따로 센다. */
+  const playCallsBeforeSeek=await page.evaluate(()=>window.__contentPlayCalls||0);
   await page.locator('.record-waveform').click({position:{x:box.width*.25,y:box.height/2}});
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   await expect(page.locator('.record-waveform')).toHaveAttribute('aria-valuenow',/1[67-8]/);
   await expect(page.locator('.record-player-elapsed')).toHaveText('0:17');
-  expect(await page.evaluate(()=>window.__mediaPlayCalls||0)).toBe(playCallsBeforeSeek);
+  expect(await page.evaluate(()=>window.__contentPlayCalls||0)).toBe(playCallsBeforeSeek);
 
   await page.locator('.record-player-tool.point').nth(0).click();
   await waveformControl.click({position:{x:box.width*.5,y:box.height/2}});
