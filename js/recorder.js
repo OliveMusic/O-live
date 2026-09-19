@@ -213,7 +213,7 @@
         /* 이미 멈춘 상태인데 iOS가 운반자를 또 멈췄다. 그대로 두면 자리를 놓쳐
            페이지가 잠든다. 쉬는 동안 한 번만 되살린다 — 무한히 되받으면 잠금화면
            그림이 깜빡인다. */
-        if(cloudMediaId && cloudTransportDestination && !cloudKeepAliveRestored){
+        if(cloudMediaId && !cloudKeepAliveRestored && shouldKeepCloudTransportFlowing()){
           cloudKeepAliveRestored=true;
           keepCloudTransportFlowing({restore:true});
         }
@@ -353,6 +353,14 @@
      잠금을 풀 때까지 배달되지 않는다 — 메트로놈에서 겪고 고친 것과 같은 사슬이다.
      재생이 멈춰 있으므로 흐르는 것은 무음이다. audio-runtime.js의
      keepBackgroundStreamFlowing()과 같은 처방이다. */
+  /* 자리를 지켜야 하는 것은 **가려진** 페이지뿐이다. 앞에 있는 동안에는 iOS가 재우지
+     않으므로 지킬 까닭이 없고, 오히려 해롭다 — 앞에서는 파형 탭과 AB 구간이 재생을
+     쉼 없이 여닫는데 운반자를 계속 흘려 두면 요소의 버퍼가 밀려, 들리는 자리와 코드가
+     아는 자리가 어긋난다. 탭한 뒤 이전 대목이 잠깐 더 들리다 옮겨 가던 것이 그것이다. */
+  function shouldKeepCloudTransportFlowing(){
+    return Boolean(cloudTransportDestination) &&
+      typeof document!=='undefined' && document.visibilityState==='hidden';
+  }
   function keepCloudTransportFlowing(detail){
     if(!cloudTransportDestination || !cloudTransportAudio.paused) return;
     cloudKeepAlivePending=true;
@@ -1685,9 +1693,11 @@
       cloudNativeInternalPause=false;
     }
     else releaseCloudSource();
-    /* 스트림 경로에서는 운반자를 멈추지 않는다. 멈추면 iOS가 엔진을, 이어서 페이지를
-       거두어 가고 잠금화면의 재생 단추가 먹지 않는다. */
-    if(!cloudTransportDestination && !transportAlreadyPaused){
+    /* 가려진 동안에는 운반자를 멈추지 않는다. 멈추면 iOS가 엔진을, 이어서 페이지를
+       거두어 가고 잠금화면의 재생 단추가 먹지 않는다. 앞에 있을 때는 예전 그대로
+       멈춘다 — 앞에서 겪는 탐색과 구간 반복을 건드리지 않기 위해서다. */
+    const keepCarrier=shouldKeepCloudTransportFlowing();
+    if(!keepCarrier && !transportAlreadyPaused){
       cloudTransportInternalPause=true;
       try{ cloudTransportAudio.pause(); }catch(error){}
       cloudTransportInternalPause=false;
@@ -1698,7 +1708,7 @@
     cloudPlaybackMode=isNativePlaybackMode()?'native-paused':'decoded-paused';
     cloudPlayingId='';
     cloudKeepAliveRestored=false;
-    if(cloudTransportDestination) keepCloudTransportFlowing();
+    if(keepCarrier) keepCloudTransportFlowing();
     setTabSounding('trainer',false,'recording-playback');
     if(cloudMediaUsesPersistentNative || cloudMediaSource || cloudDecodedBuffer){
       const row=rows.find(item=>item.id===id);
@@ -3232,6 +3242,12 @@
     keepWhenHidden:true,
   });
   document.addEventListener('visibilitychange',()=>{
+    /* 멈춘 채로 화면이 가려지는 순간이 자리를 지켜야 하는 때다. 앞에 있는 동안
+       멈춰 두었다가 잠그는 길도 여기로 들어온다. */
+    if(document.visibilityState==='hidden' && cloudMediaId && !cloudPlayingId){
+      cloudKeepAliveRestored=false;
+      keepCloudTransportFlowing({onHide:true});
+    }
     if(document.visibilityState==='visible' && currentUser) loadRecordings();
     if(cloudMediaSessionActive && cloudMediaId){
       cloudMediaPositionUpdatedAt=0;

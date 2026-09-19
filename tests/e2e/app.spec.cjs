@@ -1346,15 +1346,16 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     backward:window.__testMediaActionRegistrations.seekbackward,
     forward:window.__testMediaActionRegistrations.seekforward,
   }));
-  /* 멈춘 것은 재생이지 운반자가 아니다. 소리가 끊기면 iOS가 10.7초 뒤 오디오 엔진을,
-     이어서 페이지를 통째로 거두어 가 잠금화면의 재생 단추가 먹지 않는다. 이 판에서는
+  /* 가려진 동안에만 운반자를 계속 흘린다. 소리가 끊기면 iOS가 10.7초 뒤 오디오 엔진을,
+     이어서 페이지를 통째로 거두어 가 잠금화면의 재생 단추가 먹지 않는다. 앞에 있을 때는
+     흘리지 않는다 — 파형 탭과 구간 반복이 재생을 쉼 없이 여닫기 때문이다. 이 판에서는
      play()가 가짜라 요소가 실제로 돌지 않으므로, 계속 흘리라고 시켰는지를 센다. */
   const keepAlives=()=>page.evaluate(()=>window.OliveAudioDiagnostics.read()
     .filter(entry=>entry.event==='recording-transport:keepalive').length);
   await page.evaluate(()=>window.__recordingTransportMedia.dispatchEvent(new Event('pause')));
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
   await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('paused');
-  await expect.poll(keepAlives).toBe(1);
+  expect(await keepAlives()).toBe(0);
   await page.evaluate(()=>window.__testMediaActions.play());
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   expect(await page.evaluate(()=>({
@@ -1362,11 +1363,20 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     backward:window.__testMediaActionRegistrations.seekbackward,
     forward:window.__testMediaActionRegistrations.seekforward,
   }))).toEqual(actionRegistrations);
-  // 잠금화면의 일시정지 명령도 같은 약속을 지킨다 — 재생만 멈추고 운반자는 흐른다.
+  // 잠금화면의 일시정지 명령도 재생만 멈춘다. 가려져 있을 때만 운반자를 흘린다.
   await page.evaluate(()=>window.__testMediaActions.pause());
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
   await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('paused');
-  await expect.poll(keepAlives).toBe(2);
+  expect(await keepAlives()).toBe(0);
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(keepAlives).toBe(1);
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
   await page.evaluate(()=>window.__testMediaActions.play());
   await expect(page.locator('.record-player-play')).toHaveClass(/playing/);
   await page.evaluate(()=>{

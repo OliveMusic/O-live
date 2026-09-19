@@ -331,8 +331,10 @@ assert.match(recorder,/cloudMediaPositionUpdatedAt=0;[\s\S]*?refreshCloudMediaSe
    요소는 '재생 중'이고, 그러면 단추가 영영 일시정지 모양으로 남는다. */
 assert.match(recorder,/const pause=setCloudMediaAction\('pause',\(\)=>\{/);
 assert.match(recorder,/function keepCloudTransportFlowing\(detail\)/);
-assert.match(recorder,/if\(!cloudTransportDestination && !transportAlreadyPaused\)\{/,
-  '스트림 경로에서는 멈출 때 운반자를 멈추지 않는다');
+assert.match(recorder,/const keepCarrier=shouldKeepCloudTransportFlowing\(\);\s*\n\s*if\(!keepCarrier && !transportAlreadyPaused\)\{/,
+  '가려진 동안에만 멈출 때 운반자를 그대로 흘린다');
+assert.match(recorder,/document\.visibilityState==='hidden'/,
+  '자리를 지켜야 하는 것은 가려진 페이지뿐이다 — 앞에서는 탐색과 구간 반복이 운반자를 여닫는다');
 assert.match(recorder,/if\(cloudKeepAlivePending\)\{[\s\S]*?cloudKeepAlivePending=false;/,
   '자리 지키려 다시 튼 재생은 한 번만 삼킨다');
 assert.match(recorder,/function ensureSoundTouchProcessor\(ctx\)/);
