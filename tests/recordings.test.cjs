@@ -343,10 +343,9 @@ assert.match(recorder,/if\(cloudPlayingId\)\{\s*\n\s*updateCloudMediaSessionStat
 /* 잠금화면의 시간은 iOS가 우리가 준 자리에 배속을 곱해 스스로 센다. 구간 반복은
    직선으로 셀 수 없으므로, 구간이 걸려 있으면 구간을 전체 길이로 알려 준다. */
 /* 구간 반복은 직선 시간으로 표현할 수 없다. 구간을 전체 길이로 주면 눈금은 제대로
-   돌지만 iOS가 짧은 곡으로 읽어 아이콘을 재생 모양으로 그린다. 쓰는 사람이 눈금을
-   골랐다 — 아이콘을 고르려면 setPositionState()를 인자 없이 부르면 된다. */
-assert.match(recorder,/const looping=region && !region\.whole && region\.b-region\.a>0;/);
-assert.match(recorder,/duration:region\.b-region\.a,/);
+   돌지만 iOS가 짧은 곡으로 읽어 아이콘을 재생 모양으로 그린다. 두 쪽을 다 기기에서
+   써 보고 아이콘 쪽을 골랐다 — 틀린 눈금보다 없는 눈금이 정직하다. */
+assert.match(recorder,/if\(region && !region\.whole && region\.b-region\.a>0\)\{\s*\n\s*navigator\.mediaSession\.setPositionState\(\);/);
 assert.match(recorder,/const wrapped=position\+\.05<cloudLastReportedPosition;/,
   '한 바퀴 돌면 기다리지 않고 바로 알린다');
 assert.match(recorder,/function switchActivePlaybackToDecoded\(row,position,exact\)/);

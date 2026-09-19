@@ -572,23 +572,22 @@
          구간 반복은 직선으로 셀 수 없는 움직임이다. 전체 길이로 주면 B를 지나서도 계속
          앞으로 가고, 잠금 중에는 타이머가 심하게 눌려 바로잡아 줄 기회도 드물다.
 
-         그래서 구간이 걸려 있으면 **구간을 전체 길이로** 알려 준다. 세는 범위가 구간 안에
-         머물러 한 바퀴마다 제자리로 돌아오고, 연습하는 사람에게도 구간 안 어디쯤인지가
-         파일 어디쯤인지보다 쓸모 있다. 앞뒤 10초 이동은 실제 자리로 셈하므로 영향이 없다.
+         구간을 전체 길이로 줘 보면 눈금은 구간 안에서 잘 도는데, iOS에는 몇 초짜리
+         짧은 곡으로 보여 끝에 닿을 때마다 끝난 것으로 읽고 잠금화면 아이콘을 재생
+         모양으로 그린다. 둘 다 가질 수는 없다 — 구간 반복은 직선 시간으로 표현할 수
+         없는 움직임이기 때문이다.
 
-         **대가를 알고 고른 길이다.** 이렇게 주면 iOS에는 몇 초짜리 짧은 곡으로 보여,
-         끝에 닿을 때마다 끝난 것으로 읽고 잠금화면 아이콘을 재생 모양으로 그린다.
-         아이콘을 바로잡으려면 구간이 걸린 동안 setPositionState()를 인자 없이 불러
-         자리를 아예 알리지 않으면 되는데, 그러면 눈금이 사라진다. 둘 다 가질 수는
-         없다 — 구간 반복은 직선 시간으로 표현할 수 없는 움직임이기 때문이다.
-         쓰는 사람이 눈금을 골랐다. */
+         **두 쪽을 다 기기에서 써 보고 이쪽을 골랐다.** 구간이 걸려 있으면 자리를 아예
+         알리지 않는다. 틀린 눈금보다 없는 눈금이 정직하고, 아이콘은 playbackState가
+         정한다. 눈금 쪽으로 되돌리려면 구간일 때 duration을 region.b-region.a로,
+         position을 current-region.a로 주면 된다. 앞뒤 10초 이동은 실제 자리로
+         셈하므로 어느 쪽이든 영향이 없다. */
       const region=activeLoopFor(active);
-      const looping=region && !region.whole && region.b-region.a>0;
-      navigator.mediaSession.setPositionState(looping ? {
-        duration:region.b-region.a,
-        position:clamp(current-region.a,0,Math.max(0,region.b-region.a-.001)),
-        playbackRate:rowPlaybackRate(active),
-      } : {
+      if(region && !region.whole && region.b-region.a>0){
+        navigator.mediaSession.setPositionState();
+        return;
+      }
+      navigator.mediaSession.setPositionState({
         duration,position:current,playbackRate:rowPlaybackRate(active),
       });
     }catch(error){}
