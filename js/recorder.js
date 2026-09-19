@@ -346,6 +346,11 @@
     if(cloudTransportDestination){
       try{ cloudTransportDestination.stream.getTracks().forEach(track=>track.stop()); }catch(error){}
     }
+    /* 통로가 바뀌면 갈림길도 다시 세운다. 옛 통로에 묶인 채로 두면 안 된다. */
+    try{ if(cloudRouteIn) cloudRouteIn.disconnect(); }catch(error){}
+    try{ if(cloudRouteLocal) cloudRouteLocal.disconnect(); }catch(error){}
+    try{ if(cloudRouteStream) cloudRouteStream.disconnect(); }catch(error){}
+    cloudRouteCtx=cloudRouteIn=cloudRouteLocal=cloudRouteStream=null;
     cloudTransportDestination=null;
     cloudTransportContext=null;
     cloudTransportArmed=false;
@@ -397,6 +402,7 @@
        운반자가 이미 멈춰 있는 것이고, 그러면 1초는 다른 데서 오는 것이다. */
     if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('seek:비움',{
       통로:cloudTransportDestination?'스트림':'직결',
+      갈래:cloudRouteLocal?(cloudRouteLocal.gain.value>.5?'스피커':'통로'):'없음',
       운반자:cloudTransportDestination?(cloudTransportAudio.paused?'멈춤':'품'):'없음',
       비움:(cloudTransportDestination && !cloudTransportAudio.paused)?'예':'아니오',
     });
@@ -460,8 +466,52 @@
     cloudTransportPlayPromise=tracked;
     return tracked;
   }
+  /* 소리를 하나로 모아 두 갈래로 보낸다.
+
+     잠금화면 통로(MediaStream을 받는 <audio>)는 흘러 들어온 것을 1초쯤 쌓아 두었다가
+     내보낸다. 기기에서 잰 값이 그것을 가리켰다 — 파형을 탭하면 네이티브 요소는 68ms
+     만에 정확히 옮겨 가는데도 귀에는 1초 뒤에 왔다. 요소와 귀 사이에 남은 것은
+     이 통로뿐이었다.
+
+     그런데 통로는 **잠금화면 때문에만** 있다. 앞에 있는 동안에는 스피커로 곧장 보내면
+     되고, 가려질 때만 통로를 연다. 갈아타는 것은 게인이므로 재생 중에 바뀌어도
+     이음매가 없다. 운반자는 내내 돌고 있어 잠금화면 자리도 그대로 지킨다. */
+  let cloudRouteCtx=null, cloudRouteIn=null, cloudRouteLocal=null, cloudRouteStream=null;
+  function applyCloudRoute(immediate){
+    if(!cloudRouteCtx || !cloudRouteLocal || !cloudRouteStream) return;
+    const hidden=typeof document!=='undefined' && document.visibilityState==='hidden';
+    const now=cloudRouteCtx.currentTime;
+    const set=(node,value)=>{
+      try{
+        node.gain.cancelScheduledValues(now);
+        if(immediate) node.gain.setValueAtTime(value,now);
+        else{
+          node.gain.setValueAtTime(node.gain.value,now);
+          node.gain.linearRampToValueAtTime(value,now+.04);
+        }
+      }catch(error){ try{ node.gain.value=value; }catch(e){} }
+    };
+    set(cloudRouteLocal,hidden?0:1);
+    set(cloudRouteStream,hidden?1:0);
+  }
   function cloudOutputDestination(ctx){
-    return ensureCloudTransport(ctx)||ctx.destination;
+    const stream=ensureCloudTransport(ctx);
+    if(!stream) return ctx.destination;
+    if(cloudRouteCtx!==ctx || !cloudRouteIn){
+      try{
+        cloudRouteIn=ctx.createGain();
+        cloudRouteLocal=ctx.createGain();
+        cloudRouteStream=ctx.createGain();
+        cloudRouteIn.connect(cloudRouteLocal).connect(ctx.destination);
+        cloudRouteIn.connect(cloudRouteStream).connect(stream);
+        cloudRouteCtx=ctx;
+      }catch(error){
+        cloudRouteCtx=cloudRouteIn=cloudRouteLocal=cloudRouteStream=null;
+        return stream;
+      }
+    }
+    applyCloudRoute(true);
+    return cloudRouteIn;
   }
   function ensureSoundTouchProcessor(ctx){
     if(!ctx || !ctx.audioWorklet || typeof AudioWorkletNode!=='function'){
@@ -3341,6 +3391,7 @@
   document.addEventListener('visibilitychange',()=>{
     /* 멈춘 채로 화면이 가려지는 순간이 자리를 지켜야 하는 때다. 앞에 있는 동안
        멈춰 두었다가 잠그는 길도 여기로 들어온다. */
+    applyCloudRoute(false);
     if(document.visibilityState==='hidden' && cloudMediaId && !cloudPlayingId){
       cloudKeepAliveRestored=false;
       keepCloudTransportFlowing({onHide:true});

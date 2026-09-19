@@ -333,6 +333,12 @@ assert.match(recorder,/const pause=setCloudMediaAction\('pause',\(\)=>\{/);
 assert.match(recorder,/function keepCloudTransportFlowing\(detail\)/);
 /* 파형 탐색은 통로를 비우고 연다. MediaStream을 받는 <audio>는 흘러 들어온 것을 쌓아
    두었다가 내보내므로, 비우지 않으면 소스를 갈아 끼워도 이전 대목이 1초쯤 더 난다. */
+/* 잠금화면 통로는 1초쯤 물고 있다. 그 통로는 잠금화면 때문에만 있으므로, 앞에 있는
+   동안에는 스피커로 곧장 보내고 가려질 때만 통로를 연다. */
+assert.match(recorder,/cloudRouteIn\.connect\(cloudRouteLocal\)\.connect\(ctx\.destination\);/);
+assert.match(recorder,/cloudRouteIn\.connect\(cloudRouteStream\)\.connect\(stream\);/);
+assert.match(recorder,/set\(cloudRouteLocal,hidden\?0:1\);\s*\n\s*set\(cloudRouteStream,hidden\?1:0\);/,
+  '두 갈래 중 하나만 연다 — 둘 다 열면 겹쳐 들린다');
 assert.match(recorder,/function flushCloudTransport\(\)/);
 assert.match(recorder,/updatePlayerProgress\(row\.id,offset\);\s*\n\s*flushCloudTransport\(\);/,
   '파형 탐색은 소스를 갈아 끼우기 전에 통로를 비운다');
