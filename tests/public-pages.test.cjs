@@ -167,6 +167,11 @@ assert.match(index,/getTempo:\(\)=>bpm,[\s\S]*?adjustTempo,/);
 assert.match(index,/getTempo:\(\)=>jamBpm,[\s\S]*?adjustTempo:adjustJamTempo,/);
 assert.match(index,/audio\.addEventListener\('pause',[\s\S]*?pauseBackgroundPlayback\(\)/);
 assert.match(index,/ctx\.suspend\(\)/);
+/* 잠금화면을 남이 쥐고 있으면 메트로놈 쪽은 손대지 않는다. 저장 녹음 재생이 세션을
+   가져간 동안 '정지'를 써 버리면 소리는 나는데 잠금화면만 멈춘 것으로 보인다. */
+assert.match(audioRuntime,/function setBackgroundPlaybackState\(state\)\{[\s\S]*?if\(__externalMediaSessionOwner\) return;/);
+assert.doesNotMatch(audioRuntime,/navigator\.mediaSession\.playbackState='(playing|paused)'/,
+  '상태는 setBackgroundPlaybackState()로만 쓴다');
 /* 마스터 → 컴프레서 → 앱 출력. 사이에 아무것도 끼우지 않는다. */
 assert.match(index,/__master\.connect\(comp\)\.connect\(getAppOutput\(ctx\)\);/);
 assert.match(index,/playClick\(time - metroCtx\.currentTime, level, metroCtx, metroOutput\)/);

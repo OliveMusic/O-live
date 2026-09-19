@@ -40,8 +40,18 @@ function keepBackgroundStreamFlowing(detail){
 /* 잠금화면의 단추 그림은 iOS가 요소의 실제 재생 상태로 되돌려 놓는다. 우리가 자리를
    지키려 다시 튼 것까지 '재생 중'으로 읽으므로, playing 이벤트 뒤에 '정지'를 다시
    알린다. 이것을 빼먹으면 첫 일시정지가 헛돈다 — 소리는 멈추는데 단추는 그대로다. */
-function declareBackgroundPaused(){
-  try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+function declareBackgroundPaused(){ setBackgroundPlaybackState('paused'); }
+
+/* 잠금화면을 남이 쥐고 있으면 손대지 않는다. 저장 녹음 재생이 세션을 가져간 동안
+   메트로놈 쪽에서 '정지'를 써 버리면, 소리는 나는데 잠금화면만 멈춘 것으로 보이고
+   사용자가 재생을 누르면 이미 나고 있는 것 위에 한 벌이 더 열린다.
+   configureBackgroundMediaSession()은 처음부터 이 검사를 했는데 낱개로 쓰는 자리들이
+   빠져 있었다. */
+function setBackgroundPlaybackState(state){
+  try{
+    if(__externalMediaSessionOwner) return;
+    if(navigator.mediaSession) navigator.mediaSession.playbackState=state;
+  }catch(e){}
 }
 let __externalMediaSessionOwner = '';
 
@@ -349,7 +359,7 @@ function createBackgroundAudioElement(){
       return;
     }
     __backgroundMediaArmed=true;
-    try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='playing'; }catch(e){}
+    setBackgroundPlaybackState('playing');
   });
   // iPhone의 잠금 화면은 Media Session 콜백 대신 실제 <audio>만
   // 일시정지시키는 경우가 있다. 그 이벤트도 앱의 재생 정지로 연결한다.
@@ -362,7 +372,7 @@ function createBackgroundAudioElement(){
       __backgroundResumeSequence++;
       __backgroundMediaArmed=false;
       setBackgroundTransportsPaused(true);
-      try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+      setBackgroundPlaybackState('paused');
       recordAudioDiagnostic('transport:resume-cancelled');
       return;
     }
@@ -672,7 +682,7 @@ function resumeBackgroundPlayback(){
       __stoppingBackgroundMedia=true;
       try{ audio.pause(); }catch(e){}
       __stoppingBackgroundMedia=false;
-      try{ if(navigator.mediaSession) navigator.mediaSession.playbackState='paused'; }catch(e){}
+      setBackgroundPlaybackState('paused');
       recordAudioDiagnostic('transport:resume-failed',{
         ms:Date.now()-startedAt,
         error:String(error&&error.message||error&&error.name||error).slice(0,80),

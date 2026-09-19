@@ -337,6 +337,9 @@ assert.match(recorder,/function keepCloudTransportFlowing\(detail\)/);
    미리 당겨 온 소리를 물고 있어, 요소가 68ms 만에 옮겨 가도 귀에는 1초 뒤에 온다.
    같은 파일을 디코딩 경로로 재생하면 같은 탭이 270ms에 제자리로 간다 — 기기에서 잰
    값이다. 그래서 파형을 탐색하면 디코딩 경로로 갈아탄다. */
+/* 이미 나고 있으면 새로 열지 않는다. 잠금화면이 '정지'로 잘못 보여 재생을 눌러도
+   두 벌이 겹쳐 나서는 안 된다 — 하나는 처음부터, 하나는 원래 자리에서 흐른다. */
+assert.match(recorder,/if\(cloudPlayingId\)\{\s*\n\s*updateCloudMediaSessionState\(\);/);
 assert.match(recorder,/function switchActivePlaybackToDecoded\(row,position,exact\)/);
 assert.match(recorder,/const decodedReady=cloudDecodedBuffer && cloudDecodedId===row\.id &&/,
   '버퍼가 준비됐을 때만 갈아탄다 — 아니면 예전대로 요소를 옮긴다');

@@ -606,6 +606,14 @@
     updateCloudMediaSessionPosition(row,target);
   }
   function resumeCloudPlaybackFromMediaSession(){
+    /* 이미 소리가 나고 있으면 새로 열지 않는다. 잠금화면이 어떤 까닭으로 '정지'로
+       보여 재생을 눌러도, 두 벌이 겹쳐 나는 것보다 현재 것을 이어 두는 편이 낫다.
+       겹쳐 나면 하나는 처음부터, 하나는 원래 자리에서 흐른다. */
+    if(cloudPlayingId){
+      updateCloudMediaSessionState();
+      if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:already-playing');
+      return;
+    }
     cloudKeepAlivePending=false;
     cloudKeepAliveRestored=false;
     const row=rows.find(item=>item.id===cloudMediaId);
