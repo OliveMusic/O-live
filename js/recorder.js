@@ -138,7 +138,6 @@
   let cloudTransportInternalPause=false;
   let cloudTransportArmed=false;
   let cloudKeepAlivePending=false, cloudKeepAliveRestored=false;
-  let cloudTransportFlushes=0;
   /* 임시 계측: 소리는 MediaStream을 거쳐 <audio>로 나간다. 그 통로에 얼마가 담겨
      있는지는 '만든 양'과 '내보낸 양'의 차로만 잰다 — 운반자가 돌기 시작한 순간의
      두 시계를 적어 두고 탐색할 때 견준다. 원인을 잡으면 지운다. */
@@ -230,8 +229,6 @@
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-transport:playing');
     });
     audio.addEventListener('pause',()=>{
-      /* 통로를 비우려고 우리가 멈춘 것이다. 재생을 멈추라는 뜻이 아니다. */
-      if(cloudTransportFlushes>0){ cloudTransportFlushes--; return; }
       if(cloudTransportInternalPause) return;
       if(!cloudTransportArmed || !cloudPlayingId){
         /* 이미 멈춘 상태인데 iOS가 운반자를 또 멈췄다. 그대로 두면 자리를 놓쳐
@@ -346,11 +343,6 @@
     if(cloudTransportDestination){
       try{ cloudTransportDestination.stream.getTracks().forEach(track=>track.stop()); }catch(error){}
     }
-    /* 통로가 바뀌면 갈림길도 다시 세운다. 옛 통로에 묶인 채로 두면 안 된다. */
-    try{ if(cloudRouteIn) cloudRouteIn.disconnect(); }catch(error){}
-    try{ if(cloudRouteLocal) cloudRouteLocal.disconnect(); }catch(error){}
-    try{ if(cloudRouteStream) cloudRouteStream.disconnect(); }catch(error){}
-    cloudRouteCtx=cloudRouteIn=cloudRouteLocal=cloudRouteStream=null;
     cloudTransportDestination=null;
     cloudTransportContext=null;
     cloudTransportArmed=false;
@@ -389,36 +381,6 @@
   function shouldKeepCloudTransportFlowing(){
     return Boolean(cloudTransportDestination) &&
       typeof document!=='undefined' && document.visibilityState==='hidden';
-  }
-  /* 통로에 남은 소리를 버린다. MediaStream을 받는 <audio>는 흘러 들어온 것을 쌓아
-     두었다가 내보내므로, 소스를 갈아 끼워도 **이미 담긴 것은 마저 난다** — 파형을
-     탭하고 1초쯤 이전 대목이 그대로 이어지던 것이 그것이다. 잠깐 멈췄다 다시 틀면
-     쌓인 것이 버려지고 새 자리가 곧바로 들린다.
-
-     pause()가 부르는 이벤트는 비동기로 온다. 동기 구간에만 걸리는 빗장으로는 덮지
-     못하므로(cloudTransportInternalPause가 그렇다) 세어서 그 한 번을 지나 보낸다. */
-  function flushCloudTransport(){
-    /* 임시 계측: 비우기가 실제로 돌았는지. 안 돌았으면 통로가 스트림이 아니거나
-       운반자가 이미 멈춰 있는 것이고, 그러면 1초는 다른 데서 오는 것이다. */
-    if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('seek:비움',{
-      통로:cloudTransportDestination?'스트림':'직결',
-      갈래:cloudRouteLocal?(cloudRouteLocal.gain.value>.5?'스피커':'통로'):'없음',
-      운반자:cloudTransportDestination?(cloudTransportAudio.paused?'멈춤':'품'):'없음',
-      비움:(cloudTransportDestination && !cloudTransportAudio.paused)?'예':'아니오',
-    });
-    if(!cloudTransportDestination || cloudTransportAudio.paused) return;
-    cloudTransportFlushes++;
-    try{ cloudTransportAudio.pause(); }catch(error){ cloudTransportFlushes--; return; }
-    try{
-      const started=cloudTransportAudio.play();
-      if(started && typeof started.catch==='function'){
-        started.catch(error=>{
-          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark(
-            'recording-transport:flush-failed',
-            {error:String(error&&error.name||error&&error.message||error).slice(0,80)});
-        });
-      }
-    }catch(error){}
   }
   function keepCloudTransportFlowing(detail){
     if(!cloudTransportDestination || !cloudTransportAudio.paused) return;
@@ -466,52 +428,8 @@
     cloudTransportPlayPromise=tracked;
     return tracked;
   }
-  /* 소리를 하나로 모아 두 갈래로 보낸다.
-
-     잠금화면 통로(MediaStream을 받는 <audio>)는 흘러 들어온 것을 1초쯤 쌓아 두었다가
-     내보낸다. 기기에서 잰 값이 그것을 가리켰다 — 파형을 탭하면 네이티브 요소는 68ms
-     만에 정확히 옮겨 가는데도 귀에는 1초 뒤에 왔다. 요소와 귀 사이에 남은 것은
-     이 통로뿐이었다.
-
-     그런데 통로는 **잠금화면 때문에만** 있다. 앞에 있는 동안에는 스피커로 곧장 보내면
-     되고, 가려질 때만 통로를 연다. 갈아타는 것은 게인이므로 재생 중에 바뀌어도
-     이음매가 없다. 운반자는 내내 돌고 있어 잠금화면 자리도 그대로 지킨다. */
-  let cloudRouteCtx=null, cloudRouteIn=null, cloudRouteLocal=null, cloudRouteStream=null;
-  function applyCloudRoute(immediate){
-    if(!cloudRouteCtx || !cloudRouteLocal || !cloudRouteStream) return;
-    const hidden=typeof document!=='undefined' && document.visibilityState==='hidden';
-    const now=cloudRouteCtx.currentTime;
-    const set=(node,value)=>{
-      try{
-        node.gain.cancelScheduledValues(now);
-        if(immediate) node.gain.setValueAtTime(value,now);
-        else{
-          node.gain.setValueAtTime(node.gain.value,now);
-          node.gain.linearRampToValueAtTime(value,now+.04);
-        }
-      }catch(error){ try{ node.gain.value=value; }catch(e){} }
-    };
-    set(cloudRouteLocal,hidden?0:1);
-    set(cloudRouteStream,hidden?1:0);
-  }
   function cloudOutputDestination(ctx){
-    const stream=ensureCloudTransport(ctx);
-    if(!stream) return ctx.destination;
-    if(cloudRouteCtx!==ctx || !cloudRouteIn){
-      try{
-        cloudRouteIn=ctx.createGain();
-        cloudRouteLocal=ctx.createGain();
-        cloudRouteStream=ctx.createGain();
-        cloudRouteIn.connect(cloudRouteLocal).connect(ctx.destination);
-        cloudRouteIn.connect(cloudRouteStream).connect(stream);
-        cloudRouteCtx=ctx;
-      }catch(error){
-        cloudRouteCtx=cloudRouteIn=cloudRouteLocal=cloudRouteStream=null;
-        return stream;
-      }
-    }
-    applyCloudRoute(true);
-    return cloudRouteIn;
+    return ensureCloudTransport(ctx)||ctx.destination;
   }
   function ensureSoundTouchProcessor(ctx){
     if(!ctx || !ctx.audioWorklet || typeof AudioWorkletNode!=='function'){
@@ -678,7 +596,6 @@
     const duration=rowDurationSeconds(row);
     const target=clamp(currentCloudPosition()+Number(seconds||0),0,duration);
     playbackPositions.set(row.id,target);
-    if(cloudPlayingId===row.id) flushCloudTransport();
     if(isNativePlaybackMode()) prepareNativeOffset(target,activeCloudAudio());
     else if(cloudPlayingId===row.id && cloudPlaybackMode==='decoded' &&
             cloudDecodedBuffer && cloudDecodedContext){
@@ -2117,6 +2034,14 @@
       applyNativePlaybackSettings(row);
       cloudPlaybackMode='native-connected';
       prepareNativeOffset(offset);
+      /* 파형을 탐색하면 디코딩 경로로 갈아탄다. 그때 기다리지 않도록 미리 받아 둔다 —
+         재생 자체는 이 결과를 기다리지 않으므로 늦어도 손해가 없다. */
+      decodedBufferForRow(ctx,row).then(buffer=>{
+        if(cloudDecodedId===row.id && cloudDecodedBuffer) return;
+        cloudDecodedBuffer=buffer;
+        cloudDecodedContext=ctx;
+        cloudDecodedId=row.id;
+      }).catch(()=>{});
       // iPhone의 사용자 제스처가 살아 있는 동안 곧바로 play()를 호출한다.
       const mediaReady=Promise.resolve(cloudFallbackAudio.play());
       const transportReady=armCloudTransport(ctx,row);
@@ -2241,6 +2166,11 @@
     return true;
   }
   function switchActivePlaybackToPitchPreserving(row,position){
+    return switchActivePlaybackToDecoded(row,position,false);
+  }
+  /* exact=true는 파형 탐색이다. 누른 자리를 그대로 연다 — 이어 붙이는 것이 아니므로
+     이미 귀로 나간 만큼을 건너뛸 까닭이 없다. */
+  function switchActivePlaybackToDecoded(row,position,exact){
     if(cloudPlayingId!==row.id || !audioCtx || audioCtx.state==='closed') return false;
     /* 갈아타는 데는 디코딩과 워클릿 적재가 걸린다. 그 사이에 또 부르면 세우던 그래프를
        도로 헐고 처음부터 다시 한다. 한 번에 한 번만 갈아탄다. */
@@ -2252,7 +2182,8 @@
        그대로 이어 붙이면 방금 귀로 들은 몇십 ms를 한 번 더 듣게 된다 — 조옮김을 처음
        걸 때 '짧게 되풀이'로 들리던 것이 이것이다. 이미 나간 만큼을 건너뛰고 잇는다.
        출력 지연은 기기마다 다르고 iOS가 특히 크다. 터무니없는 값은 잘라 쓴다. */
-    const heard=Math.max(0,Math.min(.4,Number(ctx.outputLatency)||Number(ctx.baseLatency)||0));
+    const heard=exact ? 0
+      : Math.max(0,Math.min(.4,Number(ctx.outputLatency)||Number(ctx.baseLatency)||0));
     const offset=clamp((Number(position)||0)+heard,0,rowDurationSeconds(row));
     playbackPositions.set(row.id,offset);
     stopCloudProgress();
@@ -2262,7 +2193,9 @@
     Promise.all([
       ctx.state!=='running' ? resumeCtx(ctx) : Promise.resolve(),
       decodedBufferForRow(ctx,row),
-      ensureSoundTouchProcessor(ctx),
+      /* 워클릿은 조옮김·배속을 쓸 때만 필요하다. 기본값으로 듣다 탐색해 갈아타는
+         길에서까지 모듈 적재를 기다릴 까닭이 없다. */
+      needsPitchProcessing(row) ? ensureSoundTouchProcessor(ctx) : Promise.resolve(),
       armCloudTransport(ctx,row),
     ]).then(results=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
@@ -2290,8 +2223,19 @@
     if(cloudPlayingId===row.id && seeking){
       playbackPositions.set(row.id,offset);
       updatePlayerProgress(row.id,offset);
-      flushCloudTransport();
       if(isNativePlaybackMode()){
+        /* 네이티브 연결 경로는 탐색이 즉각적이지 않다. createMediaElementSource가 요소에서
+           미리 당겨 온 소리를 안에 물고 있어, 요소가 68ms 만에 정확히 옮겨 가도 귀에는
+           1초 뒤에 온다. 기기에서 잰 값이 그대로 가리켰다 — 같은 파일을 디코딩 경로로
+           재생하면 같은 탭이 270ms에 제자리로 간다.
+
+           그래서 처음 탐색할 때 디코딩 경로로 갈아탄다. 버퍼는 재생을 시작할 때 미리
+           받아 두므로 대개 그 자리에서 바로 바뀐다. 갈아타지 못하는 판(요소를 그래프에
+           물리지 않는 native-direct 등)에서는 예전 그대로 요소를 옮긴다. */
+        const decodedReady=cloudDecodedBuffer && cloudDecodedId===row.id &&
+          cloudDecodedContext===audioCtx;
+        if(decodedReady && !cloudMediaUsesPersistentNative &&
+           switchActivePlaybackToDecoded(row,offset,true)) return;
         prepareNativeOffset(offset);
         return;
       }
@@ -3391,7 +3335,6 @@
   document.addEventListener('visibilitychange',()=>{
     /* 멈춘 채로 화면이 가려지는 순간이 자리를 지켜야 하는 때다. 앞에 있는 동안
        멈춰 두었다가 잠그는 길도 여기로 들어온다. */
-    applyCloudRoute(false);
     if(document.visibilityState==='hidden' && cloudMediaId && !cloudPlayingId){
       cloudKeepAliveRestored=false;
       keepCloudTransportFlowing({onHide:true});

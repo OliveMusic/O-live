@@ -1315,8 +1315,15 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
   await expect(page.locator('.record-waveform')).not.toHaveClass(/has-loop-start/);
   await expect(page.locator('.record-player-tool.repeat')).toBeEnabled();
   await expect(page.locator('.record-player-tool.repeat')).toHaveClass(/active/);
-  expect(await page.evaluate(()=>window.__lastRecordingContentMedia.loop)).toBeTruthy();
-  await page.evaluate(()=>{ window.__lastRecordingContentMedia.currentTime=23; });
+  /* 파형을 탐색하면 디코딩 경로로 갈아탄다 — 네이티브 연결 경로는 요소가 68ms 만에
+     옮겨 가도 귀에는 1초 뒤에 온다. 그래서 구간을 지운 뒤의 전체 반복도 이제 네이티브
+     요소의 loop가 아니라 디코딩 소스가 진다. */
+  expect(await page.evaluate(()=>Boolean(
+    window.__micHarness.bufferSource && window.__micHarness.bufferSource.loop
+  ))).toBeTruthy();
+  /* 자리도 마찬가지다. 디코딩 경로에서는 요소의 currentTime이 아니라 오디오 시계로
+     센다. 파형으로 옮겨 보고 잠금화면에 그 자리가 실리는지 확인한다. */
+  await waveformControl.click({position:{x:box.width*(23/69),y:box.height/2}});
   await expect.poll(()=>page.evaluate(()=>(
     window.__testMediaSession.positionState&&window.__testMediaSession.positionState.position
   ))).toBeGreaterThan(22);
