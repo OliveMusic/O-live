@@ -138,6 +138,22 @@
   let cloudTransportInternalPause=false;
   let cloudTransportArmed=false;
   let cloudKeepAlivePending=false, cloudKeepAliveRestored=false;
+  /* 임시 계측: 소리는 MediaStream을 거쳐 <audio>로 나간다. 그 통로에 얼마가 담겨
+     있는지는 '만든 양'과 '내보낸 양'의 차로만 잰다 — 운반자가 돌기 시작한 순간의
+     두 시계를 적어 두고 탐색할 때 견준다. 원인을 잡으면 지운다. */
+  let cloudTransportClockCtx=null, cloudTransportClockEl=null;
+  function transportLag(ctx){
+    try{
+      if(cloudTransportClockCtx==null || !ctx) return null;
+      const produced=ctx.currentTime-cloudTransportClockCtx;
+      const played=cloudTransportAudio.currentTime-cloudTransportClockEl;
+      return {
+        만든양:Number(produced.toFixed(2)),
+        내보낸양:Number(played.toFixed(2)),
+        통로에남은양:Number((produced-played).toFixed(3)),
+      };
+    }catch(error){ return null; }
+  }
   let cloudTransportPlayPromise=null;
   let cloudTransportPlayGeneration=0;
   let cloudStretchNode=null;
@@ -204,6 +220,11 @@
       }
       if(!cloudMediaId) return;
       cloudTransportArmed=true;
+      /* 임시 계측: 통로가 돌기 시작한 자리. 원인을 잡으면 지운다. */
+      try{
+        cloudTransportClockCtx=cloudTransportContext?cloudTransportContext.currentTime:null;
+        cloudTransportClockEl=audio.currentTime;
+      }catch(error){ cloudTransportClockCtx=null; }
       updateCloudMediaSessionState();
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-transport:playing');
     });
@@ -1912,11 +1933,16 @@
            워클릿은 100블록마다 버퍼 상태를 보내 온다. 기별이 끝내 없으면 한도
            뒤에 그냥 연다 — 소리가 영영 닫혀 있는 것이 제일 나쁘다. */
         let opened=false;
+        const openedFrom=ctx.currentTime;
         const openOutput=()=>{
           if(opened || cloudGainNode!==gain) return;
           opened=true;
           clearTimeout(cloudStretchOpenTimer); cloudStretchOpenTimer=0;
           const now=ctx.currentTime;
+          /* 임시 계측: 늘임 경로에서 소리를 실제로 연 시각. 원인을 잡으면 지운다. */
+          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('seek:소리엶',{
+            닫아둔시간ms:Math.round((now-openedFrom)*1000),
+          });
           try{
             gain.gain.cancelScheduledValues(now);
             gain.gain.setValueAtTime(.0001,now);
@@ -1952,6 +1978,20 @@
       cloudStartedAt=ctx.currentTime;
       cloudStartedRate=rate;
       cloudPlaybackMode='decoded';
+      /* 임시 계측: 탐색 한 번에 두 갈래를 함께 가른다. 통로에남은양이 크면 이미
+         통로에 들어간 소리가 마저 나는 것이고, 물러선양이 크면 일부러 앞에서 시작한
+         쪽이다. 원인을 잡으면 지운다. */
+      if(window.OliveAudioDiagnostics){
+        window.OliveAudioDiagnostics.mark('seek:열기',Object.assign({
+          누른자리:Number((Number(offset)||0).toFixed(2)),
+          연자리:Number(startAt.toFixed(2)),
+          물러선양:Number(backUp.toFixed(3)),
+          늘임:stretching?'예':'아니오',
+          페이드:fadeIn?'예':'아니오',
+          구간:region?(region.a.toFixed(2)+'~'+region.b.toFixed(2)):'없음',
+          배속:rate,
+        },transportLag(ctx)||{}));
+      }
       source.start(0,startAt);
       armCloudTransport(ctx,row);
       setTabSounding('trainer',true,'recording-playback');
@@ -2137,6 +2177,15 @@
   function playRow(row,requestedOffset){
     const seeking=Number.isFinite(requestedOffset);
     const offset=clamp(seeking?requestedOffset:Number(playbackPositions.get(row.id))||0,0,rowDurationSeconds(row));
+    /* 임시 계측: 탐색이 어느 갈래로 가는지. 원인을 잡으면 지운다. */
+    if(seeking && window.OliveAudioDiagnostics){
+      window.OliveAudioDiagnostics.mark('seek:탭',{
+        자리:Number(offset.toFixed(2)),
+        모드:cloudPlaybackMode,
+        네이티브:isNativePlaybackMode()?'예':'아니오',
+        재생중:cloudPlayingId===row.id?'예':'아니오',
+      });
+    }
     if(recording || startPending){
       setMessage('녹음을 정지한 뒤 목록을 재생해 주세요',true);
       return;
