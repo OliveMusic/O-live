@@ -342,8 +342,8 @@ assert.match(recorder,/function keepCloudTransportFlowing\(detail\)/);
 assert.match(recorder,/if\(cloudPlayingId\)\{\s*\n\s*updateCloudMediaSessionState\(\);/);
 /* 잠금화면의 시간은 iOS가 우리가 준 자리에 배속을 곱해 스스로 센다. 구간 반복은
    직선으로 셀 수 없으므로, 구간이 걸려 있으면 구간을 전체 길이로 알려 준다. */
-assert.match(recorder,/const looping=region && !region\.whole && region\.b-region\.a>0;/);
-assert.match(recorder,/duration:region\.b-region\.a,/);
+assert.match(recorder,/if\(region && !region\.whole && region\.b-region\.a>0\)\{\s*\n\s*navigator\.mediaSession\.setPositionState\(\);/,
+  '구간 반복은 직선으로 셀 수 없다 — 틀린 눈금 대신 눈금을 걷는다');
 assert.match(recorder,/const wrapped=position\+\.05<cloudLastReportedPosition;/,
   '한 바퀴 돌면 기다리지 않고 바로 알린다');
 assert.match(recorder,/function switchActivePlaybackToDecoded\(row,position,exact\)/);

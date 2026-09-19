@@ -569,20 +569,22 @@
       const current=clamp(Number.isFinite(position)?position:currentCloudPosition(),0,
         Math.max(0,duration-.001));
       /* 잠금화면의 시간은 iOS가 직접 센다 — 우리가 준 자리에 배속을 곱해 흐르게 한다.
-         구간 반복은 직선으로 셀 수 없는 움직임이라, 전체 길이로 알려 주면 B를 지나서도
-         계속 앞으로 가고 되돌아오지 않는다. 잠금 중에는 우리 타이머가 심하게 눌려
-         바로잡아 줄 기회도 드물다.
+         구간 반복은 직선으로 셀 수 없는 움직임이다. 전체 길이로 주면 B를 지나서도 계속
+         앞으로 가고, 잠금 중에는 타이머가 심하게 눌려 바로잡아 줄 기회도 드물다.
 
-         그래서 구간이 걸려 있으면 **구간을 전체 길이로** 알려 준다. 세는 범위가 구간
-         안에 머물러 한 바퀴마다 제자리로 돌아오고, 연습하는 사람에게도 구간 안 어디쯤인지가
-         파일 어디쯤인지보다 쓸모 있다. 앞뒤 10초 이동은 실제 자리로 셈하므로 영향이 없다. */
+         구간을 전체 길이로 줘 봤더니(빌드 299) 눈금은 잘 돌았지만 아이콘이 재생 모양으로
+         남았다. iOS에는 1.5초짜리 짧은 곡으로 보이고, 끝에 닿을 때마다 끝난 것으로
+         읽히기 때문으로 보인다. 298에서 맞던 것이 299에서 틀어진 것과 맞아떨어진다.
+
+         그래서 구간이 걸려 있으면 자리를 아예 알리지 않는다. 틀린 눈금보다 없는 눈금이
+         정직하고, 아이콘은 playbackState가 정하게 둔다. 앞뒤 10초 이동은 실제 자리로
+         셈하므로 영향이 없다. */
       const region=activeLoopFor(active);
-      const looping=region && !region.whole && region.b-region.a>0;
-      navigator.mediaSession.setPositionState(looping ? {
-        duration:region.b-region.a,
-        position:clamp(current-region.a,0,Math.max(0,region.b-region.a-.001)),
-        playbackRate:rowPlaybackRate(active),
-      } : {
+      if(region && !region.whole && region.b-region.a>0){
+        navigator.mediaSession.setPositionState();
+        return;
+      }
+      navigator.mediaSession.setPositionState({
         duration,position:current,playbackRate:rowPlaybackRate(active),
       });
     }catch(error){}
