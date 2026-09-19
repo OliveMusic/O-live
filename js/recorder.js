@@ -393,6 +393,13 @@
      pause()가 부르는 이벤트는 비동기로 온다. 동기 구간에만 걸리는 빗장으로는 덮지
      못하므로(cloudTransportInternalPause가 그렇다) 세어서 그 한 번을 지나 보낸다. */
   function flushCloudTransport(){
+    /* 임시 계측: 비우기가 실제로 돌았는지. 안 돌았으면 통로가 스트림이 아니거나
+       운반자가 이미 멈춰 있는 것이고, 그러면 1초는 다른 데서 오는 것이다. */
+    if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('seek:비움',{
+      통로:cloudTransportDestination?'스트림':'직결',
+      운반자:cloudTransportDestination?(cloudTransportAudio.paused?'멈춤':'품'):'없음',
+      비움:(cloudTransportDestination && !cloudTransportAudio.paused)?'예':'아니오',
+    });
     if(!cloudTransportDestination || cloudTransportAudio.paused) return;
     cloudTransportFlushes++;
     try{ cloudTransportAudio.pause(); }catch(error){ cloudTransportFlushes--; return; }
@@ -2100,6 +2107,20 @@
   function prepareNativeOffset(offset,audio=activeCloudAudio()){
     const apply=()=>{
       const duration=Number(audio.duration)||0;
+      /* 임시 계측: iOS에서 currentTime을 바꾸면 탐색이 끝날 때까지 이전 자리가 계속
+         난다. 걸린 시간을 잰다 — 1초에 가까우면 이것이 원인이다. 잡으면 지운다. */
+      const asked=Date.now();
+      const before=Number(audio.currentTime)||0;
+      try{
+        audio.addEventListener('seeked',()=>{
+          if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('seek:네이티브끝',{
+            걸린ms:Date.now()-asked,
+            이전자리:Number(before.toFixed(2)),
+            새자리:Number((Number(audio.currentTime)||0).toFixed(2)),
+            멈춤:audio.paused?'예':'아니오',
+          });
+        },{once:true});
+      }catch(error){}
       try{ audio.currentTime=clamp(Number(offset)||0,0,Math.max(0,duration-.02)); }catch(e){}
     };
     if(audio.readyState>=1) apply();
