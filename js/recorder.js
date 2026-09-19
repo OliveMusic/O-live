@@ -138,6 +138,7 @@
   let cloudTransportInternalPause=false;
   let cloudTransportArmed=false;
   let cloudKeepAlivePending=false, cloudKeepAliveRestored=false;
+  let cloudLastReportedPosition=0;
   /* 임시 계측: 소리는 MediaStream을 거쳐 <audio>로 나간다. 그 통로에 얼마가 담겨
      있는지는 '만든 양'과 '내보낸 양'의 차로만 잰다 — 운반자가 돌기 시작한 순간의
      두 시계를 적어 두고 탐색할 때 견준다. 원인을 잡으면 지운다. */
@@ -567,19 +568,38 @@
       if(!(duration>0)) return;
       const current=clamp(Number.isFinite(position)?position:currentCloudPosition(),0,
         Math.max(0,duration-.001));
-      navigator.mediaSession.setPositionState({
+      /* 잠금화면의 시간은 iOS가 직접 센다 — 우리가 준 자리에 배속을 곱해 흐르게 한다.
+         구간 반복은 직선으로 셀 수 없는 움직임이라, 전체 길이로 알려 주면 B를 지나서도
+         계속 앞으로 가고 되돌아오지 않는다. 잠금 중에는 우리 타이머가 심하게 눌려
+         바로잡아 줄 기회도 드물다.
+
+         그래서 구간이 걸려 있으면 **구간을 전체 길이로** 알려 준다. 세는 범위가 구간
+         안에 머물러 한 바퀴마다 제자리로 돌아오고, 연습하는 사람에게도 구간 안 어디쯤인지가
+         파일 어디쯤인지보다 쓸모 있다. 앞뒤 10초 이동은 실제 자리로 셈하므로 영향이 없다. */
+      const region=activeLoopFor(active);
+      const looping=region && !region.whole && region.b-region.a>0;
+      navigator.mediaSession.setPositionState(looping ? {
+        duration:region.b-region.a,
+        position:clamp(current-region.a,0,Math.max(0,region.b-region.a-.001)),
+        playbackRate:rowPlaybackRate(active),
+      } : {
         duration,position:current,playbackRate:rowPlaybackRate(active),
       });
     }catch(error){}
   }
   function refreshCloudMediaSessionPosition(minInterval=750){
     if(!cloudMediaSessionActive || !cloudMediaId) return;
-    const now=performance.now();
-    if(now-cloudMediaPositionUpdatedAt<minInterval) return;
     const row=rows.find(item=>item.id===cloudMediaId);
     if(!row) return;
+    const position=currentCloudPosition();
+    /* 자리가 뒤로 갔으면 구간을 한 바퀴 돈 것이다. 그때는 기다리지 않고 바로 알린다 —
+       늦게 알릴수록 잠금화면이 지나간 자리를 더 오래 그린다. */
+    const wrapped=position+.05<cloudLastReportedPosition;
+    const now=performance.now();
+    if(!wrapped && now-cloudMediaPositionUpdatedAt<minInterval) return;
     cloudMediaPositionUpdatedAt=now;
-    updateCloudMediaSessionPosition(row,currentCloudPosition());
+    cloudLastReportedPosition=position;
+    updateCloudMediaSessionPosition(row,position);
   }
   function updateCloudMediaSessionState(row){
     try{
