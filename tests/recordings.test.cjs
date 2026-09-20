@@ -321,25 +321,26 @@ assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundt
 assert.match(recorder,/function makeCloudTransportAudio\(\)/);
 assert.match(recorder,/audio\.dataset\.oliveRecordingTransport='true'/);
 assert.match(recorder,/ctx\.createMediaStreamDestination\(\)/);
-assert.match(recorder,/function installCloudMediaActions\(actionMode,loopLocked\)/);
-/* A–B 구간을 도는 동안 잠금화면 단추는 아무 일도 하지 않는다. 다만 play·pause는
-   비우지 않고 속만 비운다 — 비우면 iOS가 운반자 요소를 직접 건드려 자리 지키기가
-   깨진다. 앞뒤 10초는 요소를 건드릴 일이 없으므로 실제로 거둔다. */
-assert.match(recorder,/const loopLocked=Boolean\(loopRegion && !loopRegion\.whole && loopRegion\.b-loopRegion\.a>0\);/);
-assert.match(recorder,/\(cloudTransportDestination\?'stream':'callbacks'\)\+\(loopLocked\?':loop':''\)/,
-  '구간이 걸리고 풀릴 때 단추를 다시 깐다');
-assert.match(recorder,/const backward=loopLocked \? setCloudMediaAction\('seekbackward',null\)/);
-assert.match(recorder,/const play=loopLocked\s*\n\s*\? setCloudMediaAction\('play',\(\)=>\{/,
-  'play는 거두지 않고 속만 비운다');
-assert.match(recorder,/cloudMediaSessionActionMode=installCloudMediaActions\(actionMode,loopLocked\)\?actionMode:''/);
+assert.match(recorder,/function installCloudMediaActions\(actionMode\)/);
+/* A–B 구간을 도는 동안 잠금화면 단추는 아무 일도 하지 않는다. 단추를 갈아 끼우지는
+   않는다 — 구간이 걸리고 풀릴 때마다 다시 깔았더니 iOS가 잠금화면 자리를 놓아 버려
+   미디어 박스가 사라졌고, 앱에서 멈췄다 켜도 돌아오지 않았다. 핸들러를 비우는 것도
+   안 된다: 그러면 iOS가 운반자 요소를 직접 건드린다. 등록은 한 번, 판단은 속에서. */
+assert.match(recorder,/function loopLockedNow\(\)/);
+assert.match(recorder,/if\(loopLockedAction\('play'\)\) return;/);
+assert.match(recorder,/if\(loopLockedAction\('pause'\)\) return;/);
+assert.match(recorder,/if\(loopLockedAction\('seekbackward'\)\) return;/);
+assert.match(recorder,/if\(loopLockedAction\('seekforward'\)\) return;/);
+assert.doesNotMatch(recorder,/setCloudMediaAction\('seekbackward',null\)/,
+  '앞뒤 10초도 거두지 않는다 — 단추를 갈아 끼우면 자리를 놓친다');
+assert.match(recorder,/cloudMediaSessionActionMode=installCloudMediaActions\(actionMode\)\?actionMode:''/);
 assert.match(recorder,/function refreshCloudMediaSessionPosition\(minInterval=750\)/);
 assert.match(recorder,/audio\.addEventListener\('timeupdate',\(\)=>refreshCloudMediaSessionPosition\(750\)\)/);
 assert.match(recorder,/cloudMediaPositionUpdatedAt=0;[\s\S]*?refreshCloudMediaSessionPosition\(0\)/);
 /* 일시정지는 우리가 받는다. 시스템에 맡기면 iOS가 운반자 요소를 직접 멈추고,
    잠금화면 단추 그림이 요소의 상태를 따라간다 — 멈춘 뒤에도 무음을 흘려야 하므로
    요소는 '재생 중'이고, 그러면 단추가 영영 일시정지 모양으로 남는다. */
-assert.match(recorder,/const pause=loopLocked\s*\n\s*\? setCloudMediaAction\('pause',\(\)=>\{[\s\S]*?: setCloudMediaAction\('pause',\(\)=>\{/,
-  '구간을 돌 때는 pause도 속만 비운다 — 거두면 iOS가 요소를 직접 멈춘다');
+assert.match(recorder,/const pause=setCloudMediaAction\('pause',\(\)=>\{/);
 assert.match(recorder,/function keepCloudTransportFlowing\(detail\)/);
 /* 파형 탐색은 통로를 비우고 연다. MediaStream을 받는 <audio>는 흘러 들어온 것을 쌓아
    두었다가 내보내므로, 비우지 않으면 소스를 갈아 끼워도 이전 대목이 1초쯤 더 난다. */
