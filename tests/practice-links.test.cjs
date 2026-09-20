@@ -106,7 +106,9 @@ assert.match(recorder,/const STRETCH_PRIME_SECONDS=\.28;/);
 assert.match(recorder,/const prime=stretching \? STRETCH_PRIME_SECONDS : 0;/);
 /* 차는 데 걸리는 시간은 기기마다 다르다. 고정한 시간으로 맞히면 어디선가는
    모자라고 어디선가는 길다 — 워클릿이 다 찼다고 알려 올 때 연다. */
-assert.match(recorder,/const STRETCH_READY_FRAMES=1024;/);
+/* 여덟 블록으로는 되풀이 잡음만 덮였다. 갓 세운 스트레처가 음높이를 제자리로
+   끌어오는 데는 더 걸린다 — 구간 반복을 처음 걸 때 음이 낮았다가 올라오던 것이다. */
+assert.match(recorder,/const STRETCH_READY_FRAMES=4096;/);
 assert.match(recorder,/if\(Number\(data\.framesBuffered\)>=STRETCH_READY_FRAMES\) openOutput\(\);/);
 /* 기별이 끝내 없어도 소리는 나야 한다. 영영 닫혀 있는 것이 제일 나쁘다. */
 assert.match(recorder,/cloudStretchOpenTimer=setTimeout\(openOutput,STRETCH_PRIME_MAX_MS\);/);
