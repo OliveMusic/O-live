@@ -2239,9 +2239,11 @@
     const offset=clamp((Number(position)||0)+heard,0,rowDurationSeconds(row));
     playbackPositions.set(row.id,offset);
     stopCloudProgress();
-    resetCloudMediaElement();
-    releaseCloudSource();
     cloudPlaybackMode='decoded-loading';
+    /* 옛 소리를 여기서 끊지 않는다. 디코딩을 기다리는 동안 스트림에 무음이 흘러
+       들어가면, 살아 있는 MediaStream을 받는 쪽이 굶어 늘여 메꾸며 음이 흔들린다 —
+       조옮김이 없는데도 처음 탭할 때만 음이 낮아졌다 돌아오던 것이 그것이다.
+       아래에서 새 소리를 여는 같은 동기 구간에서 끊는다. */
     Promise.all([
       ctx.state!=='running' ? resumeCtx(ctx) : Promise.resolve(),
       decodedBufferForRow(ctx,row),
@@ -2251,6 +2253,8 @@
       armCloudTransport(ctx,row),
     ]).then(results=>{
       if(token!==cloudPlayToken || cloudPlayingId!==row.id) return;
+      // 끊고 여는 것을 한 호흡에 한다. 사이에 무음이 끼지 않는다.
+      resetCloudMediaElement();
       startDecodedSource(ctx,results[1],row,token,offset,true);
     }).catch(error=>handlePlaybackFailure(playbackStageError('audio',error),row,token))
       .finally(()=>{ switchingToPitch=false; });
@@ -2641,14 +2645,9 @@
       cloudStartedOffset=activePosition;
       cloudStartedAt=cloudDecodedContext.currentTime;
       cloudStartedRate=rate;
-      try{ cloudSource.playbackRate.setValueAtTime(rate,cloudDecodedContext.currentTime); }
-      catch(error){ try{ cloudSource.playbackRate.value=rate; }catch(ignore){} }
-      const stretchRate=cloudStretchNode&&cloudStretchNode.parameters&&
-        cloudStretchNode.parameters.get('playbackRate');
-      if(stretchRate){
-        try{ stretchRate.setValueAtTime(rate,cloudDecodedContext.currentTime); }
-        catch(error){ stretchRate.value=rate; }
-      }
+      glideParam(cloudSource.playbackRate,rate);
+      glideParam(cloudStretchNode&&cloudStretchNode.parameters&&
+        cloudStretchNode.parameters.get('playbackRate'),rate);
       updateCloudMediaSessionPosition(row,activePosition);
       return;
     }
@@ -2685,13 +2684,25 @@
     }
     updateCloudMediaSessionPosition(row,activePosition);
   }
+  /* 값을 한 번에 튀기면 스트레처가 그 점프를 받아내지 못하고 굶는다. 굶은 스트레처는
+     그레인을 되풀이하는데, 그것이 배속·조옮김을 바꿀 때 아주 짧은 구간이 되풀이되며
+     렉처럼 들리던 소리다. 짧게 미끄러뜨리면 받아낸다. 손잡이를 끄는 동안에는 값이
+     계속 들어오므로, 먼저 예약을 거두고 지금 값에서 이어 간다. */
+  const PARAM_GLIDE=.06;
+  function glideParam(param,value){
+    if(!param || !cloudDecodedContext) return;
+    const now=cloudDecodedContext.currentTime;
+    try{
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(param.value,now);
+      param.linearRampToValueAtTime(value,now+PARAM_GLIDE);
+    }catch(error){ try{ param.value=value; }catch(ignore){} }
+  }
   function applyTransposeToStretchNode(row){
     const pitch=cloudStretchNode&&cloudStretchNode.parameters&&
       cloudStretchNode.parameters.get('pitch');
     if(!pitch) return;
-    const value=transposeRatio(rowTranspose(row));
-    try{ pitch.setValueAtTime(value,cloudDecodedContext.currentTime); }
-    catch(error){ pitch.value=value; }
+    glideParam(pitch,transposeRatio(rowTranspose(row)));
   }
   function formatTranspose(value){
     const semitones=Math.round(Number(value)||0);

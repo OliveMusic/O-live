@@ -351,6 +351,13 @@ assert.match(recorder,/const wrapped=position\+\.05<cloudLastReportedPosition;/,
 /* A–B 반복도 디코딩 경로로 진다. 네이티브 경로는 타이머가 되감는데 요소의 탐색만
    50~70ms가 걸려 한 바퀴마다 구간 끝이 샌다. 오디오 엔진이 지면 샘플 단위로 맞는다. */
 assert.match(recorder,/if\(region && !region\.whole && decodedReady && !cloudMediaUsesPersistentNative &&\s*\n\s*switchActivePlaybackToDecoded\(row,target,true\)\) return;/);
+/* 갈아탈 때 스트림에 무음을 흘리지 않는다. 살아 있는 MediaStream을 받는 쪽이 굶으면
+   늘여 메꾸며 음이 흔들린다. 끊고 여는 것을 한 호흡에 한다. */
+assert.match(recorder,/resetCloudMediaElement\(\);\s*\n\s*startDecodedSource\(ctx,results\[1\],row,token,offset,true\);/);
+/* 배속·조옮김은 미끄러뜨려 바꾼다. 한 번에 튀기면 스트레처가 굶어 그레인을 되풀이한다. */
+assert.match(recorder,/const PARAM_GLIDE=\.06;/);
+assert.match(recorder,/param\.linearRampToValueAtTime\(value,now\+PARAM_GLIDE\);/);
+assert.doesNotMatch(recorder,/pitch\.setValueAtTime\(/,'조옮김도 미끄러뜨린다');
 assert.match(recorder,/function switchActivePlaybackToDecoded\(row,position,exact\)/);
 assert.match(recorder,/const decodedReady=cloudDecodedBuffer && cloudDecodedId===row\.id &&/,
   '버퍼가 준비됐을 때만 갈아탄다 — 아니면 예전대로 요소를 옮긴다');
