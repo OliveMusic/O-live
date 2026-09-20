@@ -382,3 +382,12 @@ assert.doesNotMatch(edge,/JSON\.stringify\(body\)/);
 assert.match(config,/\[functions\.youtube-search\][\s\S]*verify_jwt = true/);
 
 console.log('practice link tests passed');
+
+/* 목록을 받아 오는 길은 로그인 상태가 바뀔 때 한 번뿐이라, 그때 실패하면 녹음본은
+   뜨는데 링크만 빈 채로 남고 앱을 껐다 켜야 돌아왔다. 몇 번 다시 받아 보고, 그래도
+   안 되면 화면이 다시 보일 때 받는다. */
+assert.match(links,/linksLoadFailed=true;\s*\n\s*scheduleLinkRetry\(\);/);
+assert.match(links,/const LINK_RETRY_DELAYS=\[3000,9000,25000\];/);
+assert.match(links,/if\(document\.visibilityState!=='visible' \|\| !currentUser \|\| !linksLoadFailed\) return;/);
+assert.match(links,/linksLoadFailed=false;\s*\n\s*linkRetries=0;/,'받아 오면 재시도를 거둔다');
+

@@ -58,6 +58,12 @@
   let currentUser=null;
   let rows=[];
   let loading=false;
+  /* 목록을 받아 오는 길은 로그인 상태가 바뀔 때 한 번뿐이다. 그때 실패하면 — 네트워크가
+     잠깐 끊겼거나 세션이 아직 서지 않았거나 — 조용히 넘어가고 다시 받아 올 길이 없었다.
+     녹음본은 화면이 다시 보일 때마다 새로 받아 와 스스로 낫는데 링크만 그러지 못해,
+     녹음본은 뜨는데 링크만 빈 채로 남고 앱을 껐다 켜야 돌아왔다. */
+  let linksLoadFailed=false, linkRetryTimer=0, linkRetries=0;
+  const LINK_RETRY_DELAYS=[3000,9000,25000];
   let expandedId='';
   let player=null;
   let playerVideoId='';
@@ -909,14 +915,37 @@
     try{
       rows=await window.OliveCloud.listPracticeLinks();
       loopState.clear();
+      linksLoadFailed=false;
+      linkRetries=0;
+      clearTimeout(linkRetryTimer); linkRetryTimer=0;
     }catch(e){
       /* 오프라인이거나 일시적 실패다. 목록을 비우면 링크가 아무 설명 없이
-         사라진 것처럼 보인다. 마지막으로 받은 목록을 그대로 둔다. */
+         사라진 것처럼 보인다. 마지막으로 받은 목록을 그대로 두고 다시 받아 본다. */
+      linksLoadFailed=true;
+      scheduleLinkRetry();
     }finally{
       loading=false;
       renderList();
     }
   }
+
+  /* 몇 번은 스스로 다시 받아 보고, 그래도 안 되면 화면이 다시 보일 때를 기다린다.
+     끝없이 두드리면 오프라인에서 헛돌기만 한다. */
+  function scheduleLinkRetry(){
+    if(linkRetryTimer || !currentUser) return;
+    const wait=LINK_RETRY_DELAYS[linkRetries];
+    if(wait==null) return;
+    linkRetries++;
+    linkRetryTimer=setTimeout(()=>{
+      linkRetryTimer=0;
+      if(linksLoadFailed && currentUser) loadLinks(true);
+    },wait);
+  }
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState!=='visible' || !currentUser || !linksLoadFailed) return;
+    linkRetries=0;
+    loadLinks(true);
+  });
 
   /* ── 메뉴 ── */
   async function setFavorite(row,next){
