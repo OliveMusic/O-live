@@ -348,6 +348,9 @@ assert.match(recorder,/if\(cloudPlayingId\)\{\s*\n\s*updateCloudMediaSessionStat
 assert.match(recorder,/if\(region && !region\.whole && region\.b-region\.a>0\)\{\s*\n\s*navigator\.mediaSession\.setPositionState\(\);/);
 assert.match(recorder,/const wrapped=position\+\.05<cloudLastReportedPosition;/,
   '한 바퀴 돌면 기다리지 않고 바로 알린다');
+/* A–B 반복도 디코딩 경로로 진다. 네이티브 경로는 타이머가 되감는데 요소의 탐색만
+   50~70ms가 걸려 한 바퀴마다 구간 끝이 샌다. 오디오 엔진이 지면 샘플 단위로 맞는다. */
+assert.match(recorder,/if\(region && !region\.whole && decodedReady && !cloudMediaUsesPersistentNative &&\s*\n\s*switchActivePlaybackToDecoded\(row,target,true\)\) return;/);
 assert.match(recorder,/function switchActivePlaybackToDecoded\(row,position,exact\)/);
 assert.match(recorder,/const decodedReady=cloudDecodedBuffer && cloudDecodedId===row\.id &&/,
   '버퍼가 준비됐을 때만 갈아탄다 — 아니면 예전대로 요소를 옮긴다');

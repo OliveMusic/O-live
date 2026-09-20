@@ -2516,7 +2516,20 @@
     // AudioBufferSourceNode의 반복을 끈 직후에는 내부 재생 위치와 표시 시간이
     // 달라질 수 있으므로, 디코딩 경로는 현재 들리던 위치에서 한 번 다시 연다.
     if(cloudPlaybackMode==='decoded'){ playRow(row,target); return; }
-    if(isNativePlaybackMode() && target!==position) prepareNativeOffset(target);
+    /* 네이티브 경로에서 A–B 반복은 타이머가 되감는다. 요소의 탐색만 50~70ms가 걸리고
+       그동안 소리는 B를 지나 계속 나므로, 한 바퀴마다 구간 끝이 조금씩 샌다. 화면이
+       잠기면 타이머가 눌려 더 나빠진다 — 아예 안 돌 수도 있다.
+
+       디코딩 경로는 오디오 엔진이 반복을 지므로 샘플 단위로 정확하고 잠금에도 흔들리지
+       않는다. 버퍼가 준비돼 있으면 구간을 걸 때 그리로 갈아탄다. 준비되지 않았으면
+       예전 그대로 둔다 — 디코딩을 기다리다 재생이 멎는 일은 만들지 않는다. */
+    if(isNativePlaybackMode()){
+      const decodedReady=cloudDecodedBuffer && cloudDecodedId===row.id &&
+        cloudDecodedContext===audioCtx;
+      if(region && !region.whole && decodedReady && !cloudMediaUsesPersistentNative &&
+         switchActivePlaybackToDecoded(row,target,true)) return;
+      if(target!==position) prepareNativeOffset(target);
+    }
   }
   function setLoopPoint(row,point){
     const current=clamp(cloudMediaId===row.id?currentCloudPosition():Number(playbackPositions.get(row.id))||0,
