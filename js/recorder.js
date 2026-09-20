@@ -629,7 +629,13 @@
     const row=rows.find(item=>item.id===cloudMediaId);
     if(!row) return;
     const duration=rowDurationSeconds(row);
-    const target=clamp(currentCloudPosition()+Number(seconds||0),0,duration);
+    let target=clamp(currentCloudPosition()+Number(seconds||0),0,duration);
+    /* 구간을 돌고 있으면 구간 밖으로 나가지 않는다. 밖으로 나가면 다음 바퀴에 어차피
+       끌려 들어오므로, 듣는 사람에게는 건너뛰기가 먹지 않은 것처럼 보인다.
+       구간 안으로 감아 넣어 10초만큼 실제로 움직이게 한다. */
+    const loop=activeLoopFor(row);
+    const span=loop && !loop.whole ? loop.b-loop.a : 0;
+    if(span>0) target=loop.a+((((target-loop.a)%span)+span)%span);
     playbackPositions.set(row.id,target);
     if(isNativePlaybackMode()) prepareNativeOffset(target,activeCloudAudio());
     else if(cloudPlayingId===row.id && cloudPlaybackMode==='decoded' &&
@@ -707,49 +713,35 @@
       return false;
     }
   }
-  /* A–B 구간을 도는 동안에는 잠금화면 단추가 아무 일도 하지 않게 한다. 구간 반복은
-     직선 재생이 아니라서 원격에서 자리를 옮기거나 멈췄다 켜면 어긋나기 쉽다.
+  /* A–B 구간을 돌 때 잠금화면 단추를 죽여 두려고 세 가지를 해 봤고 셋 다 막혔다.
 
-     **단추를 갈아 끼우지는 않는다.** 구간이 걸리고 풀릴 때마다 핸들러를 다시 깔았더니
-     iOS가 이 페이지의 잠금화면 자리를 아예 놓아 버렸다 — 미디어 박스가 사라지고, 앱에서
-     멈췄다 다시 켜도 돌아오지 않았다. 등록은 처음 한 번뿐이고, 눌렸을 때 속에서 가린다.
-     핸들러를 비우는 것도 안 된다: 그러면 iOS가 운반자 요소를 직접 건드려 자리 지키기가
-     깨진다(메트로놈에서 겪은 그 문제다). */
-  function loopLockedNow(){
-    const row=rows.find(item=>item.id===cloudMediaId);
-    const region=row&&activeLoopFor(row);
-    return Boolean(region && !region.whole && region.b-region.a>0);
-  }
-  function loopLockedAction(name){
-    if(!loopLockedNow()) return false;
-    if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark(
-      'recording-media:loop-locked',{동작:name});
-    return true;
-  }
+     핸들러를 비우면 iOS가 운반자 요소를 직접 건드려 자리 지키기가 깨진다(메트로놈에서
+     겪은 그 문제다). 구간이 걸리고 풀릴 때마다 다시 깔면 iOS가 이 페이지의 잠금화면
+     자리를 놓아 버린다. 등록은 두고 속만 비워도 마찬가지다 — 재생·일시정지를 보냈는데
+     앱이 따르지 않으면(소리는 그대로 나고 상태도 안 바뀌면) iOS가 미디어 박스를 거둔다.
+     실제로 구간에서 단추를 누른 뒤 구간을 풀면 박스가 사라졌다.
+
+     그러니 명령은 반드시 따라야 한다. 대신 구간 안에서 얌전히 굴게 한다 — 재생·일시정지는
+     그대로 듣고, 앞뒤 10초는 구간을 벗어나지 않도록 구간 안으로 감는다. 두 벌이 겹쳐
+     나는 것은 resumeCloudPlaybackFromMediaSession()에서 따로 막는다. */
   function installCloudMediaActions(actionMode){
-    const play=setCloudMediaAction('play',()=>{
-      if(loopLockedAction('play')) return;
-      resumeCloudPlaybackFromMediaSession();
-    });
+    const play=setCloudMediaAction('play',()=>resumeCloudPlaybackFromMediaSession());
     /* 일시정지도 우리가 받는다. 예전에는 스트림 모드에서 시스템에 맡겼는데, 맡기면
        iOS가 운반자 요소를 직접 멈추고 잠금화면 단추 그림도 요소의 상태를 그대로
        따라간다. 이제는 멈춘 뒤에도 무음을 계속 흘려야 하므로 요소는 '재생 중'이고,
        맡겨 두면 단추가 영영 일시정지 모양으로 남는다. 우리가 받으면 playbackState가
        그림을 정한다. */
     const pause=setCloudMediaAction('pause',()=>{
-      if(loopLockedAction('pause')) return;
       if(window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-media:pause');
       pauseCloudPlayback();
     });
     if(actionMode==='stream') setCloudMediaAction('stop',null);
     else setCloudMediaAction('stop',()=>stopCloudPlayback());
     const backward=setCloudMediaAction('seekbackward',details=>{
-      if(loopLockedAction('seekbackward')) return;
       const amount=Number(details&&details.seekOffset)||10;
       seekCloudPlaybackBy(-amount);
     });
     const forward=setCloudMediaAction('seekforward',details=>{
-      if(loopLockedAction('seekforward')) return;
       const amount=Number(details&&details.seekOffset)||10;
       seekCloudPlaybackBy(amount);
     });

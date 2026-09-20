@@ -322,17 +322,13 @@ assert.match(recorder,/function makeCloudTransportAudio\(\)/);
 assert.match(recorder,/audio\.dataset\.oliveRecordingTransport='true'/);
 assert.match(recorder,/ctx\.createMediaStreamDestination\(\)/);
 assert.match(recorder,/function installCloudMediaActions\(actionMode\)/);
-/* A–B 구간을 도는 동안 잠금화면 단추는 아무 일도 하지 않는다. 단추를 갈아 끼우지는
-   않는다 — 구간이 걸리고 풀릴 때마다 다시 깔았더니 iOS가 잠금화면 자리를 놓아 버려
-   미디어 박스가 사라졌고, 앱에서 멈췄다 켜도 돌아오지 않았다. 핸들러를 비우는 것도
-   안 된다: 그러면 iOS가 운반자 요소를 직접 건드린다. 등록은 한 번, 판단은 속에서. */
-assert.match(recorder,/function loopLockedNow\(\)/);
-assert.match(recorder,/if\(loopLockedAction\('play'\)\) return;/);
-assert.match(recorder,/if\(loopLockedAction\('pause'\)\) return;/);
-assert.match(recorder,/if\(loopLockedAction\('seekbackward'\)\) return;/);
-assert.match(recorder,/if\(loopLockedAction\('seekforward'\)\) return;/);
-assert.doesNotMatch(recorder,/setCloudMediaAction\('seekbackward',null\)/,
-  '앞뒤 10초도 거두지 않는다 — 단추를 갈아 끼우면 자리를 놓친다');
+/* A–B 구간에서 잠금화면 단추를 죽여 두려고 세 가지를 해 봤고 셋 다 막혔다. 핸들러를
+   비우면 iOS가 운반자 요소를 직접 건드리고, 구간마다 다시 깔면 잠금화면 자리를 놓치고,
+   등록을 두고 속만 비워도 명령을 따르지 않은 앱으로 보여 미디어 박스가 사라진다.
+   그러니 명령은 따르되 구간 안에서 얌전히 굴게 한다. */
+assert.doesNotMatch(recorder,/loopLocked/,'단추를 죽이지 않는다 — iOS가 박스를 거둔다');
+assert.match(recorder,/if\(span>0\) target=loop\.a\+\(\(\(\(target-loop\.a\)%span\)\+span\)%span\);/,
+  '앞뒤 10초는 구간 안으로 감는다');
 assert.match(recorder,/cloudMediaSessionActionMode=installCloudMediaActions\(actionMode\)\?actionMode:''/);
 assert.match(recorder,/function refreshCloudMediaSessionPosition\(minInterval=750\)/);
 assert.match(recorder,/audio\.addEventListener\('timeupdate',\(\)=>refreshCloudMediaSessionPosition\(750\)\)/);
