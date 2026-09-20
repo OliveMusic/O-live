@@ -139,6 +139,7 @@
   let cloudTransportArmed=false;
   let cloudKeepAlivePending=false, cloudKeepAliveRestored=false;
   let cloudLastReportedPosition=0;
+  let cloudStreamFeed=null;
   /* 임시 계측: 소리는 MediaStream을 거쳐 <audio>로 나간다. 그 통로에 얼마가 담겨
      있는지는 '만든 양'과 '내보낸 양'의 차로만 잰다 — 운반자가 돌기 시작한 순간의
      두 시계를 적어 두고 탐색할 때 견준다. 원인을 잡으면 지운다. */
@@ -344,10 +345,41 @@
     if(cloudTransportDestination){
       try{ cloudTransportDestination.stream.getTracks().forEach(track=>track.stop()); }catch(error){}
     }
+    if(cloudStreamFeed){
+      try{ cloudStreamFeed.stop(); }catch(error){}
+      try{ cloudStreamFeed.disconnect(); }catch(error){}
+      cloudStreamFeed=null;
+    }
     cloudTransportDestination=null;
     cloudTransportContext=null;
     cloudTransportArmed=false;
     cloudTransportPlayPromise=null;
+  }
+  /* 목적지에 아무것도 연결돼 있지 않으면 프레임이 나가지 않는다. 그런데 운반자는
+     일시정지 중에도 계속 돌고 있으므로(그래야 iOS가 페이지를 재우지 않는다) 굶어서
+     마지막 조각을 되풀이한다 — 구간에서 잠금화면의 일시정지를 눌렀을 때 아주 짧은
+     소리가 무한히 반복되던 것이 그것이다. 재생을 멈추면 releaseCloudSource()가
+     게인을 떼어 목적지의 입력이 하나도 남지 않는다.
+
+     그래서 소리와 무관하게 무음을 끊임없이 흘려 둔다. 값이 0인 상수원이라 들리는
+     것은 달라지지 않고, 통로만 살아 있게 한다. */
+  function keepCloudStreamFed(ctx,destination){
+    try{
+      if(typeof ctx.createConstantSource==='function'){
+        const idle=ctx.createConstantSource();
+        idle.offset.value=0;
+        idle.connect(destination);
+        idle.start();
+        cloudStreamFeed=idle;
+        return;
+      }
+      const silence=ctx.createBufferSource();
+      silence.buffer=ctx.createBuffer(1,128,ctx.sampleRate);
+      silence.loop=true;
+      silence.connect(destination);
+      silence.start();
+      cloudStreamFeed=silence;
+    }catch(error){ cloudStreamFeed=null; }
   }
   function ensureCloudTransport(ctx){
     if(cloudTransportDestination && cloudTransportContext===ctx) return cloudTransportDestination;
@@ -360,6 +392,7 @@
          !mediaStream.getAudioTracks().length) return null;
       cloudTransportDestination=destination;
       cloudTransportContext=ctx;
+      keepCloudStreamFed(ctx,destination);
       cloudTransportInternalPause=true;
       cloudTransportAudio.srcObject=mediaStream;
       cloudTransportInternalPause=false;

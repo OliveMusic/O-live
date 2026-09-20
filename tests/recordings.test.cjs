@@ -338,6 +338,11 @@ assert.match(recorder,/cloudMediaPositionUpdatedAt=0;[\s\S]*?refreshCloudMediaSe
    요소는 '재생 중'이고, 그러면 단추가 영영 일시정지 모양으로 남는다. */
 assert.match(recorder,/const pause=setCloudMediaAction\('pause',\(\)=>\{/);
 assert.match(recorder,/function keepCloudTransportFlowing\(detail\)/);
+/* 목적지에 입력이 하나도 없으면 프레임이 나가지 않는다. 운반자는 일시정지 중에도
+   계속 도므로 굶어서 마지막 조각을 되풀이한다 — 값이 0인 상수원으로 통로를 살려 둔다. */
+assert.match(recorder,/function keepCloudStreamFed\(ctx,destination\)/);
+assert.match(recorder,/idle\.offset\.value=0;/);
+assert.match(recorder,/keepCloudStreamFed\(ctx,destination\);/);
 /* 파형 탐색은 통로를 비우고 연다. MediaStream을 받는 <audio>는 흘러 들어온 것을 쌓아
    두었다가 내보내므로, 비우지 않으면 소스를 갈아 끼워도 이전 대목이 1초쯤 더 난다. */
 /* 네이티브 연결 경로는 탐색이 즉각적이지 않다. createMediaElementSource가 요소에서
