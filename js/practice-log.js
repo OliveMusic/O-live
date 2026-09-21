@@ -25,7 +25,6 @@
 
   const signInButton=document.getElementById('topbarSignIn');
   const sheetClose=document.getElementById('practiceLogClose');
-  const leadEl=document.getElementById('practiceLogLead');
   const monthEl=document.getElementById('practiceLogMonth');
   const prevEl=document.getElementById('practiceLogPrev');
   const nextEl=document.getElementById('practiceLogNext');
@@ -213,10 +212,6 @@
     const source=window.OliveEarHistory;
     return source ? source.modes() : [];
   }
-  function earDays(){
-    const source=window.OliveEarHistory;
-    return source ? source.days() : [];
-  }
 
   /* ---------- 달력 ---------- */
   let shownMonth=new Date();
@@ -288,24 +283,6 @@
     }
   }
 
-  function renderLead(){
-    const prefix=`${shownMonth.getFullYear()}-${String(shownMonth.getMonth()+1).padStart(2,'0')}-`;
-    let days=0, seconds=0;
-    const counted=new Set();
-    Object.keys(store).forEach(key=>{
-      if(key.indexOf(prefix)!==0) return;
-      const total=totalSeconds(store[key]);
-      if(total<=0) return;
-      counted.add(key); seconds+=total;
-    });
-    // 소리 없이 청음만 한 날도 연습한 날이다.
-    earDays().forEach(key=>{ if(key.indexOf(prefix)===0 && earFor(key)) counted.add(key); });
-    days=counted.size;
-    leadEl.innerHTML=days
-      ? `${shownMonth.getMonth()+1}월에 <b>${days}일 · ${formatSpan(seconds)}</b>`
-      : `${shownMonth.getMonth()+1}월에는 아직 기록이 없습니다`;
-  }
-
   /* 도구별로는 얼마나 붙잡고 있었는지만 적는다. 몇 BPM에서 몇으로 옮겼는지,
      어떤 곡을 걸었는지까지 적으면 하루를 훑어보려고 연 화면이 읽을거리가 된다.
 
@@ -369,7 +346,6 @@
 
   function render(){
     buildLegend();
-    renderLead();
     renderCalendar();
     renderDetail();
   }
