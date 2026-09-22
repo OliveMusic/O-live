@@ -1110,6 +1110,15 @@ test('코드 찾기는 짚은 모양의 이름을 찾고 쓸어서 친다',async
   await expect(page.locator('#chordBoard .cf-base')).toHaveText('3');
   await expect(page.locator('#chordBoard .cf-nut')).toHaveCount(0);
   await expect(page.locator('#chordName')).toHaveText('E7sus2');
+  /* 시작 프렛 번호는 6번 줄 첫 칸의 올리브에 가리지 않는다. 올리브는 기울여 놓아서
+     반지름보다 조금 더 왼쪽까지 온다 — 번호가 그 끝과 겹쳐 덮이던 적이 있다. */
+  await board.click({position:cell(0,0)});
+  const clearance=await page.evaluate(()=>{
+    const label=document.querySelector('#chordBoard .cf-base').getBoundingClientRect();
+    const olive=document.querySelector('#chordBoard .cf-dot[transform^="translate(40 "]').getBoundingClientRect();
+    return olive.left-label.right;
+  });
+  expect(clearance).toBeGreaterThan(3);
 
   await page.locator('#chordClear').click();
   await expect(page.locator('#chordName')).toHaveText('—');

@@ -101,7 +101,10 @@
         x1:X0,y1:y,x2:stringX(STRINGS-1),y2:y}));
     }
     if(base>MIN_BASE){
-      frets.appendChild(el('text',{class:'cf-base',x:X0-14,y:Y0+DY/2+5,'text-anchor':'end'},String(base)));
+      /* 6번 줄 올리브는 X0를 중심으로 반지름 15인데, -12° 기울여 놓아서 실제 왼쪽 끝은
+         X0-17.2까지 온다(재 본 값이다). 번호를 X0-14에 두었더니 첫 칸에 올리브가 앉으면
+         번호 끝을 덮었다. 올리브 끝에서 6쯤 떼어 둔다 — 두 자리(10~12)도 왼쪽 여백 안에 든다. */
+      frets.appendChild(el('text',{class:'cf-base',x:X0-23,y:Y0+DY/2+5,'text-anchor':'end'},String(base)));
     }
     for(let index=0; index<STRINGS; index++){
       const x=stringX(index), value=shape[index];
