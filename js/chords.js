@@ -69,6 +69,13 @@
     /* 치는 칸은 한 묶음으로 그린다 — 사각형·글씨·그 위를 지나는 줄 토막까지. 도움말이
        이 칸을 강조할 때 묶음 안의 무엇을 눌러도 칸을 누른 것으로 쳐야 하는데, 줄이
        사각형 밖의 요소면 줄 위에서 시작한 쓸기가 막힌다. */
+    /* 짚는 부분도 한 묶음이다 — ✕·○ 칸, 지판, 음 이름까지. 도움말이 이름 창과 이 부분만
+       함께 비추면 구멍이 짧아져 말풍선이 아래로 내려가고, 짚을 때마다 이름이 바뀌는 것이
+       가려지지 않는다. 줄 사이의 빈 곳을 누르면 SVG 자체가 눌린 것으로 잡혀 묶음 밖이
+       되므로, 투명한 바닥을 먼저 깐다. */
+    const frets=el('g',{id:'chordFrets'});
+    frets.appendChild(el('rect',{class:'cf-hit',x:X0-22,y:0,
+      width:DX*(STRINGS-1)+44,height:STRUM_TOP-4}));
     const zone=el('g',{id:'chordStrumZone',class:'cf-strum'});
     zone.appendChild(el('rect',{class:'cf-strum-zone',x:X0-18,y:STRUM_TOP,
       width:DX*(STRINGS-1)+36,height:STRUM_BOTTOM-STRUM_TOP,rx:12}));
@@ -82,30 +89,31 @@
         /* 낮은 줄일수록 굵게 — 실제 줄 두께의 차례를 따른다. */
         'stroke-width':(1+(STRINGS-1-index)*0.35).toFixed(2),
       };
-      board.appendChild(el('line',Object.assign({},attrs,{y1:Y0,y2:STRUM_TOP})));
+      frets.appendChild(el('line',Object.assign({},attrs,{y1:Y0,y2:STRUM_TOP})));
       zone.appendChild(el('line',Object.assign({},attrs,{y1:STRUM_TOP,y2:STRUM_BOTTOM-22})));
     }
+    board.appendChild(frets);
     board.appendChild(zone);
     for(let fret=0; fret<=FRETS; fret++){
       const y=Y0+fret*DY;
       const nut=fret===0 && base===MIN_BASE;
-      board.appendChild(el('line',{class:nut?'cf-nut':'cf-fret',
+      frets.appendChild(el('line',{class:nut?'cf-nut':'cf-fret',
         x1:X0,y1:y,x2:stringX(STRINGS-1),y2:y}));
     }
     if(base>MIN_BASE){
-      board.appendChild(el('text',{class:'cf-base',x:X0-14,y:Y0+DY/2+5,'text-anchor':'end'},String(base)));
+      frets.appendChild(el('text',{class:'cf-base',x:X0-14,y:Y0+DY/2+5,'text-anchor':'end'},String(base)));
     }
     for(let index=0; index<STRINGS; index++){
       const x=stringX(index), value=shape[index];
-      if(value===null) board.appendChild(el('text',{class:'cf-mute',x,y:MARK_Y+5,'text-anchor':'middle'},'✕'));
-      else if(value===OPEN) board.appendChild(el('circle',{class:'cf-open',cx:x,cy:MARK_Y,r:7.5}));
-      else board.appendChild(olive(x,Y0+value*DY+DY/2));
+      if(value===null) frets.appendChild(el('text',{class:'cf-mute',x,y:MARK_Y+5,'text-anchor':'middle'},'✕'));
+      else if(value===OPEN) frets.appendChild(el('circle',{class:'cf-open',cx:x,cy:MARK_Y,r:7.5}));
+      else frets.appendChild(olive(x,Y0+value*DY+DY/2));
       const midi=midiOf(index);
-      board.appendChild(el('text',{class:'cf-note'+(midi===null?' muted':''),x,y:NOTE_Y,
+      frets.appendChild(el('text',{class:'cf-note'+(midi===null?' muted':''),x,y:NOTE_Y,
         'text-anchor':'middle'},midi===null?'–':engine.noteName(midi)));
       if(midi!==null && found && !found.kind){
         const tone=found.tones.find(item=>item.pc===((midi%12)+12)%12);
-        if(tone) board.appendChild(el('text',{class:'cf-degree',x,y:DEGREE_Y,'text-anchor':'middle'},tone.degree));
+        if(tone) frets.appendChild(el('text',{class:'cf-degree',x,y:DEGREE_Y,'text-anchor':'middle'},tone.degree));
       }
     }
     board.setAttribute('aria-label',describe(found));

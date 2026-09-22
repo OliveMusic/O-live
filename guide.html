@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=315">
+<link rel="stylesheet" href="info.css?v=318">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -565,14 +565,21 @@
          body:'짚은 모양으로 코드 이름을 찾고, 스케일을 지판과 건반에 보여 줍니다.', hint:'여기를 누르세요'},
         /* 코드 찾기에서 가르칠 것은 둘뿐이다. 짚으면 이름이 바뀐다는 것, 그리고 쓸어서
            친다는 것. ✕·○ 전환은 지판 아래 안내에 적혀 있어 눌러 보면 안다. */
-        {screen:'scales:chord', target:'#chordBoard', title:'짚어서 코드 찾기',
+        /* 한 번 짚고 곧장 넘어가면 이름이 어떻게 바뀌는지 볼 틈이 없다. 처음 바뀌면
+           '다음'만 띄우고 앱은 열어 둔다 — 마음껏 짚어 보고 스스로 넘긴다. 이름 창도 함께
+           비춘다. 지판 전체를 비추면 구멍이 길어 말풍선이 위로 올라가 바로 그 이름 창을
+           덮었다. 짚는 부분만 비추면 말풍선은 아래 치는 칸 위로 내려간다. */
+        {screen:'scales:chord', target:doc=>doc.getElementById('chordFrets'), also:'.cf-display',
+         coachAt:'bottom', title:'짚어서 코드 찾기',
          body:'지판을 누르면 올리브가 놓이고, 위의 코드 이름이 바로 바뀝니다. 같은 자리를 다시 누르면 뗍니다. 맨 위 칸은 <b>✕(뮤트)</b>와 <b>○(개방)</b>을 오갑니다.',
-         hint:'지판 한 칸을 눌러 보세요',
+         hint:'여러 자리를 짚어 보세요', done:'짚을 때마다 이름이 바뀝니다',
+         linger:1200, keepOpen:true,
          memo:doc=>chordName(doc), check:(doc,memo)=>chordName(doc)!==memo},
         /* 치는 칸은 chords.js가 그리는 SVG 묶음이라 앱 HTML에는 없다. 찾는 법으로 준다. */
         {screen:'scales:chord', target:doc=>doc.getElementById('chordStrumZone'), title:'쓸어서 치기',
          body:'맨 아래 칸을 <b>좌우로 쓸면</b> 줄마다 차례로 울립니다. 뮤트한 줄은 소리가 나지 않습니다.',
-         hint:'좌우로 쓸어 보세요',
+         hint:'좌우로 쓸어 보세요', done:'마음껏 쳐 보세요',
+         linger:1200, keepOpen:true,
          memo:doc=>strums(doc), check:(doc,memo)=>strums(doc)>memo},
         /* 챕터를 여는 길잡이가 아니라 챕터 안에서 칸을 넘기는 단계라 nav를 달지 않는다.
            이 챕터 하나만 볼 때도 코드와 스케일을 오가는 법은 배워야 한다. */
@@ -1170,6 +1177,8 @@
 
   /* ── 스포트라이트 ── */
   let tracked=null, trackedAlso=null, trackTimer=0;   /* tracked는 요소가 아니라 '찾는 법'이다 */
+  /* 말풍선 자리를 단계가 정할 때만 쓴다. 비어 있으면 구멍 아래, 모자라면 위다. */
+  let trackedCoach='';
   /* 드롭다운 목록은 자리를 차지하지 않고 바깥으로 튀어나온다. 부모 상자만 뚫으면
      목록이 어두운 쪽에 남아 고를 수가 없다. 열려 있으면 함께 감싼다. */
   function union(box,other){
@@ -1323,6 +1332,16 @@
   function placeCoach(holeTop,holeHeight){
     const stageBox=stage.getBoundingClientRect();
     const coachHeight=coach.offsetHeight||140;
+    /* 구멍이 길어 위아래 어디에도 온전히 들어가지 않으면 기본은 위에 붙는데, 그러면
+       구멍의 윗부분을 덮는다. 윗부분이 봐야 할 곳인 단계는 맨 아래에 세운다 — 코드
+       찾기에서 짚을 때마다 바뀌는 이름 창이 그렇다. 아래의 치는 칸과 탭바는 그 단계에서
+       쓰지 않는다. */
+    if(trackedCoach==='bottom'){
+      coach.style.top=Math.max(8,stageBox.height-coachHeight-8)+'px';
+      coach.style.left='50%';
+      coach.style.transform='translateX(-50%)';
+      return;
+    }
     const below=holeTop+holeHeight+12;
     const top=(below+coachHeight<=stageBox.height-8)
       ? below
@@ -1365,8 +1384,8 @@
     if(nudge && nudgeDoc){ try{ nudgeDoc.removeEventListener('pointerdown',nudge,true); }catch(e){} }
     nudge=null; nudgeDoc=null;
   }
-  function track(target,also){
-    tracked=target; trackedAlso=also||null;
+  function track(target,also,coachAt){
+    tracked=target; trackedAlso=also||null; trackedCoach=coachAt||'';
     repaint();
     clearInterval(trackTimer);
     trackTimer=setInterval(repaint,280);
@@ -1379,7 +1398,7 @@
     }
   }
   function untrack(){
-    tracked=null; trackedAlso=null;
+    tracked=null; trackedAlso=null; trackedCoach='';
     clearInterval(trackTimer);
     trackTimer=0;
     dropNudge();
@@ -1544,7 +1563,7 @@
       retry=null;
       mask.hidden=false;
       coach.hidden=false;
-      track(step.target,step.also);
+      track(step.target,step.also,step.coachAt);
       listen(step);
       /* 보여 주기만 하는 단계는 앱을 통째로 봉한다. 여기서 만질 수 있는 것은
          도움말 쪽의 '다음'뿐이다 — 그 버튼은 봉인 바깥에 있다. */

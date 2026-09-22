@@ -303,6 +303,18 @@ const chordsUi=fs.readFileSync('js/chords.js','utf8');
 assert.match(guide,/target:doc=>doc\.getElementById\('chordStrumZone'\)/);
 assert.match(chordsUi,/el\('g',\{id:'chordStrumZone'/);
 assert.match(chordsUi,/zone\.appendChild\(el\('line'/,'줄 토막도 묶음 안에 든다');
+/* 짚기 단계는 짚는 부분과 이름 창을 함께 비춘다. 지판 전체를 비추면 구멍이 길어 말풍선이
+   위로 올라가 이름 창을 덮었다. 빈 곳을 눌러도 묶음 안이도록 투명한 바닥을 깐다. */
+assert.match(guide,/target:doc=>doc\.getElementById\('chordFrets'\), also:'\.cf-display'/);
+assert.match(chordsUi,/el\('g',\{id:'chordFrets'\}\)/);
+assert.match(chordsUi,/el\('rect',\{class:'cf-hit'/);
+/* 두 단계 모두 한 번 해내면 '다음'만 띄우고 앱은 열어 둔다 — 마음껏 해 보고 스스로 넘긴다. */
+assert.equal((guide.match(/linger:1200, keepOpen:true,\n\s*memo:doc=>(chordName|strums)\(doc\)/g)||[]).length,2);
+/* 짚기 단계는 말풍선을 맨 아래에 세운다. 구멍이 길어 기본 규칙대로 위에 붙이면 바로 그
+   이름 창을 덮는다. 다른 단계의 자리는 건드리지 않도록 단계가 고를 때만 쓴다. */
+assert.match(guide,/also:'\.cf-display',\n\s*coachAt:'bottom'/);
+assert.match(guide,/if\(trackedCoach==='bottom'\)\{/);
+assert.match(guide,/track\(step\.target,step\.also,step\.coachAt\);/);
 
 /* 가리키는 곳이 앱에 실제로 있어야 한다. 앱에서 id를 바꾸면 여기서 먼저 걸린다. */
 const appSource=indexHtml+'\n'+recorder+'\n'+practiceLinks;
