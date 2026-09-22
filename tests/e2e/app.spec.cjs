@@ -525,7 +525,7 @@ test('분리된 앱이 모바일 화면에서 모든 탭과 서비스 워커를 
   const tabs=[
     ['metronome','메트로놈'],
     ['tuner','튜너'],
-    ['scales','스케일'],
+    ['scales','코드 & 스케일'],
     ['trainer','트레이너'],
     ['jam','잼 세션'],
   ];
@@ -1036,16 +1036,93 @@ test('YouTube 재생도 다른 소리와 같은 판에서 관리된다',async({p
 /* 눌러서 들어 보는 소리는 ambient라 무음 스위치를 따른다. 무음인지 읽는 API가 웹에
    없어 그때만 알릴 수 없으니, 스위치가 있는 기기에서만 미리 조용히 적어 둔다.
    여기 하네스는 navigator.audioSession을 흉내 내고 기기 프로필도 iPhone이라 켜져야 한다. */
-test('무음 스위치가 있는 기기에서는 세 미리 듣기에 무음 모드 안내가 붙는다',async({page})=>{
+test('무음 스위치가 있는 기기에서는 네 미리 듣기에 무음 모드 안내가 붙는다',async({page})=>{
   await preparePage(page);
-  await expect(page.locator('.hint.mute-note')).toHaveCount(3);
+  await expect(page.locator('.hint.mute-note')).toHaveCount(4);
   expect(await page.evaluate(()=>(
     [...document.querySelectorAll('.hint.mute-note')].every(el=>!el.hidden)
   ))).toBeTruthy();
   for(const tab of ['tuner','scales','jam']){
     await page.locator(`.tab-btn[data-tab="${tab}"]`).click();
-    await expect(page.locator(`#tab-${tab} .hint.mute-note`)).toBeVisible();
+    /* 코드 & 스케일에는 코드 칸과 스케일 칸에 하나씩 있다. 보이는 것은 고른 칸의 것뿐이다. */
+    const note=tab==='scales' ? '#pane-chord .hint.mute-note' : `#tab-${tab} .hint.mute-note`;
+    await expect(page.locator(note)).toBeVisible();
   }
+  await page.locator('.tab-btn[data-tab="scales"]').click();
+  await page.locator('#scalesSeg .seg-btn[data-mode="scale"]').click();
+  await expect(page.locator('#pane-scale .hint.mute-note')).toBeVisible();
+});
+
+/* 코드 찾기. 세로 코드표 지판을 눌러 짚고 아래 칸을 쓸어 친다. 좌표는 viewBox(300×372)를
+   화면 크기로 옮겨 누른다 — 칸 가운데를 눌러야 옆 줄로 새지 않는다. 소리는 guitarPluck을
+   가로채 무엇이 어떤 차례로 울렸는지 센다. */
+test('코드 찾기는 짚은 모양의 이름을 찾고 쓸어서 친다',async({page})=>{
+  await preparePage(page);
+  await page.locator('.tab-btn[data-tab="scales"]').click();
+  await expect(page.locator('#pageTitle')).toHaveText('코드 & 스케일');
+  await expect(page.locator('#scalesSeg .seg-btn[data-mode="chord"]')).toHaveClass(/active/);
+  /* 처음에는 C(x32010)가 짚혀 있다. 음과 도수는 좁은 공백으로 한 짝이다. */
+  await expect(page.locator('#chordName')).toHaveText('C');
+  await expect(page.locator('#chordTones')).toHaveText('C\u20091 · E\u20093 · G\u20095');
+
+  await page.evaluate(()=>{
+    window.__plucks=[];
+    window.guitarPluck=midi=>window.__plucks.push(midi);
+  });
+  const board=page.locator('#chordBoard');
+  const box=await board.boundingBox();
+  const at=(vx,vy)=>({x:vx*box.width/300,y:vy*box.height/372});
+  const X0=40, DX=44, Y0=48, DY=46;
+  const cell=(string,row)=>at(X0+string*DX,Y0+row*DY+DY/2);
+
+  /* G줄 2프렛 → C·E·A. 3화음이 온전하니 C6(5음 없음)이 아니라 Am/C다. 짚으면 그 줄이 운다. */
+  await board.click({position:cell(3,1)});
+  await expect(page.locator('#chordName')).toHaveText('Am/C');
+  expect(await page.evaluate(()=>window.__plucks.splice(0))).toEqual([57]);
+
+  /* 너트 위 칸은 ✕와 ○를 오간다. 6번 줄을 열면 베이스가 E로 내려간다. */
+  await board.click({position:at(X0,25)});
+  await expect(page.locator('#chordName')).toHaveText('Am/E');
+  expect(await page.evaluate(()=>window.__plucks.splice(0))).toEqual([40]);
+
+  /* 치는 칸을 왼쪽에서 오른쪽으로 쓸면 여섯 줄이 낮은 줄부터 차례로 운다. 칸은 화면 아래쪽이라
+     고정된 탭바에 가릴 수 있고, 위에서 칸을 누르는 사이 페이지가 스크롤됐을 수 있다.
+     가운데로 올린 뒤에 자리를 다시 잰다 — 처음 잰 자리로 누르면 엉뚱한 데를 쓴다. */
+  await page.evaluate(()=>document.getElementById('chordStrumZone').scrollIntoView({block:'center'}));
+  const strumBox=await board.boundingBox();
+  const atNow=(vx,vy)=>({x:strumBox.x+vx*strumBox.width/300,y:strumBox.y+vy*strumBox.height/372});
+  const from=atNow(X0,320), to=atNow(X0+DX*5,320);
+  await page.mouse.move(from.x,from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x,to.y,{steps:6});
+  await page.mouse.up();
+  expect(await page.evaluate(()=>window.__plucks.splice(0))).toEqual([40,48,52,57,60,64]);
+  await expect(board).toHaveAttribute('data-strums','1');
+
+  await page.locator('#chordStrum').click();
+  await expect.poll(()=>page.evaluate(()=>window.__plucks.length)).toBe(6);
+
+  /* 프렛 위치를 옮기면 모양째 올라간다. 개방현은 그대로 개방이다. 너트 대신 시작 프렛 번호가
+     붙는다. 3프렛에서는 E·D·F#·B — E7sus2가 된다. */
+  await page.locator('#chordHigher').click();
+  await page.locator('#chordHigher').click();
+  await expect(page.locator('#chordPos')).toHaveText('3프렛');
+  await expect(page.locator('#chordBoard .cf-base')).toHaveText('3');
+  await expect(page.locator('#chordBoard .cf-nut')).toHaveCount(0);
+  await expect(page.locator('#chordName')).toHaveText('E7sus2');
+
+  await page.locator('#chordClear').click();
+  await expect(page.locator('#chordName')).toHaveText('—');
+  await expect(page.locator('#chordTones')).toHaveText('소리 나는 줄이 없습니다');
+
+  /* 스케일 칸은 가려진 동안 폭이 0이라, 넘어온 뒤에 다시 그려 폭에 맞춰야 한다. */
+  await page.locator('#scalesSeg .seg-btn[data-mode="scale"]').click();
+  await expect(page.locator('#pane-scale')).toBeVisible();
+  await expect(page.locator('#pane-chord')).toBeHidden();
+  expect(await page.evaluate(()=>{
+    const scroll=document.getElementById('fretScroll');
+    return document.getElementById('fretboard').scrollWidth-scroll.clientWidth;
+  })).toBeLessThanOrEqual(0);
 });
 
 /* 저장할 때 길이를 알아내지 못하면 duration_ms가 0으로 남는다. onReady의

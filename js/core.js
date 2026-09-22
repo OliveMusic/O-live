@@ -596,7 +596,7 @@ function bindResetOnDouble(el, reset){
 }
 
 /* ===================== 탭 전환 ===================== */
-const tabTitles = {metronome:'메트로놈', tuner:'튜너', scales:'스케일', trainer:'트레이너', jam:'잼 세션'};
+const tabTitles = {metronome:'메트로놈', tuner:'튜너', scales:'코드 & 스케일', trainer:'트레이너', jam:'잼 세션'};
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     const id = btn.dataset.tab;

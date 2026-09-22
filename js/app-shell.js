@@ -34,6 +34,23 @@
   },true);
 })();
 
+/* ===== 코드 & 스케일: 코드 / 스케일 전환 ===== */
+(function(){
+  const seg=document.getElementById('scalesSeg');
+  if(!seg) return;
+  seg.querySelectorAll('.seg-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const m=b.dataset.mode;
+      seg.querySelectorAll('.seg-btn').forEach(x=>x.classList.toggle('active', x===b));
+      document.querySelectorAll('.scales-pane').forEach(p=>
+        p.classList.toggle('active', p.id==='pane-'+m));
+      /* 스케일 지판은 보이게 된 뒤에야 폭을 잴 수 있다. 가려진 동안 그리면 폭이 0이라
+         대신 쓰는 값으로 칸을 나눠, 맞춤으로 봐도 끝이 모자라거나 넘친다. */
+      document.dispatchEvent(new CustomEvent('olive-scales-pane',{detail:m}));
+    });
+  });
+})();
+
 /* ===== 스크롤 시 탭바 축소 (iOS 26 리퀴드 글라스 거동) ===== */
 (function(){
   const mainEl = document.querySelector('main');

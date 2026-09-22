@@ -296,6 +296,14 @@ assert.match(guide,/function repaint\(\)\{[\s\S]{0,240}?resolveTarget\(doc,track
 assert.match(guide,/const mine=\+\+token;/);
 assert.match(guide,/if\(!running \|\| mine!==token\) return;/);
 
+/* 코드 찾기의 치는 칸은 chords.js가 그리는 SVG 묶음이라 앱 HTML에는 없다. 도움말은
+   찾는 법으로 가리키고, 여기서는 그 id를 실제로 그리는지 본다. 묶음이어야 그 위를
+   지나는 줄을 눌러도 도움말이 칸을 누른 것으로 친다. */
+const chordsUi=fs.readFileSync('js/chords.js','utf8');
+assert.match(guide,/target:doc=>doc\.getElementById\('chordStrumZone'\)/);
+assert.match(chordsUi,/el\('g',\{id:'chordStrumZone'/);
+assert.match(chordsUi,/zone\.appendChild\(el\('line'/,'줄 토막도 묶음 안에 든다');
+
 /* 가리키는 곳이 앱에 실제로 있어야 한다. 앱에서 id를 바꾸면 여기서 먼저 걸린다. */
 const appSource=indexHtml+'\n'+recorder+'\n'+practiceLinks;
 const targets=[...guide.matchAll(/target:'([^']+)'/g)].map(match=>match[1]);
@@ -559,8 +567,8 @@ assert.match(cloud,/261\.63\*Math\.pow\(2,semitone\/12\)/);
 /* 눌러서 가르칠 수 없는 것은 마지막 카드로 남긴다. */
 assert.match(guide,/무음 모드를 꺼 보세요/);
 /* 무음 스위치를 읽는 API는 웹에 없다. 감지해서 그때만 알릴 수 없으니, 스위치가 있는
-   기기에서만 미리 적어 둔다. 눌러서 듣는 소리 셋에 모두 붙어야 한다. */
-assert.equal((indexHtml.match(/class="hint mute-note"/g)||[]).length,3,'튜너 현·스케일 건반·잼 코드');
+   기기에서만 미리 적어 둔다. 눌러서 듣는 소리 넷에 모두 붙어야 한다. */
+assert.equal((indexHtml.match(/class="hint mute-note"/g)||[]).length,4,'튜너 현·스케일 건반·코드 찾기·잼 코드');
 assert.match(indexHtml,/<p class="hint mute-note" hidden style="margin-top:4px;">무음 모드에서는 들리지 않을 수 있습니다<\/p>/);
 assert.match(indexHtml,/\.hint\.mute-note\{ word-break:keep-all; \}/,'마지막 글자가 홀로 떨어지지 않게');
 /* ---------- 소리는 자르지 말고 줄여서 끈다 ----------

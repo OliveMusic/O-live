@@ -227,6 +227,8 @@
     clearTimeout(__rsz);
     __rsz=setTimeout(()=>{ if(zoom==='fit') render(); }, 120);
   });
+  // 코드 칸에서 스케일 칸으로 넘어오면 그제야 지판의 폭을 잴 수 있다.
+  document.addEventListener('olive-scales-pane', event=>{ if(event.detail==='scale') render(); });
   // 탭이 처음 열릴 때 컨테이너 폭이 잡히므로 다시 계산한다
   document.querySelector('.tab-btn[data-tab="scales"]')
     .addEventListener('click', ()=> setTimeout(render, 0));

@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://olivemusic.github.io/O-live/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<link rel="stylesheet" href="info.css?v=312">
+<link rel="stylesheet" href="info.css?v=315">
 <style>
   /* ── 도움말은 문서가 아니라 앱이다 ──
      실제 앱을 같은 출처 iframe으로 띄우고, 그 위에 눌러야 할 곳만 남기고 덮는다.
@@ -559,21 +559,37 @@
       ],
     },
     {
-      key:'scales', icon:'scales', name:'스케일', blurb:'지판과 건반에서 보기',
+      key:'scales', icon:'scales', name:'코드 & 스케일', blurb:'코드 찾기와 스케일 보기',
       steps:[
-        {screen:null, nav:true, target:'.tab-btn[data-tab="scales"]', title:'스케일로 갑니다',
-         body:'고른 스케일을 지판과 건반에 함께 보여 줍니다.', hint:'여기를 누르세요'},
-        {screen:'scales', target:'#scaleKey', title:'루트음 고르기',
+        {screen:null, nav:true, target:'.tab-btn[data-tab="scales"]', title:'코드 & 스케일로 갑니다',
+         body:'짚은 모양으로 코드 이름을 찾고, 스케일을 지판과 건반에 보여 줍니다.', hint:'여기를 누르세요'},
+        /* 코드 찾기에서 가르칠 것은 둘뿐이다. 짚으면 이름이 바뀐다는 것, 그리고 쓸어서
+           친다는 것. ✕·○ 전환은 지판 아래 안내에 적혀 있어 눌러 보면 안다. */
+        {screen:'scales:chord', target:'#chordBoard', title:'짚어서 코드 찾기',
+         body:'지판을 누르면 올리브가 놓이고, 위의 코드 이름이 바로 바뀝니다. 같은 자리를 다시 누르면 뗍니다. 맨 위 칸은 <b>✕(뮤트)</b>와 <b>○(개방)</b>을 오갑니다.',
+         hint:'지판 한 칸을 눌러 보세요',
+         memo:doc=>chordName(doc), check:(doc,memo)=>chordName(doc)!==memo},
+        /* 치는 칸은 chords.js가 그리는 SVG 묶음이라 앱 HTML에는 없다. 찾는 법으로 준다. */
+        {screen:'scales:chord', target:doc=>doc.getElementById('chordStrumZone'), title:'쓸어서 치기',
+         body:'맨 아래 칸을 <b>좌우로 쓸면</b> 줄마다 차례로 울립니다. 뮤트한 줄은 소리가 나지 않습니다.',
+         hint:'좌우로 쓸어 보세요',
+         memo:doc=>strums(doc), check:(doc,memo)=>strums(doc)>memo},
+        /* 챕터를 여는 길잡이가 아니라 챕터 안에서 칸을 넘기는 단계라 nav를 달지 않는다.
+           이 챕터 하나만 볼 때도 코드와 스케일을 오가는 법은 배워야 한다. */
+        {screen:'scales', target:'#scalesSeg', title:'스케일을 고릅니다',
+         body:'위쪽 세그먼트로 <b>코드</b>와 <b>스케일</b>을 오갑니다.', hint:'스케일을 누르세요',
+         check:doc=>scalesSeg(doc)==='scale'},
+        {screen:'scales:scale', target:'#scaleKey', title:'루트음 고르기',
          body:'여기서 고른 음이 스케일의 시작점이 됩니다.', hint:'목록을 열어 다른 음을 골라 보세요',
          memo:doc=>ddValue(doc,'#scaleKey'), check:(doc,memo)=>ddValue(doc,'#scaleKey')!==memo},
-        {screen:'scales', target:'#scaleType', title:'스케일 고르기',
+        {screen:'scales:scale', target:'#scaleType', title:'스케일 고르기',
          body:'메이저·마이너부터 모드와 펜타토닉까지 있습니다.', hint:'목록을 열어 다른 스케일을 골라 보세요',
          memo:doc=>ddValue(doc,'#scaleType'), check:(doc,memo)=>ddValue(doc,'#scaleType')!==memo},
-        {screen:'scales', target:'#fretboard', title:'진한 색이 루트음',
+        {screen:'scales:scale', target:'#fretboard', title:'진한 색이 루트음',
          body:'회색은 나머지 구성음이고, 건반의 숫자는 루트로부터의 <b>도수</b>입니다.', advance:'next'},
-        {screen:'scales', target:'#fretZoom', title:'확대해서 보기',
+        {screen:'scales:scale', target:'#fretZoom', title:'확대해서 보기',
          body:'<b>확대</b>로 바꾸면 지판이 커지고 좌우로 밀어서 봅니다.', hint:'확대를 눌러 보세요'},
-        {screen:'scales', target:'#scaleTuning', title:'튜닝을 바꾸면',
+        {screen:'scales:scale', target:'#scaleTuning', title:'튜닝을 바꾸면',
          body:'지판이 그 조율에 맞춰 다시 그려집니다.', advance:'next'},
       ],
     },
@@ -900,6 +916,19 @@
     const active=doc.querySelector('#trainerSeg .seg-btn.active');
     return active?active.dataset.mode:'';
   }
+  function scalesSeg(doc){
+    const active=doc.querySelector('#scalesSeg .seg-btn.active');
+    return active?active.dataset.mode:'';
+  }
+  function chordName(doc){
+    const name=doc.getElementById('chordName');
+    return name?name.textContent:'';
+  }
+  /* 치는 칸을 쓸 때마다 하나씩 는다. 소리로는 쓸었는지 알 수 없으니 이것으로 본다. */
+  function strums(doc){
+    const board=doc.getElementById('chordBoard');
+    return Number(board && board.dataset.strums)||0;
+  }
   /* 목록에는 녹음본과 YouTube 링크가 섞여 있고 도움말 예시는 이름까지 같다.
      제목으로 가르면 엉뚱한 행을 집는다. 여는 버튼의 aria-controls로 가른다 —
      녹음본은 record-player-, 링크는 link-player-로 시작한다. */
@@ -1132,7 +1161,9 @@
     const tab=doc.querySelector('.tab-btn[data-tab="'+parts[0]+'"]');
     if(tab && !tab.classList.contains('active')) tab.click();
     if(parts[1]){
-      const button=doc.querySelector('#trainerSeg .seg-btn[data-mode="'+parts[1]+'"]');
+      /* 세그먼트는 그 탭 안에서 찾는다. 트레이너(트랙·청음·리듬)와 코드 & 스케일
+         (코드·스케일)이 같은 모양을 쓴다. */
+      const button=doc.querySelector('#tab-'+parts[0]+' .seg .seg-btn[data-mode="'+parts[1]+'"]');
       if(button && !button.classList.contains('active')) button.click();
     }
   }
