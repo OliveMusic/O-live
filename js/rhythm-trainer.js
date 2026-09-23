@@ -46,14 +46,30 @@
 
   let pattern=[], beats=4;
 
+  /* 박자마다 칸 수와 박의 자리. 칸 하나는 16분음표다.
+     6/8은 8분음표 여섯 개가 한 마디다. 빠르기도 메트로놈의 6/8처럼 8분음표로 센다.
+     그래서 한 박이 두 칸이고, 3+3으로 묶어 4박째에 중간 강세를 둔다. 예전에는 한 박을
+     네 칸으로 그려 24칸이 되었는데, 그것은 6/4였다. */
+  function meterOf(b){
+    return b===6 ? {cells:12, per:2, group:6, mid:6}
+                 : {cells:b*4, per:4, group:4, mid:-1};
+  }
+  function defaultPattern(b){
+    const m=meterOf(b);
+    return new Array(m.cells).fill(0).map((_,k)=>k%m.per===0?1:0);
+  }
+
   /* ---------- 생성 ---------- */
   function generate(){
     const synco=parseInt(rhySynco.value)/10;
     const dens =parseInt(rhyDiff.value)/10;
-    const steps=beats*4;
+    const meter=meterOf(beats);
+    const steps=meter.cells;
     const p=new Array(steps).fill(0);
     for(let i=0;i<steps;i++){
-      const pos=i%4;
+      /* 6/8은 한 박이 8분음표라, 4/4의 '8분 뒷박' 자리가 없다. 묶음 머리(1·4박)를
+         가장 자주, 나머지 8분음표를 그다음, 16분음표를 가장 드물게 채운다. */
+      const pos=meter.per===4 ? i%4 : (i%meter.group===0 ? 0 : i%2===0 ? 2 : 1);
       let prob;
       if(pos===0)      prob=0.90-synco*0.30;
       else if(pos===2) prob=0.28+synco*0.45;
@@ -84,8 +100,10 @@
     const gap=3;
     // 정박 동그라미는 1.32배로 커서 그만큼을 셈에 넣지 않으면 양끝이 잘린다.
     // 전체폭 = size*(일반칸 수) + 1.32*size*(정박 수) + 간격 + 좌우 여유
-    const nBeat=Math.ceil(steps/4);
-    const pad=6;
+    const meter=meterOf(beats);
+    const nBeat=Math.ceil(steps/meter.per);
+    const groupGap=meter.mid>0 ? 10 : 0;      // 6/8의 3+3 묶음 사이 틈
+    const pad=6+groupGap;
     // 최소값을 10으로 묶어 두면 6/8(24칸)에서 계산상 9.5가 나와도 10으로 올라가
     // 실제 폭을 넘겨 끝이 잘렸다. 들어갈 만큼 줄어들게 둔다.
     const size=Math.max(7, Math.min(30,
@@ -93,14 +111,15 @@
     row.style.setProperty('--gc', size+'px');
     row.style.gap=gap+'px';
     pattern.forEach((on,i)=>{
-      const isBeat=i%4===0;
+      const isBeat=i%meter.per===0;
       const c=document.createElement('div');
       c.className='gcell'+(isBeat?' beat':'')+(on?' on':'');
       c.dataset.i=i;
       if(isBeat){                             // 숫자는 칸 위쪽 바깥에
-        const n=document.createElement('i'); n.className='bn'; n.textContent=i/4+1;
+        const n=document.createElement('i'); n.className='bn'; n.textContent=i/meter.per+1;
         c.appendChild(n);
       }
+      if(groupGap && i===meter.mid) c.style.marginLeft=groupGap+'px';
       c.addEventListener('click', ()=>{
         pattern[i]=pattern[i]?0:1;
         c.classList.toggle('on', !!pattern[i]);
@@ -150,11 +169,11 @@
   rhyBpm.addEventListener('input', ()=>setRhyBpm(rhyBpm.value));
   rhyGen  .addEventListener('click', ()=>{ getCtx(); generate(); });
   rhyClear.addEventListener('click', ()=>{
-    setPattern(new Array(beats*4).fill(0), beats);
+    setPattern(new Array(meterOf(beats).cells).fill(0), beats);
   });
   rhySigDD = makeSplitDropdown(rhySigEl, RHY_SIGS.map(x=>({main:x.label,sub:''})), 0, i=>{
     const b=RHY_SIGS[i].b;
-    setPattern(new Array(b*4).fill(0).map((_,k)=>k%4===0?1:0), b);
+    setPattern(defaultPattern(b), b);
   });
 
   const RHY_BPM_DEFAULT = 90;
@@ -201,8 +220,10 @@
   let timerID=null, nextTime=0, cursor=0, marks=[];
   const AHEAD=0.16, TICK=25;
 
-  function stepDur(){ return (60/parseInt(rhyBpm.value))/4; }
-  function swingOff(i){ return (opts.swing && i%4===2) ? stepDur()*0.55 : 0; }
+  /* 칸 하나의 길이. 빠르기는 박(4/4는 4분음표, 6/8은 8분음표)으로 센다. */
+  function stepDur(){ return (60/parseInt(rhyBpm.value))/meterOf(beats).per; }
+  /* 스윙은 4분음표 박의 8분 뒷박을 민다. 6/8은 이미 셋으로 나뉜 박이라 밀 자리가 없다. */
+  function swingOff(i){ return (opts.swing && meterOf(beats).per===4 && i%4===2) ? stepDur()*0.55 : 0; }
 
   function schedule(){
     const ctx=rhythmCtx;
@@ -215,17 +236,19 @@
       nextTime = ctx.currentTime + 0.05;
       marks.length = 0;
     }
+    const meter=meterOf(beats);
     while(nextTime < ctx.currentTime + AHEAD){
       const i=cursor%steps;
       const when=nextTime+swingOff(i);
-      const isBeat=i%4===0;
-      const isFirst=i===0;
+      const isBeat=i%meter.per===0;
+      /* 첫박은 강세, 6/8의 4박째는 중간 강세. 메트로놈의 겹박자와 같다. */
+      const level=!opts.accent ? 0 : i===0 ? 2 : i===meter.mid ? 1 : 0;
 
-      if(opts.metro && isBeat) playClick(when-ctx.currentTime, opts.accent && isFirst, ctx);
+      if(opts.metro && isBeat) playClick(when-ctx.currentTime, level, ctx);
       if(pattern[i] && opts.drum){
-        isBeat ? kick(ctx,when) : snare(ctx,when);
+        i%meter.group===0 ? kick(ctx,when) : snare(ctx,when);
       } else if(pattern[i] && !opts.drum){
-        playClick(when-ctx.currentTime, opts.accent && isFirst, ctx);
+        playClick(when-ctx.currentTime, isBeat ? level : 0, ctx);
       }
       marks.push({time:when, i});
       nextTime += stepDur();
@@ -249,7 +272,7 @@
       const c=beatGrid.querySelector(`.gcell[data-i="${m.i}"]`);
       if(c) c.classList.add('cursor');
       lastCursorEl=c;
-      if(m.i%4===0) pulseTab('trainer');
+      if(m.i%meterOf(beats).per===0) pulseTab('trainer');
     }
     requestAnimationFrame(()=>visual(gen));
   }
@@ -324,8 +347,14 @@
       if(!value || typeof value!=='object') return;
       setRhyBpm(value.bpm);
       const nextBeats=RHY_SIGS.some(item=>item.b===Number(value.beats)) ? Number(value.beats) : beats;
-      const nextPattern=Array.isArray(value.pattern) && value.pattern.length===nextBeats*4
-        ? value.pattern.map(item=>item?1:0) : pattern;
+      const cells=meterOf(nextBeats).cells;
+      const saved=Array.isArray(value.pattern) ? value.pattern.map(item=>item?1:0) : null;
+      let nextPattern=saved && saved.length===cells ? saved : null;
+      /* 예전 6/8은 24칸(한 박 네 칸)이었다. 박 머리와 8분 뒷박만 새 12칸으로 옮긴다. */
+      if(!nextPattern && saved && nextBeats===6 && saved.length===24){
+        nextPattern=new Array(12).fill(0).map((_,k)=>saved[(k>>1)*4+(k%2?2:0)]);
+      }
+      if(!nextPattern) nextPattern=nextBeats===beats && pattern.length===cells ? pattern : defaultPattern(nextBeats);
       setPattern(nextPattern,nextBeats);
       if(value.options && typeof value.options==='object'){
         Object.keys(opts).forEach(key=>{ if(typeof value.options[key]==='boolean') opts[key]=value.options[key]; });

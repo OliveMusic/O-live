@@ -697,6 +697,31 @@
   .string-btn.match{ background:var(--signal); border-color:var(--signal); }
   .string-btn.match .sn{ color:var(--on-signal); opacity:.75; }
   .string-btn.match .nn{ color:var(--on-signal); }
+  /* 계속 울리는 줄. 꽉 채운 세이지는 '맞음'이 쓰므로 연한 세이지로 둔다. */
+  .string-btn.droning{ background:var(--signal-soft); border-color:var(--signal); }
+  .string-btn.droning .nn{ color:var(--signal); }
+  .string-btn.match.droning{ background:var(--signal); }
+  .string-btn.match.droning .nn{ color:var(--on-signal); }
+  /* 크로매틱은 줄이 없으므로 열두 음을 두 줄로 둔다. 번호 자리는 비운다. */
+  .string-btns.chromatic .sn{ display:none; }
+  .string-btns.chromatic .string-btn{ padding:11px 2px 10px; }
+  .tuner-a4, .tuner-drone{ margin:14px 0 0; }
+  .ear-focus{ margin:18px 0 0; }
+  .opt-label{ font-size:12px; }
+  .a4-step{ display:flex; align-items:center; gap:8px; }
+  .a4-btn{
+    position:relative; width:34px; height:34px; border-radius:50%;
+    border:1px solid var(--line); background:transparent; color:var(--ink);
+    font-size:1.125rem; line-height:1; cursor:pointer; font-family:inherit; padding:0;
+    touch-action:manipulation;
+  }
+  /* 보이는 원은 작게, 누르는 곳은 44px. */
+  .a4-btn::after{ content:''; position:absolute; left:50%; top:50%; width:44px; height:44px;
+    transform:translate(-50%,-50%); }
+  .a4-btn:active{ background:var(--key-press); }
+  .a4-btn:disabled{ color:var(--line); cursor:default; background:transparent; }
+  .a4-val{ min-width:64px; text-align:center; font-size:15px; font-variant-numeric:tabular-nums;
+    cursor:pointer; user-select:none; -webkit-user-select:none; }
 
   /* ---------- Fretboard: circular note markers ---------- */
   .fretboard-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -2px; padding:0 2px;}
@@ -1777,6 +1802,11 @@
     overflow-wrap:anywhere; }
   .cf-alts{ font-size:0.75rem; color:var(--display-dim); text-align:right; line-height:1.4; flex:none; }
   .cf-tones{ font-size:0.8125rem; color:var(--signal-display); margin-top:3px; }
+  /* 음 이름과 도수는 한 짝이지만 같은 무게로 두면 C1·E3 같은 옥타브 표기로 읽힌다.
+     도수를 흐리게 하고 '도'를 붙인다. 짝 사이는 가운뎃점으로 넉넉히 뗀다. */
+  .cf-tone{ white-space:nowrap; }
+  .cf-deg{ color:var(--display-dim); margin-left:.3em; }
+  .cf-sep{ color:var(--display-dim); margin:0 .5em; }
   .cf-tools{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
   .cf-pos{ display:flex; align-items:center; gap:2px; }
   .cf-step{
@@ -2585,7 +2615,19 @@
         <h2>기준 튜닝</h2>
         <div id="tuningSelect"></div>
         <div class="string-btns" id="stringBtns"></div>
-        <p class="hint" style="margin-top:10px;">현을 누르면 기준음이 들립니다</p>
+        <div class="row tuner-a4">
+          <span class="opt-label">기준음 A4</span>
+          <div class="a4-step">
+            <button type="button" class="a4-btn" id="a4Minus" aria-label="기준음 1Hz 내리기">−</button>
+            <span class="a4-val" id="a4Val" aria-live="polite">440 Hz</span>
+            <button type="button" class="a4-btn" id="a4Plus" aria-label="기준음 1Hz 올리기">+</button>
+          </div>
+        </div>
+        <div class="row tuner-drone">
+          <span class="opt-label">누르면 계속 울리기</span>
+          <button type="button" class="pill" id="droneToggle" aria-pressed="false">OFF</button>
+        </div>
+        <p class="hint" style="margin-top:10px;">현을 누르면 기준음이 들립니다 · A4는 두 번 누르면 440으로</p>
         <p class="hint mute-note" hidden style="margin-top:4px;">무음 모드에서는 들리지 않을 수 있습니다</p>
       </div>
       <div class="card">
@@ -2700,6 +2742,10 @@
         <div class="pill-group" id="earModes"></div>
         <h2 style="margin:20px 0 13px;">난이도</h2>
         <div class="pill-group" id="earLevels"></div>
+        <div class="row ear-focus">
+          <span class="opt-label">틀린 것 다시 내기</span>
+          <button type="button" class="pill active" id="earFocus" aria-pressed="true">ON</button>
+        </div>
       </div>
 
       <div class="card">
@@ -3161,25 +3207,25 @@
   </section>
 </div>
 
-<script src="app-version.js?v=322"></script>
+<script src="app-version.js?v=323"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=322"></script>
-<script src="js/audio-runtime.js?v=322"></script>
-<script src="js/core.js?v=322"></script>
-<script src="js/metronome.js?v=322"></script>
-<script src="js/tuner-engine.js?v=322"></script>
-<script src="js/tuner.js?v=322"></script>
-<script src="js/scales.js?v=322"></script>
-<script src="js/chord-engine.js?v=322"></script>
-<script src="js/chords.js?v=322"></script>
-<script src="js/ear-trainer.js?v=322"></script>
-<script src="js/rhythm-trainer.js?v=322"></script>
-<script src="js/recording-cache.js?v=322"></script>
-<script src="js/recorder.js?v=322"></script>
-<script src="js/practice-links.js?v=322"></script>
-<script src="js/jam-session.js?v=322"></script>
-<script src="js/practice-log.js?v=322"></script>
-<script src="js/app-shell.js?v=322"></script>
+<script src="cloud-sync.js?v=323"></script>
+<script src="js/audio-runtime.js?v=323"></script>
+<script src="js/core.js?v=323"></script>
+<script src="js/metronome.js?v=323"></script>
+<script src="js/tuner-engine.js?v=323"></script>
+<script src="js/tuner.js?v=323"></script>
+<script src="js/chord-engine.js?v=323"></script>
+<script src="js/scales.js?v=323"></script>
+<script src="js/chords.js?v=323"></script>
+<script src="js/ear-trainer.js?v=323"></script>
+<script src="js/rhythm-trainer.js?v=323"></script>
+<script src="js/recording-cache.js?v=323"></script>
+<script src="js/recorder.js?v=323"></script>
+<script src="js/practice-links.js?v=323"></script>
+<script src="js/jam-session.js?v=323"></script>
+<script src="js/practice-log.js?v=323"></script>
+<script src="js/app-shell.js?v=323"></script>
 </body>
 </html>

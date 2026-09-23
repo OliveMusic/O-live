@@ -1,13 +1,13 @@
 /* ===================== 튜너 ===================== */
 (function(){
-  const TUNINGS = {
-    guitar:{label:'기타 표준', strings:[40,45,50,55,59,64]},
-    dropd:{label:'기타 드롭 D', strings:[38,45,50,55,59,64]},
-    bass:{label:'베이스 4현', strings:[28,33,38,43]},
-    ukulele:{label:'우쿨렐레', strings:[67,60,64,69]},
-    mandolin:{label:'만돌린', strings:[55,62,69,76]},
-  };
-  const TUNING_ORDER = ['guitar','dropd','bass','ukulele','mandolin'];
+  /* 튜닝 목록은 스케일 지판과 함께 쓴다(core.js). 크로매틱은 튜너에만 있다. */
+  const TUNINGS = OLIVE_TUNINGS;
+  const TUNING_ORDER = OLIVE_TUNING_ORDER.slice();
+  /* 크로매틱에서 누를 수 있는 열두 음. 가운데 옥타브(C4~B4)다. */
+  const CHROMATIC_REFS=[60,61,62,63,64,65,66,67,68,69,70,71];
+  /* 크로매틱은 악기를 가리지 않으므로 5현 베이스의 B0부터 C7까지 본다. 대신 음역으로
+     팬 소리를 걸러 주던 보호가 없어진다(팬 억제는 그대로 돈다). */
+  const CHROMATIC_RANGE=[23,96];
   const tunerNote   = document.getElementById('tunerNote');
   const tunerFreq   = document.getElementById('tunerFreq');
   const tunerStart  = document.getElementById('tunerStart');
@@ -26,6 +26,12 @@
   const tunerEngine = window.OliveTunerEngine;
 
   let currentTuning='guitar';
+  const a4Minus=document.getElementById('a4Minus');
+  const a4Plus=document.getElementById('a4Plus');
+  const a4Val=document.getElementById('a4Val');
+  const droneToggle=document.getElementById('droneToggle');
+  let droneMode=false;          // '누르면 계속 울리기'
+  let drone=null;               // 지금 울리는 지속음 {midi, stop()}
   let listening=false, micStarting=false, micStartToken=0;
   let stream=null, analyser=null, buf=null, srcNode=null, micBoost=null, monitorSink=null;
   let micChain=[];              // 껐을 때 확실히 끊기 위해 들고 있는다
@@ -298,32 +304,116 @@
 
   /* ---------- 표시 ---------- */
   function renderStringButtons(){
+    stopDrone();
     stringBtns.innerHTML='';
     const t=TUNINGS[currentTuning];
+    const chromatic=Boolean(t.chromatic);
     // 이 악기가 낼 수 있는 음역 밖은 아예 보지 않는다.
     // 기타를 고르면 하한이 약 72Hz라 선풍기 소리(28~70Hz)가 구조적으로 걸러진다.
-    const lo=Math.min(...t.strings), hi=Math.max(...t.strings);
+    const lo=chromatic ? CHROMATIC_RANGE[0] : Math.min(...t.strings);
+    const hi=chromatic ? CHROMATIC_RANGE[1] : Math.max(...t.strings)+26;
     freqLo=midiToFreq(lo)*0.87;      // 많이 풀린 줄도 잡을 만큼의 여유
-    freqHi=midiToFreq(hi+26);        // 하이 프렛까지
-    const count = t.strings.length;
-    stringBtns.style.gridTemplateColumns=`repeat(${count},1fr)`;
-    t.strings.forEach((midi,idx)=>{
+    freqHi=midiToFreq(hi);           // 하이 프렛까지
+    const notes = chromatic ? CHROMATIC_REFS : t.strings;
+    const count = notes.length;
+    stringBtns.classList.toggle('chromatic',chromatic);
+    stringBtns.style.gridTemplateColumns=`repeat(${chromatic?6:count},1fr)`;
+    notes.forEach((midi,idx)=>{
       const b=document.createElement('button');
       b.className='string-btn';
       // 줄 번호: 가장 낮은(굵은) 줄이 가장 큰 번호. 기타 6번 ~ 1번.
       const num = count - idx;
-      const name = midiToName(midi);
-      b.innerHTML = `<span class="sn">${num}</span><span class="nn">${name}</span>`;
+      /* 반음 다운처럼 조에 맞춘 이름이 있으면 그것을 쓴다(E♭2). 크로매틱은 옥타브 없이. */
+      const letter = chromatic ? pcName(midi) : tuningStringName(t,idx);   // 튜너는 조가 없어 샵으로 적는다
+      const name = chromatic ? letter : letter+(Math.floor(midi/12)-1);
+      const sn=document.createElement('span'); sn.className='sn'; sn.textContent=chromatic?'':String(num);
+      const nn=document.createElement('span'); nn.className='nn'; nn.textContent=name;
+      b.append(sn,nn);
       b.dataset.midi=midi;
-      b.setAttribute('aria-label', num+'번 줄 '+name);
-      b.addEventListener('click', ()=> referenceTone(midi, 2.6));
+      b.setAttribute('aria-label', chromatic ? name+' 기준음' : num+'번 줄 '+name);
+      b.addEventListener('click', ()=> pressReference(midi,b));
       stringBtns.appendChild(b);
     });
   }
+
+  /* ---------- 기준음과 지속음 ----------
+     '누르면 계속 울리기'를 켜 두면 누른 음이 다시 누를 때까지 이어진다. 다른 줄을 누르면
+     그 줄로 옮긴다. 튜너 탭을 떠나거나 다른 소리를 켜면 멈춘다(운반자로 등록). */
+  function pressReference(midi,button){
+    if(!droneMode){ referenceTone(midi, 2.6); return; }
+    const same=drone && drone.midi===midi;
+    stopDrone();
+    if(same) return;
+    drone=startDrone(midi);
+    button.classList.add('droning');
+    button.setAttribute('aria-pressed','true');
+    setTabSounding('tuner', true, 'drone');
+  }
+  function stopDrone(){
+    if(!drone) return;
+    const current=drone;
+    drone=null;
+    current.stop();
+    stringBtns.querySelectorAll('.string-btn.droning').forEach(b=>{
+      b.classList.remove('droning');
+      b.removeAttribute('aria-pressed');
+    });
+    setTabSounding('tuner', false, 'drone');
+  }
+  registerTransport({ isPlaying:()=>Boolean(drone), stop:stopDrone });
+  function renderDroneToggle(){
+    droneToggle.textContent=droneMode?'ON':'OFF';
+    droneToggle.classList.toggle('active',droneMode);
+    droneToggle.setAttribute('aria-pressed',String(droneMode));
+  }
+  droneToggle.addEventListener('click',()=>{
+    droneMode=!droneMode;
+    if(!droneMode) stopDrone();
+    renderDroneToggle();
+    window.OlivePreferences.changed();
+  });
+
+  /* 기준음 A4. 누르면 1Hz, 누르고 있으면 계속 움직인다. 값을 두 번 누르면 440.
+     앱의 모든 소리가 따르므로(core.js) 여기서 바꾸면 잼과 지판도 같은 높이로 난다. */
+  function renderA4(){
+    const hz=concertA();
+    a4Val.textContent=hz+' Hz';
+    a4Minus.disabled=hz<=CONCERT_A_MIN;
+    a4Plus.disabled=hz>=CONCERT_A_MAX;
+  }
+  function applyA4(hz,{save=true}={}){
+    const before=concertA();
+    const next=setConcertA(hz);
+    renderA4();
+    if(next===before) return;
+    renderStringButtons();          // 음역 경계를 새 기준으로 다시 잡는다
+    idle();
+    if(save) window.OlivePreferences.changed();
+  }
+  [[a4Minus,-1],[a4Plus,1]].forEach(([button,step])=>{
+    let holdTimer=0, repeatTimer=0, held=false;
+    const end=()=>{ clearTimeout(holdTimer); clearInterval(repeatTimer); holdTimer=repeatTimer=0; };
+    button.addEventListener('pointerdown',event=>{
+      if(event.button>0) return;
+      held=false;
+      holdTimer=setTimeout(()=>{
+        held=true;
+        repeatTimer=setInterval(()=>applyA4(concertA()+step),90);
+      },450);
+    });
+    ['pointerup','pointerleave','pointercancel'].forEach(type=>button.addEventListener(type,end));
+    button.addEventListener('click',()=>{
+      if(held){ held=false; return; }
+      applyA4(concertA()+step);
+    });
+  });
+  bindResetOnDouble(a4Val,()=>applyA4(CONCERT_A_DEFAULT));
+  renderA4();
+  renderDroneToggle();
   const tunerTuningDD = makeSplitDropdown(
     tuningSelect,
-    TUNING_ORDER.map(k=>({ main:TUNINGS[k].label, sub:TUNINGS[k].strings.map(m=>pcName(m)).join('') })),
-    0,
+    TUNING_ORDER.map(k=>({ main:TUNINGS[k].label, sub:tuningLetters(TUNINGS[k]) })),
+    TUNING_ORDER.indexOf(currentTuning),
     i=>{
       currentTuning=TUNING_ORDER[i]; renderStringButtons();
       window.OlivePreferences.changed();
@@ -332,7 +422,7 @@
   renderStringButtons();
 
   function update(freq){
-    const midi=69+12*Math.log2(freq/440);
+    const midi=freqToMidi(freq);
     const nearest=Math.round(midi);
     const cents=(midi-nearest)*100;
 
@@ -343,7 +433,7 @@
     lastNote = nearest;
     haveLock = true;
 
-    tunerNote.textContent=midiToName(nearest);
+    tunerNote.textContent=noteLabel(nearest);
     tunerFreq.textContent=freq.toFixed(1)+' Hz';
 
     strobeCents=Math.max(-50,Math.min(50,smoothCents));
@@ -358,11 +448,25 @@
       : (smoothCents>0 ? '높음 ▶ '+smoothCents.toFixed(0)+'¢'
                        : '◀ 낮음 '+Math.abs(smoothCents).toFixed(0)+'¢');
 
+    // 크로매틱의 열두 버튼은 옥타브를 가리지 않고 같은 음이면 켠다.
+    const chromatic=Boolean(TUNINGS[currentTuning].chromatic);
     stringBtns.querySelectorAll('.string-btn').forEach(b=>{
-      b.classList.toggle('match', +b.dataset.midi===nearest && Math.abs(smoothCents)<10);
+      const midi=+b.dataset.midi;
+      const same=chromatic ? ((midi-nearest)%12+12)%12===0 : midi===nearest;
+      b.classList.toggle('match', same && Math.abs(smoothCents)<10);
     });
   }
 
+  /* 튜너는 조가 없어 샵으로 적는다. 다만 반음 다운처럼 줄 이름을 플랫으로 부르는
+     튜닝에서는 줄 버튼과 같은 이름을 쓴다(D#2가 아니라 E♭2). */
+  function noteLabel(midi){
+    const t=TUNINGS[currentTuning];
+    if(t && t.names){
+      const index=t.strings.findIndex(open=>((open-midi)%12+12)%12===0);
+      if(index>=0) return t.names[index]+(Math.floor(midi/12)-1);
+    }
+    return midiToName(midi);
+  }
   function idle(){
     haveLock=false; hist.length=0; lastNote=null; wasInTune=false;
     pitchTracker.reset();
@@ -451,6 +555,7 @@
         } : null,{
           minConfidence:sensitivity.value>=67 ? 0.43 : 0.48,
           attackConfirmed:toneState.onset,
+          referenceHz:concertA(),
         });
         let accepted=Boolean(tracked);
         // 어택 없이 오래 유지된 음높이는 팬·모터 배경음으로 보고 즉시 표시를 놓는다.
@@ -474,7 +579,7 @@
 
         // 주기성·악기 음역·적응형 소음 문턱을 모두 통과한 경우만 표시한다.
         if(accepted){
-          const nRaw=Math.round(69+12*Math.log2(tracked.freq/440));
+          const nRaw=Math.round(freqToMidi(tracked.freq));
           if(nRaw!==lastNote) hist.length=0;
           update(stabilize(tracked.freq));
           quietFrames=0;
@@ -613,7 +718,7 @@
   // 튜너가 아닌 다른 탭으로 넘어가면 마이크를 자동으로 끈다
   document.querySelectorAll('.tab-btn').forEach(b=>{
     b.addEventListener('click', ()=>{
-      if(b.dataset.tab !== 'tuner') stopMic();
+      if(b.dataset.tab !== 'tuner'){ stopMic(); stopDrone(); }   // 지속음도 튜너 안에서만 운다
       else if(!listening && !micStarting) requestAnimationFrame(()=>resetScope());
     });
   });
@@ -632,21 +737,32 @@
     ()=>({
       tuning:currentTuning,
       sensitivity:sensEl ? Number(sensEl.value) : SENS_DEFAULT,
+      a4:concertA(),
+      drone:droneMode,
     }),
     value=>{
       if(!value || typeof value!=='object') return;
       const tuningIndex=TUNING_ORDER.indexOf(value.tuning);
-      if(tuningIndex>=0){
+      if(tuningIndex>=0 && TUNING_ORDER[tuningIndex]!==currentTuning){
         currentTuning=TUNING_ORDER[tuningIndex];
         tunerTuningDD.set(tuningIndex);
         renderStringButtons();
       }
       setSens(value.sensitivity);
+      if(value.a4!==undefined) applyA4(value.a4,{save:false});
+      if(typeof value.drone==='boolean' && value.drone!==droneMode){
+        droneMode=value.drone;
+        if(!droneMode) stopDrone();
+        renderDroneToggle();
+      }
     }
   );
 
   tunerStart.addEventListener('click', async ()=>{
     if(listening || micStarting){ stopMic(); return; }
+    /* 마이크를 열 때 오디오 컨텍스트를 새로 만들므로, 울리던 지속음은 소리 없이 끊긴 채
+       버튼만 켜져 남는다. 먼저 끈다. 마이크를 켠 뒤에 누르는 지속음은 그대로 운다. */
+    stopDrone();
     const token=++micStartToken;
     let requestedStream=null;
     micStarting=true;

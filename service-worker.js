@@ -1,4 +1,4 @@
-importScripts('./app-version.js?v=322');
+importScripts('./app-version.js?v=323');
 
 /* 파일을 갱신했는데 화면이 그대로라면 대개 이 파일 때문이다.
    예전 방식(캐시 우선)은 캐시에 있으면 네트워크를 아예 보지 않아
@@ -19,27 +19,27 @@ const ASSETS = [
   './guide.html',
   './privacy.html',
   './terms.html',
-  './info.css?v=322',
+  './info.css?v=323',
   './manifest.json',
-  './app-version.js?v=322',
+  './app-version.js?v=323',
   './cloud-config.js?v=92',
-  './cloud-sync.js?v=322',
-  './js/audio-runtime.js?v=322',
-  './js/core.js?v=322',
-  './js/metronome.js?v=322',
-  './js/tuner-engine.js?v=322',
-  './js/tuner.js?v=322',
-  './js/scales.js?v=322',
-  './js/chord-engine.js?v=322',
-  './js/chords.js?v=322',
-  './js/ear-trainer.js?v=322',
-  './js/rhythm-trainer.js?v=322',
-  './js/recording-cache.js?v=322',
-  './js/recorder.js?v=322',
-  './js/practice-links.js?v=322',
-  './js/jam-session.js?v=322',
-  './js/practice-log.js?v=322',
-  './js/app-shell.js?v=322',
+  './cloud-sync.js?v=323',
+  './js/audio-runtime.js?v=323',
+  './js/core.js?v=323',
+  './js/metronome.js?v=323',
+  './js/tuner-engine.js?v=323',
+  './js/tuner.js?v=323',
+  './js/scales.js?v=323',
+  './js/chord-engine.js?v=323',
+  './js/chords.js?v=323',
+  './js/ear-trainer.js?v=323',
+  './js/rhythm-trainer.js?v=323',
+  './js/recording-cache.js?v=323',
+  './js/recorder.js?v=323',
+  './js/practice-links.js?v=323',
+  './js/jam-session.js?v=323',
+  './js/practice-log.js?v=323',
+  './js/app-shell.js?v=323',
   /* 배속·조옮김 처리기는 파일이 바뀔 때만 번호를 올린다. 앱(recorder.js)이 부르는
      주소와 똑같아야 오프라인에서도 캐시에서 나온다. 예전에는 빌드 번호로 적어 두어
      앱이 부르는 ?v=198과 어긋났고, 업데이트 직후 오프라인이면 배속 재생이 실패했다. */

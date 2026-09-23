@@ -359,6 +359,9 @@
 
      청음만 예외다. 나머지 도구는 시간이 곧 연습의 양이지만, 청음은 몇 문제를
      어느 모드에서 몇 개 맞혔는지가 곧 연습의 내용이다. */
+  function escapeText(value){
+    return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  }
   function detailLines(day,ear){
     const lines=TOOL_ORDER
       .filter(tool=>Number(day[tool]))
@@ -382,9 +385,15 @@
           ? `${item.label} ${part.correct}/${part.total}` : '';
       }).filter(Boolean);
       if(rest.total) modes.push(`구분 전 ${rest.correct}/${rest.total}`);
+      /* 그날 두 번 넘게 헷갈린 짝. 점수 요약을 늘리지 않고 글 한 줄로만 둔다. */
+      const confusions=Array.isArray(ear.confusions) ? ear.confusions : [];
+      const confused=confusions.length
+        ? `<br><em>자주 헷갈림 · ${confusions.map(item=>`${escapeText(item.label)} ${Number(item.count)||0}번`).join(' · ')}</em>`
+        : '';
       lines.push({swatch:'log-sw-ear',name:'청음',
         text:`${ear.correct}/${ear.total} 정답 · ${accuracy}%`
-          +(modes.length?`<br><em>${modes.join(' · ')}</em>`:'')});
+          +(modes.length?`<br><em>${modes.join(' · ')}</em>`:'')
+          +confused});
     }
     return lines;
   }

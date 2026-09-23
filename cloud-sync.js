@@ -496,6 +496,8 @@
       try{
         localStorage.removeItem(USER_HISTORY_PREFIX+userId);
         localStorage.removeItem(QUEUE_PREFIX+userId);
+        // 청음 문항별 기록(틀린 것 다시 내기, 자주 헷갈림)도 계정과 함께 지운다.
+        localStorage.removeItem('olive-ear-items-v1:'+userId);
       }catch(e){}
     }
     if(handlers.clearPreferences) handlers.clearPreferences();

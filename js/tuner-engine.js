@@ -135,7 +135,10 @@
         }
 
         misses=0;
-        const midi=69+12*Math.log2(candidate.freq/440);
+        /* 기준음(A4)을 바꾸면 음의 경계도 함께 옮겨야 한다. 415Hz 기준에서 440Hz로
+           나누면 반음 가까이 어긋난 칸에 들어간다. */
+        const reference=Number.isFinite(options.referenceHz) && options.referenceHz>0 ? options.referenceHz : 440;
+        const midi=69+12*Math.log2(candidate.freq/reference);
         const note=Math.round(midi);
         if(lockedNote===note){
           pendingNote=null; pendingCount=0;

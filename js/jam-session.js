@@ -181,14 +181,18 @@
   let jamBpm = JAM_BPM_DEFAULT;
   const jamStart      = document.getElementById('jamStart');
 
-  jamKeyDD = makeSplitDropdown(jamKeyEl, Array.from({length:12},(_,i)=>({main:pcName(i),sub:''})),
+  /* 조 이름과 코드 이름은 조에 맞춰 적는다. C 마이너 루프는 Cm · A♭ · E♭ · B♭이고,
+     으뜸음 목록도 메이저면 B♭·E♭, 마이너면 C♯·G♯처럼 그 조의 철자를 따른다. */
+  const theory = window.OliveChordEngine;
+  function keyItems(){ return Array.from({length:12},(_,i)=>({main:theory.keyName(i,jamModeVal),sub:''})); }
+  jamKeyDD = makeSplitDropdown(jamKeyEl, keyItems(),
     0, i=>{
       jamRoot=i; renderPalette(); renderTimeline();
       window.OlivePreferences.changed();
     });
   jamModeDD = makeSplitDropdown(jamModeEl, [{main:'Major',sub:''},{main:'Minor',sub:''}],
     0, i=>{
-      jamModeVal = i===1?'minor':'major'; renderPalette(); renderTimeline();
+      jamModeVal = i===1?'minor':'major'; jamKeyDD.setItems(keyItems()); renderPalette(); renderTimeline();
       window.OlivePreferences.changed();
     });
   // 프리셋: 이름은 왼쪽, 진행은 오른쪽 (라벨의 여러 칸 공백으로 나뉘어 있다)
@@ -280,7 +284,7 @@
     const fig = chordFigure(intervals);
     return {
       pc, semis,
-      name: pcName(pc) + chordSuffix(intervals),
+      name: theory.spellInKey(rootPc, mode, semis, idx+1) + chordSuffix(intervals),
       rn: fig ? rn.replace('°','') + fig : rn,
       fn: info.fn,
       quality,
@@ -398,7 +402,7 @@
     }
     const p = PRESETS[jamPresetKey];
     if(!p) return;
-    jamModeVal = p.mode; jamModeDD.set(p.mode==='minor'?1:0);
+    jamModeVal = p.mode; jamModeDD.set(p.mode==='minor'?1:0); jamKeyDD.setItems(keyItems());
     setVoicing(p.seventh);
     progression = p.deg.map((d,i)=>({
       deg:d, beats:4, sev:!!p.seventh, fam:(p.fam ? p.fam[i] : null)
@@ -810,7 +814,7 @@
       const root=Math.round(Number(value.root));
       if(Number.isFinite(root) && root>=0 && root<12){ jamRoot=root; jamKeyDD.set(root); }
       if(value.mode==='major' || value.mode==='minor'){
-        jamModeVal=value.mode; jamModeDD.set(value.mode==='minor'?1:0);
+        jamModeVal=value.mode; jamModeDD.set(value.mode==='minor'?1:0); jamKeyDD.setItems(keyItems());
       }
       const presetIndex=PRESET_KEYS.indexOf(value.preset);
       jamPresetKey=presetIndex>=0 ? PRESET_KEYS[presetIndex] : 'custom';

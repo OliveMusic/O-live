@@ -55,6 +55,7 @@
   const guidePreview = /[?&]guide=1(?:&|$)/.test(location.search);
 
   let mode = 'interval', level = 1;
+  let focusMissed = true;           // '틀린 것 다시 내기'
   let current = null, answered = false, reviewingWrong = false, nextTimer = null, playFlash = null;
   let score = 0, total = 0, streak = 0;
 
@@ -68,6 +69,7 @@
   const earPrompt   = document.getElementById('earPrompt');
   const earFeedback = document.getElementById('earFeedback');
   const earChoices  = document.getElementById('earChoices');
+  const earFocus    = document.getElementById('earFocus');
 
   /* ---------- 날짜별 청음 기록 ----------
      달력은 하루 기록을 합산하고 상세에는 음정·화음·음계를 나눠 보여준다.
@@ -139,6 +141,77 @@
     if(window.OliveCloud) window.OliveCloud.recordAnswer(key,correct,mode);
   }
 
+  /* ---------- 틀린 것 다시 내기 ----------
+     문항마다 얼마나 자주 틀렸는지를 0~1의 '약함'으로 들고, 약한 문항일수록 더 자주
+     낸다(최대 다섯 배). 맞히면 약함이 줄어 저절로 원래 비율로 돌아간다.
+     틀렸을 때는 무엇을 무엇으로 들었는지(단3도를 장3도로) 그날 몫으로 센다. 연습 기록이
+     '자주 헷갈림' 한 줄로 보여 준다. 이 기록은 기기에만 둔다. */
+  const EAR_ITEMS_PREFIX = 'olive-ear-items-v1:';
+  const ITEM_DAYS_KEPT = 60;
+  function itemId(modeKey,item){ return modeKey==='interval' ? String(item.semis) : String(item.en); }
+  function itemLabel(modeKey,id){
+    const bankFor=(MODES.find(item=>item.key===modeKey)||{}).bank||[];
+    const item=bankFor.find(entry=>itemId(modeKey,entry)===id);
+    if(!item) return '';
+    // 음정은 '도'를 떼어 짧게 쓴다(단3↔장3). 짝으로 늘어놓으면 '도'가 반복돼 읽기 어렵다.
+    return modeKey==='interval' ? item.ko.replace(/도$/,'') : item.ko;
+  }
+  function itemsKey(){
+    return EAR_ITEMS_PREFIX+(activeEarHistoryKey===EAR_HISTORY_KEY
+      ? 'anon' : activeEarHistoryKey.slice(EAR_USER_HISTORY_PREFIX.length));
+  }
+  function loadItemStats(){
+    try{
+      const parsed=JSON.parse(localStorage.getItem(itemsKey())||'{}');
+      return parsed && typeof parsed==='object' && !Array.isArray(parsed) ? parsed : {};
+    }catch(e){ return {}; }
+  }
+  let itemStats = loadItemStats();
+  function saveItemStats(){
+    if(guidePreview) return;          // 도움말은 읽기만 한다
+    try{ localStorage.setItem(itemsKey(), JSON.stringify(itemStats)); }catch(e){}
+  }
+  function weakness(modeKey,id){
+    const table=itemStats.weak && itemStats.weak[modeKey];
+    return table ? Math.max(0,Math.min(1,Number(table[id])||0)) : 0;
+  }
+  function noteItemResult(answer,picked,correct){
+    itemStats.weak = itemStats.weak && typeof itemStats.weak==='object' ? itemStats.weak : {};
+    const table = itemStats.weak[mode] = itemStats.weak[mode] && typeof itemStats.weak[mode]==='object' ? itemStats.weak[mode] : {};
+    const id=itemId(mode,answer);
+    const before=weakness(mode,id);
+    const after=correct ? before*0.55 : Math.min(1,before*0.6+0.5);
+    if(after<0.02) delete table[id];
+    else table[id]=Math.round(after*1000)/1000;
+    if(!correct && picked){
+      const day=dateKey(new Date());
+      itemStats.days = itemStats.days && typeof itemStats.days==='object' ? itemStats.days : {};
+      const record = itemStats.days[day] = itemStats.days[day] && typeof itemStats.days[day]==='object' ? itemStats.days[day] : {};
+      // 짝은 순서를 가리지 않는다. 장3을 단3으로 들은 것과 그 반대는 같은 헷갈림이다.
+      const pair=mode+':'+[id,itemId(mode,picked)].sort().join('|');
+      record[pair]=(Number(record[pair])||0)+1;
+      const days=Object.keys(itemStats.days).sort();
+      days.slice(0,Math.max(0,days.length-ITEM_DAYS_KEPT)).forEach(key=>{ delete itemStats.days[key]; });
+    }
+    saveItemStats();
+  }
+  /* 그날 두 번 이상 헷갈린 짝을 많은 순으로 셋까지. 한 번 틀린 것은 실수일 수 있다. */
+  function confusionsFor(day){
+    const record=itemStats.days && itemStats.days[day];
+    if(!record || typeof record!=='object') return [];
+    return Object.entries(record)
+      .map(([key,count])=>{
+        const [modeKey,pair]=key.split(':');
+        const [a,b]=String(pair||'').split('|');
+        const labels=[itemLabel(modeKey,a),itemLabel(modeKey,b)];
+        return {label:labels.join('↔'),count:Number(count)||0,ok:labels.every(Boolean)};
+      })
+      .filter(item=>item.ok && item.count>=2)
+      .sort((a,b)=>b.count-a.count)
+      .slice(0,3)
+      .map(({label,count})=>({label,count}));
+  }
+
   /* 청음 기록의 유일한 창구. 연습 기록이 localStorage 키를 짐작해 읽던 때는
      로그인 여부에 따라 엉뚱한 저장소를 집어 두 화면의 숫자가 어긋났다. */
   window.OliveEarHistory={
@@ -150,6 +223,7 @@
         total:Number(rec.total)||0,
         correct:Number(rec.correct)||0,
         byMode:rec.byMode&&typeof rec.byMode==='object' ? rec.byMode : {},
+        confusions:confusionsFor(key),
       };
     },
     days:()=>Object.keys(earHistoryData),
@@ -163,12 +237,14 @@
       useUserHistory:(userId,history)=>{
         activeEarHistoryKey=EAR_USER_HISTORY_PREFIX+userId;
         earHistoryData=history && typeof history==='object' ? history : {};
+        itemStats=loadItemStats();
         saveEarHistory();
         notifyHistoryChanged();
       },
       useAnonymousHistory:()=>{
         activeEarHistoryKey=EAR_HISTORY_KEY;
         earHistoryData=loadEarHistory(EAR_HISTORY_KEY);
+        itemStats=loadItemStats();
         notifyHistoryChanged();
       },
       getPreferences:()=>window.OlivePreferences.getRecord(),
@@ -202,10 +278,26 @@
     earLevels.appendChild(b);
   });
 
+  function renderFocus(){
+    earFocus.textContent=focusMissed?'ON':'OFF';
+    earFocus.classList.toggle('active',focusMissed);
+    earFocus.setAttribute('aria-pressed',String(focusMissed));
+  }
+  earFocus.addEventListener('click',()=>{
+    focusMissed=!focusMissed;
+    renderFocus();
+    window.OlivePreferences.changed();
+  });
+  renderFocus();
+
   window.OlivePreferences.register('earTrainer',
-    ()=>({mode,level}),
+    ()=>({mode,level,focus:focusMissed}),
     value=>{
       if(!value || typeof value!=='object') return;
+      if(typeof value.focus==='boolean' && value.focus!==focusMissed){
+        focusMissed=value.focus;
+        renderFocus();
+      }
       const previousMode=mode, previousLevel=level;
       if(MODES.some(item=>item.key===value.mode)) mode=value.mode;
       const nextLevel=Math.round(Number(value.level));
@@ -240,7 +332,25 @@
     return r;
   }
 
-  /* ---------- 문제 ---------- */
+  /* ---------- 문제 ----------
+     바로 앞 문제와 같은 답은 네 배 덜 나오게 한다. 초급 음정은 보기가 다섯뿐이라 같은
+     답이 연달아 나오는 일이 잦았다(다섯에 하나). 아예 막지는 않는다. 막으면 그것도
+     단서가 된다. '틀린 것 다시 내기'가 켜져 있으면 약한 문항에 무게를 더 준다. */
+  function pickAnswer(pool){
+    if(pool.length<2) return pool[0];
+    const previous=current && current.answer;
+    const weights=pool.map(item=>{
+      let weight=focusMissed ? 1+4*weakness(mode,itemId(mode,item)) : 1;
+      if(item===previous) weight*=0.25;
+      return weight;
+    });
+    let roll=Math.random()*weights.reduce((sum,value)=>sum+value,0);
+    for(let index=0;index<pool.length;index++){
+      roll-=weights[index];
+      if(roll<0) return pool[index];
+    }
+    return pool[pool.length-1];
+  }
   function newQuestion(autoPlay){
     clearTimeout(nextTimer); nextTimer=null;
     answered=false;
@@ -251,7 +361,7 @@
     earPlayBtn.setAttribute('aria-label','문제 듣기');
 
     const pool = bank();
-    const answer = pool[Math.floor(Math.random()*pool.length)];
+    const answer = pickAnswer(pool);
     // 휴대폰 스피커는 300Hz 아래를 12~21dB나 깎는다.
     // 예전 음역(165~277Hz)은 측정상 충분해도 실제로는 작게 들렸다.
     const root = (mode==='scale' ? 60 : mode==='chord' ? 57 : 60) + Math.floor(Math.random()*7);
@@ -310,6 +420,7 @@
       playAnswer(picked);
     }
     renderStats();
+    noteItemResult(answer,picked,correct);
     recordEarResult(correct);
     if(correct) nextTimer=setTimeout(()=>newQuestion(true), 1500);
   }

@@ -39,7 +39,7 @@ assert.ok(shape('xx0233').alternatives.includes('Gsus2/D'));
 
 /* 베이스가 루트가 아니면 슬래시 코드다. */
 assert.equal(name('x20033'),'G/B');
-assert.equal(name('2x0232'),'D/F#');
+assert.equal(name('2x0232'),'D/F♯');
 assert.equal(name('332010'),'C/G');
 /* 3화음이 온전하면 5음이 빠진 해석보다 앞선다. C·E·A는 'C6에서 5음을 뺀 것'이 아니라
    Am/C다 — 5음 생략은 7음이 있는 코드에만 허락한다. */
@@ -70,8 +70,8 @@ assert.equal(degrees(shape('x32010')),'C1 E3 G5');
 assert.equal(degrees(shape('x02010')),'A1 C♭3 E5 G♭7');
 assert.equal(degrees(shape('x32030')),'C1 D9 E3 G5','add9의 2도는 9로 적는다');
 assert.equal(degrees(shape('xx0233')),'D1 G4 A5','sus4의 4도는 4로 적는다');
-assert.equal(degrees(shape('x7678x')),'E1 G♯9 G#3 D♭7','7♯9의 ♭3은 ♯9로 적는다');
-assert.equal(degrees(shape('x3211x')),'C1 E3 G#♯5','aug의 ♭6은 ♯5로 적는다');
+assert.equal(degrees(shape('x7678x')),'E1 G♯9 G♯3 D♭7','7♯9의 ♭3은 ♯9로 적는다(F𝄪 대신 흔한 이름 G)');
+assert.equal(degrees(shape('x3211x')),'C1 E3 G♯♯5','aug의 ♭6은 ♯5로 적는다');
 assert.equal(engine.degreeLabel(9,'dim7'),'♭♭7');
 assert.equal(engine.degreeLabel(9,'13'),'13');
 assert.equal(engine.degreeLabel(9,'6'),'6');
@@ -97,5 +97,52 @@ assert.equal(third.interval,'장3도');
 /* 어떤 튜닝이든 같은 규칙으로 읽는다. 우쿨렐레 C(0003). */
 const ukulele=[67,60,64,69];
 assert.equal(engine.identifyChord(engine.stringNotes([0,0,0,3],ukulele)).name,'C');
+
+/* ---------- 음 이름의 철자 ----------
+   조와 도수가 있으면 글자는 도수가 정한다. F 메이저의 4음은 A#이 아니라 B♭,
+   Cm의 단3도는 D#이 아니라 E♭이다. */
+assert.equal(degrees(shape('x35543')),'C1 E♭♭3 G5');
+assert.equal(name('x13331'),'B♭');
+assert.equal(name('x13321'),'B♭m');
+assert.equal(name('466544'),'A♭');
+assert.equal(name('x46664'),'D♭','C#보다 D♭. 구성음에 올림·내림이 적은 쪽');
+assert.equal(name('244222'),'F♯m','G♭m(B𝄫)이 아니라 F♯m');
+assert.equal(name('x21202'),'B7');
+assert.equal(degrees(shape('x21202')),'B1 D♯3 F♯5 A♭7');
+assert.equal(degrees(shape('x32310')),'C1 E3 B♭♭7','5음 없는 C7');
+assert.equal(name('x3434x'),'Cm7♭5');
+assert.equal(degrees(shape('x3434x')),'C1 E♭♭3 G♭♭5 B♭♭7');
+/* 이름이 붙지 않는 모음은 흔한 이름으로 적는다. */
+assert.equal(engine.plainName(1),'C♯');
+assert.equal(engine.plainName(3),'E♭');
+assert.equal(engine.plainName(6),'F♯');
+assert.equal(engine.plainName(10),'B♭');
+
+/* 스케일과 조. 으뜸음은 조표를 빌려 오는 장조를 따른다. */
+const spelled=(root,type,intervals)=>engine.spellScale(root,type,intervals).map(item=>item.name).join(' ');
+const MAJOR=[0,2,4,5,7,9,11], MINOR=[0,2,3,5,7,8,10], LYDIAN=[0,2,4,6,7,9,11];
+assert.equal(spelled(5,'major',MAJOR),'F G A B♭ C D E');
+assert.equal(spelled(10,'major',MAJOR),'B♭ C D E♭ F G A');
+assert.equal(spelled(1,'major',MAJOR),'D♭ E♭ F G♭ A♭ B♭ C');
+assert.equal(spelled(4,'major',MAJOR),'E F♯ G♯ A B C♯ D♯');
+assert.equal(spelled(1,'minor',MINOR),'C♯ D♯ E F♯ G♯ A B','C♯ 마이너는 샵');
+assert.equal(spelled(0,'minor',MINOR),'C D E♭ F G A♭ B♭');
+assert.equal(spelled(0,'dorian',[0,2,3,5,7,9,10]),'C D E♭ F G A B♭');
+assert.equal(spelled(7,'blues',[0,3,5,6,7,10]),'G B♭ C D♭ D F','블루스의 ♭5');
+assert.equal(engine.keyName(10,'major'),'B♭');
+assert.equal(engine.keyName(10,'minor'),'B♭');
+assert.equal(engine.keyName(6,'minor'),'F♯');
+assert.equal(engine.keyName(8,'major'),'A♭');
+assert.equal(engine.keyName(8,'minor'),'G♯');
+/* 리디안의 4는 ♭5가 아니라 ♯4다. 로크리안의 5는 ♭5다. */
+assert.deepEqual(engine.scaleDegrees(LYDIAN),['1','2','3','♯4','5','6','7']);
+assert.deepEqual(engine.scaleDegrees([0,1,3,5,6,8,10]),['1','♭2','♭3','4','♭5','♭6','♭7']);
+assert.deepEqual(engine.scaleDegrees([0,2,3,5,7,8,11]),['1','2','♭3','4','5','♭6','7']);
+assert.deepEqual(engine.scaleDegrees([0,3,5,6,7,10]),['1','♭3','4','♭5','5','♭7']);
+/* 잼: C 마이너 루프 i–VI–III–VII는 Cm · A♭ · E♭ · B♭ */
+assert.deepEqual([[0,1],[8,6],[3,3],[10,7]].map(([interval,degree])=>engine.spellInKey(0,'minor',interval,degree)),
+  ['C','A♭','E♭','B♭']);
+/* 조가 없는 튜너는 여전히 샵이다. */
+assert.equal(engine.noteName(10),'A#');
 
 console.log('chord engine tests passed');

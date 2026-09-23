@@ -1,8 +1,53 @@
 /* ===================== 공통 유틸 ===================== */
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 function midiToName(midi){ return NOTE_NAMES[((midi%12)+12)%12] + (Math.floor(midi/12)-1); }
-function midiToFreq(midi){ return 440 * Math.pow(2, (midi-69)/12); }
+/* 기준음 A4. 튜너 카드에서 415~466Hz로 고른다. 앱이 내는 모든 소리(튜너 기준음,
+   지판, 잼, 청음)가 이 값을 따른다. 442로 맞춘 기타로 잼을 켰는데 반주만 440이면
+   8센트 어긋난 채로 연습하게 된다. */
+const CONCERT_A_DEFAULT=440, CONCERT_A_MIN=415, CONCERT_A_MAX=466;
+let __concertA=CONCERT_A_DEFAULT;
+function concertA(){ return __concertA; }
+function setConcertA(hz){
+  const value=Math.round(Number(hz));
+  __concertA=Number.isFinite(value) ? Math.max(CONCERT_A_MIN,Math.min(CONCERT_A_MAX,value)) : CONCERT_A_DEFAULT;
+  return __concertA;
+}
+function midiToFreq(midi){ return __concertA * Math.pow(2, (midi-69)/12); }
+function freqToMidi(freq){ return 69+12*Math.log2(freq/__concertA); }
 function pcName(pc){ return NOTE_NAMES[((pc%12)+12)%12]; }
+
+/* 튜너와 스케일 지판이 함께 쓰는 튜닝 목록. 한 곳에 두어야 튜너에서 고른 튜닝을
+   지판에서도 같은 이름으로 찾는다. names는 조에 맞춘 줄 이름이다(반음 다운은 E♭…).
+   크로매틱은 줄이 없어 튜너에서만 쓴다. */
+const OLIVE_TUNINGS=Object.freeze({
+  chromatic:{label:'크로매틱', sub:'모든 음', strings:[], chromatic:true},
+  guitar:{label:'기타 표준', strings:[40,45,50,55,59,64]},
+  halfdown:{label:'기타 반음 다운', strings:[39,44,49,54,58,63], names:['E♭','A♭','D♭','G♭','B♭','E♭']},
+  dropd:{label:'기타 드롭 D', strings:[38,45,50,55,59,64]},
+  dropc:{label:'기타 드롭 C', strings:[36,43,48,53,57,62]},
+  dadgad:{label:'DADGAD', strings:[38,45,50,55,57,62]},
+  openg:{label:'오픈 G', strings:[38,43,50,55,59,62]},
+  seven:{label:'7현 기타', strings:[35,40,45,50,55,59,64]},
+  bass:{label:'베이스 4현', strings:[28,33,38,43]},
+  bass5:{label:'베이스 5현', strings:[23,28,33,38,43]},
+  ukulele:{label:'우쿨렐레', strings:[67,60,64,69]},
+  ukulelelow:{label:'우쿨렐레 Low G', strings:[55,60,64,69]},
+  mandolin:{label:'만돌린', strings:[55,62,69,76]},
+  violin:{label:'바이올린', strings:[55,62,69,76]},
+  viola:{label:'비올라', strings:[48,55,62,69]},
+  cello:{label:'첼로', strings:[36,43,50,57]},
+});
+const OLIVE_TUNING_ORDER=Object.freeze(['chromatic','guitar','halfdown','dropd','dropc','dadgad','openg','seven',
+  'bass','bass5','ukulele','ukulelelow','mandolin','violin','viola','cello']);
+function tuningStringName(tuning,index){
+  const names=tuning && tuning.names;
+  return names && names[index] ? names[index] : pcName(tuning.strings[index]);
+}
+function tuningLetters(tuning){
+  if(!tuning) return '';
+  if(tuning.chromatic) return tuning.sub||'';
+  return tuning.strings.map((_,index)=>tuningStringName(tuning,index)).join('');
+}
 
 /* 앱의 연습 설정은 기능별 제공자가 자기 상태를 읽고 적용한다.
    변경 즉시 로컬에 저장하고, 로그인 중이면 cloud-sync.js가 같은 레코드를 자동 전송한다. */
@@ -118,7 +163,18 @@ function makeSplitDropdown(mount, items, selected, onSelect){
   btn.addEventListener('click', ()=> menu.hidden ? open() : close());
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') close(); });
   render();
-  return { set(i){ cur=i; render(); }, get:()=>cur, close };
+  /* 항목 이름만 바꾼다(개수는 그대로). 스케일 종류를 바꾸면 으뜸음 목록이 B♭·F♯처럼
+     그 스케일의 철자로 바뀌는 데 쓴다. */
+  function setItems(next){
+    if(!Array.isArray(next) || next.length!==items.length) return;
+    items=next.slice();
+    menu.querySelectorAll('.dd-item').forEach((o,i)=>{
+      o.querySelector('.dd-main').textContent=items[i].main;
+      o.querySelector('.dd-sub').textContent=items[i].sub||'';
+    });
+    render();
+  }
+  return { set(i){ cur=i; render(); }, get:()=>cur, close, setItems };
 }
 
 /* ===================== 울리는 중인 음 =====================
@@ -404,6 +460,52 @@ function guitarPluck(midi, dur=2.4, vol=0.62){
   });
 }
 function referenceTone(midi, dur=2.6){ guitarPluck(midi, dur, 0.78); }
+
+/* ---- 지속음(드론) ----
+   튜너의 '누르면 계속 울리기'. 기준음에 맞춰 음정을 연습할 때 쓴다. 현을 튕긴 소리는
+   2초 남짓에 사그라들어 기댈 수 없으므로, 배음 몇 개를 쌓은 오르간 같은 음을 다시
+   누를 때까지 낸다. 켜고 끌 때는 짧게 오르내려 '툭' 소리를 내지 않는다. */
+function startDrone(midi, vol=0.3){
+  const ctx=getCtx();
+  const f0=midiToFreq(midi);
+  const bus=ctx.createGain(); bus.gain.value=0.0001;
+  const tone=ctx.createBiquadFilter();
+  tone.type='lowpass'; tone.frequency.value=Math.min(4200,f0*6); tone.Q.value=0.4;
+  tone.connect(bus); bus.connect(getMaster(ctx));
+  sendTo(bus,0.16);
+  const partials=[[1,1],[2,.42],[3,.2],[4,.09]].map(([n,amp])=>{
+    const osc=ctx.createOscillator(), gain=ctx.createGain();
+    osc.type='sine'; osc.frequency.value=f0*n; gain.gain.value=amp*0.5;
+    osc.connect(gain).connect(tone);
+    return osc;
+  });
+  let started=false, stopped=false;
+  whenClockAwake(ctx,()=>{
+    if(stopped) return;
+    const t=noteStart(ctx,0.005);
+    partials.forEach(osc=>osc.start(t));
+    bus.gain.setValueAtTime(0.0001,t);
+    bus.gain.exponentialRampToValueAtTime(vol,t+0.12);
+    started=true;
+  });
+  return {
+    midi,
+    stop(){
+      if(stopped) return;
+      stopped=true;
+      if(!started){ try{ bus.disconnect(); }catch(e){} return; }
+      const now=ctx.currentTime;
+      try{
+        bus.gain.cancelScheduledValues(now);
+        bus.gain.setValueAtTime(Math.max(0.0001,bus.gain.value),now);
+        bus.gain.exponentialRampToValueAtTime(0.0001,now+0.25);
+      }catch(e){}
+      partials.forEach(osc=>{ try{ osc.stop(now+0.3); }catch(e){} });
+      keepVoice(ctx,bus,now+0.3);
+      setTimeout(()=>{ try{ bus.disconnect(); }catch(e){} },450);
+    },
+  };
+}
 
 /* ---- 어쿠스틱 피아노 ----
    실제 피아노는 한 음에 현이 2~3개이고 서로 미세하게 어긋나 있다.

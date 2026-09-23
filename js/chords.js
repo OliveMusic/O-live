@@ -113,7 +113,7 @@
       else frets.appendChild(olive(x,Y0+value*DY+DY/2));
       const midi=midiOf(index);
       frets.appendChild(el('text',{class:'cf-note'+(midi===null?' muted':''),x,y:NOTE_Y,
-        'text-anchor':'middle'},midi===null?'–':engine.noteName(midi)));
+        'text-anchor':'middle'},midi===null?'–':spelledName(found,midi)));
       if(midi!==null && found && !found.kind){
         const tone=found.tones.find(item=>item.pc===((midi%12)+12)%12);
         if(tone) frets.appendChild(el('text',{class:'cf-degree',x,y:DEGREE_Y,'text-anchor':'middle'},tone.degree));
@@ -126,6 +126,33 @@
     renderName(found);
   }
 
+  /* 줄 아래 음 이름도 코드 이름과 같은 철자로 적는다. Cm의 단3도는 D#이 아니라 E♭이다. */
+  function spelledName(found,midi){
+    const pc=((midi%12)+12)%12;
+    const tone=found && found.tones.find(item=>item.pc===pc);
+    return tone ? tone.name : engine.plainName(pc);
+  }
+  /* 도수는 '근음·3도'처럼 적고 한 단계 흐리게 둔다. 'C 1 · E 3'은 붙어 보여 C1·E3 같은
+     옥타브 표기로 읽혔다. 바로 옆 튜너가 E2·A2로 적는다. */
+  function degreeWord(degree){ return degree==='1' ? '근음' : degree+'도'; }
+  function renderTones(tones){
+    tonesEl.textContent='';
+    tones.forEach((tone,index)=>{
+      if(index){
+        const sep=document.createElement('span');
+        sep.className='cf-sep'; sep.textContent='·';
+        tonesEl.appendChild(sep);
+      }
+      const pair=document.createElement('span');
+      pair.className='cf-tone';
+      const name=document.createElement('span');
+      name.textContent=tone.name;
+      const degree=document.createElement('span');
+      degree.className='cf-deg'; degree.textContent=degreeWord(tone.degree);
+      pair.append(name,degree);
+      tonesEl.appendChild(pair);
+    });
+  }
   function renderName(found){
     if(!found){
       nameEl.textContent='—';
@@ -137,9 +164,7 @@
     if(found.kind==='두 음') tonesEl.textContent='두 음 · '+found.interval;
     else if(found.kind==='이름 없음') tonesEl.textContent='이름이 붙지 않는 조합';
     else if(found.kind) tonesEl.textContent=found.kind;
-    /* 음과 도수는 좁은 공백으로 붙여 한 짝으로 읽히게 한다. 보통 공백을 쓰면 'C 1 · E 3'이
-       짝 없이 흩어져, 어느 숫자가 어느 음의 것인지 한 번 더 세어야 한다. */
-    else tonesEl.textContent=found.tones.map(tone=>tone.name+'\u2009'+tone.degree).join(' · ');
+    else renderTones(found.tones);
     altsEl.textContent='';
     if(found.alternatives.length){
       altsEl.append('다르게 부르면');

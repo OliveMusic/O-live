@@ -905,8 +905,15 @@ for(const label of ['초급','중급','고급']) assert.ok(earTrainer.includes(`
 assert.match(guide,/초급부터 고급까지 있습니다/);
 assert.match(earTrainer,/newQuestion\(true\), 1500\)/,'맞히면 1.5초 뒤');
 assert.match(guide,/1\.5초 뒤에 다음 문제가 저절로 나옵니다/,'맞혔을 때를 가르치는 단계가 말한다');
-for(const label of ['기타 표준','기타 드롭 D','베이스 4현','우쿨렐레','만돌린']) assert.ok(tuner.includes(label));
-assert.match(guide,/기타 표준·Drop D, 베이스, 우쿨렐레, 만돌린을 지원합니다/);
+/* 튜닝 목록은 튜너와 스케일 지판이 함께 쓴다(core.js). 도움말이 말하는 것이 다 있어야 한다. */
+{
+  const core=read('js/core.js');
+  for(const label of ['기타 표준','기타 반음 다운','기타 드롭 D','기타 드롭 C','DADGAD','오픈 G','7현 기타',
+    '베이스 4현','베이스 5현','우쿨렐레','만돌린','바이올린','비올라','첼로','크로매틱']) assert.ok(core.includes(`label:'${label}'`),label);
+  assert.match(tuner,/const TUNINGS = OLIVE_TUNINGS;/);
+  assert.match(read('js/scales.js'),/const TUNINGS = OLIVE_TUNINGS;/);
+  assert.match(guide,/기타\(반음 다운·드롭 D·드롭 C·DADGAD·오픈 G·7현\), 베이스 4·5현, 우쿨렐레, 만돌린, 바이올린·비올라·첼로와 모든 음을 보는 크로매틱을 지원합니다/);
+}
 
 /* 목록 머리는 아래 행들이 'YouTube'라고 적는 것과 같은 말을 쓴다. */
 assert.match(recorder,/· YouTube \$\{links\}\/\$\{MAX_LINKS\}/);

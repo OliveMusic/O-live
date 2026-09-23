@@ -1067,9 +1067,16 @@ test('코드 찾기는 짚은 모양의 이름을 찾고 쓸어서 친다',async
   await page.locator('.tab-btn[data-tab="scales"]').click();
   await expect(page.locator('#pageTitle')).toHaveText('코드 & 스케일');
   await expect(page.locator('#scalesSeg .seg-btn[data-mode="chord"]')).toHaveClass(/active/);
-  /* 처음에는 C(x32010)가 짚혀 있다. 음과 도수는 좁은 공백으로 한 짝이다. */
+  /* 처음에는 C(x32010)가 짚혀 있다. 도수는 '근음·3도'로 적고 한 단계 흐리게 둔다.
+     'C 1 · E 3'은 C1·E3 같은 옥타브 표기로 읽혔다. */
   await expect(page.locator('#chordName')).toHaveText('C');
-  await expect(page.locator('#chordTones')).toHaveText('C\u20091 · E\u20093 · G\u20095');
+  await expect(page.locator('#chordTones')).toHaveText('C근음·E3도·G5도');
+  await expect(page.locator('#chordTones .cf-deg')).toHaveText(['근음','3도','5도']);
+  const [toneInk,degreeInk]=await page.evaluate(()=>[
+    getComputedStyle(document.querySelector('#chordTones .cf-tone span')).color,
+    getComputedStyle(document.querySelector('#chordTones .cf-deg')).color,
+  ]);
+  expect(degreeInk).not.toBe(toneInk);
 
   await page.evaluate(()=>{
     window.__plucks=[];
@@ -2872,4 +2879,158 @@ test('조옮김을 걸면 스트레처가 찰 때까지 소리를 닫아 둔다'
     const gains=window.__micHarness.gainNodes;
     return gains[gains.length-1].gain.value;
   })).toBeGreaterThan(.5);
+});
+
+/* ---------- 조에 맞는 음 이름 ----------
+   조와 도수를 아는 화면(스케일·코드 찾기·잼)은 도수에서 글자를 정한다. 튜너는 샵. */
+test('스케일·코드 찾기·잼은 조에 맞는 음 이름을 쓴다',async({page})=>{
+  const progression=[1,6,3,7].map(deg=>({deg,beats:4,sev:false,fam:null}));
+  await preparePage(page,{preferences:{data:{
+    scales:{root:5,type:'major',tuning:'guitar',zoom:'fit'},
+    chords:{base:3,shape:[null,0,2,2,1,0]},
+    jam:{root:0,mode:'minor',preset:'minorLoop',bpm:90,seventh:false,style:'pop',
+      tracks:{drum:true,bass:true,chord:true,click:false},progression},
+  },updatedAt:'2026-09-23T00:00:00.000Z'}});
+  await page.locator('.tab-btn[data-tab="scales"]').click();
+  /* Cm의 단3도는 E♭. 줄 아래 음 이름도 같은 철자다. */
+  await expect(page.locator('#chordName')).toHaveText('Cm');
+  await expect(page.locator('#chordTones')).toHaveText('C근음·E♭♭3도·G5도');
+  await expect(page.locator('#chordBoard .cf-note')).toContainText(['E♭']);
+  /* F 메이저의 4음은 B♭. 으뜸음 목록도 그 스케일의 철자다. */
+  await page.locator('#scalesSeg .seg-btn[data-mode="scale"]').click();
+  await expect(page.locator('#fretboard')).toContainText('B♭');
+  await expect(page.locator('#fretboard')).not.toContainText('A#');
+  const roots=await page.locator('#scaleKey .dd-item .dd-main').allTextContents();
+  expect(roots).toEqual(['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B']);
+  /* 리디안의 4는 ♭5가 아니라 ♯4. */
+  await page.evaluate(()=>window.OlivePreferences.applyRecord({scales:{root:0,type:'lydian',tuning:'guitar',zoom:'fit'}}));
+  await expect(page.locator('#scaleNotesList .pkey.in span')).toContainText(['♯4']);
+  await expect(page.locator('#scaleNotesList')).not.toContainText('♭5');
+  /* 마이너로 바꾸면 으뜸음 목록이 C♯·G♯로 바뀐다. */
+  await page.evaluate(()=>window.OlivePreferences.applyRecord({scales:{root:1,type:'minor',tuning:'guitar',zoom:'fit'}}));
+  await expect(page.locator('#scaleKey .dd-btn .dd-main')).toHaveText('C♯');
+  /* C 마이너 루프 i–VI–III–VII는 Cm · A♭ · E♭ · B♭. */
+  await page.locator('.tab-btn[data-tab="jam"]').click();
+  await expect(page.locator('#progTimeline .prog-bar .nm')).toHaveText(['Cm','A♭','E♭','B♭']);
+});
+
+/* ---------- 리듬 6/8 ----------
+   8분음표 여섯 개, 한 박이 두 칸, 3+3 사이 틈. 예전 24칸 기록은 옮겨 온다. */
+test('리듬 트레이너의 6/8은 8분음표 여섯 개다',async({page})=>{
+  await preparePage(page,{preferences:{data:{rhythmTrainer:{bpm:90,beats:6,
+    pattern:[1,0,0,0, 0,0,0,0, 1,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+    options:{metro:true,drum:true,swing:false,accent:true},syncopation:5,difficulty:5}},
+    updatedAt:'2026-09-23T00:00:00.000Z'}});
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn[data-mode="rhythm"]').click();
+  await expect(page.locator('#beatGrid .gcell')).toHaveCount(12);
+  await expect(page.locator('#beatGrid .gcell.beat')).toHaveCount(6);
+  await expect(page.locator('#beatGrid .bn')).toHaveText(['1','2','3','4','5','6']);
+  const on=await page.locator('#beatGrid .gcell').evaluateAll(cells=>cells.map(c=>c.classList.contains('on')?1:0).join(''));
+  expect(on).toBe('100010100010');
+  const gap=await page.locator('#beatGrid .gcell').nth(6).evaluate(el=>el.style.marginLeft);
+  expect(gap).toBe('10px');
+  /* 다시 저장하면 12칸으로 남는다. */
+  await expect.poll(()=>page.evaluate(()=>{
+    const record=window.OlivePreferences.getRecord();
+    return record && record.data && record.data.rhythmTrainer && record.data.rhythmTrainer.pattern.length;
+  })).toBe(12);
+});
+
+/* ---------- 튜너: 기준음·지속음·튜닝 ---------- */
+test('튜너는 기준음 A4를 바꾸고, 누른 음을 계속 울리고, 튜닝을 넓게 고른다',async({page})=>{
+  await preparePage(page,{microphone:'controls'});
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  await expect(page.locator('#a4Val')).toHaveText('440 Hz');
+  await page.locator('#a4Plus').click();
+  await page.locator('#a4Plus').click();
+  await expect(page.locator('#a4Val')).toHaveText('442 Hz');
+  expect(await page.evaluate(()=>[concertA(),Math.round(midiToFreq(69))])).toEqual([442,442]);
+  /* 앱의 다른 소리도 같은 기준을 따르고, 설정으로 남는다. */
+  await expect.poll(()=>page.evaluate(()=>{
+    const record=window.OlivePreferences.getRecord();
+    return record && record.data && record.data.tuner && record.data.tuner.a4;
+  })).toBe(442);
+  /* 두 번 누르면 440. */
+  await page.locator('#a4Val').click();
+  await page.locator('#a4Val').click();
+  await expect(page.locator('#a4Val')).toHaveText('440 Hz');
+
+  /* 지속음을 켜면 누른 음이 다시 누를 때까지 이어진다. 탭 아이콘도 울리는 표시를 한다. */
+  await page.locator('#droneToggle').click();
+  await expect(page.locator('#droneToggle')).toHaveText('ON');
+  const low=page.locator('#stringBtns .string-btn').first();
+  await low.click();
+  await expect(low).toHaveClass(/droning/);
+  await expect(page.locator('.tab-btn[data-tab="tuner"]')).toHaveClass(/sounding/);
+  /* 다른 줄을 누르면 그 줄로 옮긴다. */
+  const second=page.locator('#stringBtns .string-btn').nth(1);
+  await second.click();
+  await expect(second).toHaveClass(/droning/);
+  await expect(low).not.toHaveClass(/droning/);
+  await second.click();
+  await expect(second).not.toHaveClass(/droning/);
+  await expect(page.locator('.tab-btn[data-tab="tuner"]')).not.toHaveClass(/sounding/);
+  /* 다른 탭으로 가면 멈춘다. */
+  await low.click();
+  await expect(low).toHaveClass(/droning/);
+  await page.locator('.tab-btn[data-tab="metronome"]').click();
+  await expect.poll(()=>page.evaluate(()=>document.querySelectorAll('#stringBtns .droning').length)).toBe(0);
+  await page.locator('.tab-btn[data-tab="tuner"]').click();
+
+  /* 크로매틱은 열두 음, 반음 다운은 플랫 이름. */
+  await page.locator('#tuningSelect .dd-btn').click();
+  await page.locator('#tuningSelect .dd-item',{hasText:'크로매틱'}).click();
+  await expect(page.locator('#stringBtns .string-btn')).toHaveCount(12);
+  await page.locator('#tuningSelect .dd-btn').click();
+  await page.locator('#tuningSelect .dd-item',{hasText:'반음 다운'}).click();
+  await expect(page.locator('#stringBtns .nn')).toHaveText(['E♭2','A♭2','D♭3','G♭3','B♭3','E♭4']);
+  /* 스케일 지판도 같은 목록을 쓴다(크로매틱만 빼고). */
+  const scaleTunings=await page.locator('#scaleTuning .dd-item .dd-main').allTextContents();
+  expect(scaleTunings).toContain('기타 반음 다운');
+  expect(scaleTunings).toContain('첼로');
+  expect(scaleTunings).not.toContain('크로매틱');
+});
+
+/* ---------- 틀린 것 다시 내기 ---------- */
+test('청음은 틀린 짝을 기록해 연습 기록에 자주 헷갈린 것을 보여 준다',async({page})=>{
+  await preparePage(page);
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn[data-mode="ear"]').click();
+  await expect(page.locator('#earFocus')).toHaveText('ON');
+  await page.locator('#earFocus').click();
+  await expect(page.locator('#earFocus')).toHaveText('OFF');
+  await expect.poll(()=>page.evaluate(()=>{
+    const record=window.OlivePreferences.getRecord();
+    return record && record.data && record.data.earTrainer && record.data.earTrainer.focus;
+  })).toBe(false);
+  await page.locator('#earFocus').click();
+
+  /* 뽑기를 고정하면 초급 음정의 첫 문항(장2도)이 나온다. 같은 오답을 두 번 고른다. */
+  await page.evaluate(()=>{ Math.random=()=>0; });
+  await page.locator('#earModes .pill[data-mode="interval"]').click();
+  const picks=[];
+  for(let round=0;round<2;round++){
+    const rows=page.locator('#earChoices .choice-row');
+    await expect(rows.first()).toBeVisible();
+    const labels=await rows.locator('.ko').allTextContents();
+    const wrongIndex=labels.findIndex(label=>label!=='장2도');
+    picks.push(labels[wrongIndex]);
+    await rows.nth(wrongIndex).click();
+    await expect(rows.nth(wrongIndex)).toHaveClass(/wrong/);
+    await expect(page.locator('#earChoices .choice-row.correct .ko')).toHaveText('장2도');
+    await page.locator('#earPlayBtn').click();          // 다음 문제
+  }
+  expect(picks[0]).toBe(picks[1]);
+  const stats=await page.evaluate(()=>JSON.parse(localStorage.getItem('olive-ear-items-v1:anon')||'{}'));
+  expect(stats.weak.interval['2']).toBeGreaterThan(0.5);
+  /* 연습 기록의 청음 줄에 '자주 헷갈림'이 한 줄로 붙는다. */
+  await page.evaluate(()=>window.OlivePracticeLog.open());
+  /* 음정은 '도'를 떼어 짧게 적는다(장2↔단3). 짝의 순서는 가리지 않는다. */
+  const wrongLabel=picks[0].replace(/도$/,'');
+  const line=page.locator('#practiceLogFull em').last();
+  await expect(line).toContainText('자주 헷갈림');
+  await expect(line).toContainText('장2');
+  await expect(line).toContainText(wrongLabel);
+  await expect(line).toContainText('2번');
 });

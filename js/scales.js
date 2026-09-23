@@ -14,21 +14,16 @@
     harmonicminor:{label:'하모닉 마이너', intervals:[0,2,3,5,7,8,11]},
     melodicminor:{label:'멜로딕 마이너', intervals:[0,2,3,5,7,9,11]},
   };
-  const TUNINGS = {
-    guitar:{strings:[40,45,50,55,59,64]},
-    dropd:{strings:[38,45,50,55,59,64]},
-    bass:{strings:[28,33,38,43]},
-    ukulele:{strings:[67,60,64,69]},
-    mandolin:{strings:[55,62,69,76]},
-  };
-  // 루트로부터의 반음 거리를 도수 표기로
-  const DEGREE = ['1','♭2','2','♭3','3','4','♭5','5','♭6','6','♭7','7'];
+  /* 튜닝 목록은 튜너와 함께 쓴다(core.js). 줄이 없는 크로매틱만 뺀다. */
+  const TUNINGS = OLIVE_TUNINGS;
+  /* 음 이름과 도수는 조에 맞춰 적는다. F 메이저의 4음은 B♭, 리디안의 4는 ♯4다.
+     철자 규칙은 코드 찾기·잼과 같은 곳(chord-engine.js)에 있다. */
+  const theory = window.OliveChordEngine;
 
   const scaleKeyEl  = document.getElementById('scaleKey');
   const scaleTypeEl = document.getElementById('scaleType');
   const scaleTuneEl = document.getElementById('scaleTuning');
-  const TUNE_LABEL={guitar:'기타 표준',dropd:'기타 드롭 D',bass:'베이스 4현',ukulele:'우쿨렐레',mandolin:'만돌린'};
-  const TUNE_ORDER=['guitar','dropd','bass','ukulele','mandolin'];
+  const TUNE_ORDER=OLIVE_TUNING_ORDER.filter(key=>!OLIVE_TUNINGS[key].chromatic);
   const SC_KEYS=Object.keys(SCALE_TYPES);
   let scaleRoot=0, scaleTypeKey=SC_KEYS[0], scaleTuneKey='guitar';
   const fretboard  = document.getElementById('fretboard');
@@ -44,7 +39,11 @@
   ];
   let zoom = 'fit';
 
-  const scaleKeyDD=makeSplitDropdown(scaleKeyEl, Array.from({length:12},(_,i)=>({main:pcName(i),sub:''})),
+  /* 으뜸음 목록은 고른 스케일의 철자를 따른다. 메이저면 B♭, 마이너면 G♯. */
+  function rootItems(){
+    return Array.from({length:12},(_,i)=>({main:theory.keyName(i,scaleTypeKey),sub:''}));
+  }
+  const scaleKeyDD=makeSplitDropdown(scaleKeyEl, rootItems(),
     0, i=>{ scaleRoot=i; render(); window.OlivePreferences.changed(); });
   const SCALE_EN = {
     major:'Ionian', minor:'Aeolian',
@@ -55,8 +54,8 @@
   };
   const scaleTypeDD=makeSplitDropdown(scaleTypeEl,
     SC_KEYS.map(k=>({ main:splitParen(SCALE_TYPES[k].label).main, sub:SCALE_EN[k]||'' })),
-    0, i=>{ scaleTypeKey=SC_KEYS[i]; render(); window.OlivePreferences.changed(); });
-  const scaleTuneDD=makeSplitDropdown(scaleTuneEl, TUNE_ORDER.map(k=>({main:TUNE_LABEL[k], sub:TUNINGS[k].strings.map(m=>pcName(m)).join('')})),
+    0, i=>{ scaleTypeKey=SC_KEYS[i]; scaleKeyDD.setItems(rootItems()); render(); window.OlivePreferences.changed(); });
+  const scaleTuneDD=makeSplitDropdown(scaleTuneEl, TUNE_ORDER.map(k=>({main:TUNINGS[k].label, sub:tuningLetters(TUNINGS[k])})),
     0, i=>{ scaleTuneKey=TUNE_ORDER[i]; render(); window.OlivePreferences.changed(); });
   ZOOMS.forEach(z=>{
     const b=document.createElement('button');
@@ -96,7 +95,7 @@
      아이폰에서 누르기 좋게 흰건반 7개가 카드 폭을 꽉 채운다. */
   const WHITE_PC = [0,2,4,5,7,9,11];
   const BLACK = [ {pc:1,after:0}, {pc:3,after:1}, {pc:6,after:3}, {pc:8,after:4}, {pc:10,after:5} ];
-  function renderPiano(rootPc, scaleSet){
+  function renderPiano(rootPc, scaleSet){ // scaleSet: pc → {name, degree}
     scaleNotesList.className='piano';
     scaleNotesList.innerHTML='';
     const bw = 'calc(100% / 7 * 0.58)';
@@ -107,9 +106,11 @@
       const inScale = scaleSet.has(pc);
       if(inScale) el.classList.add('in');
       if(pc===rootPc) el.classList.add('root');
-      const label = inScale ? DEGREE[scaleSet.get(pc)] : (black ? '' : pcName(pc));
-      el.innerHTML = `<span>${label}</span>`;
-      el.setAttribute('aria-label', pcName(pc)+(inScale?' '+DEGREE[scaleSet.get(pc)]+'도':''));
+      const tone = inScale ? scaleSet.get(pc) : null;
+      const label = tone ? tone.degree : (black ? '' : pcName(pc));
+      const span=document.createElement('span'); span.textContent=label;
+      el.appendChild(span);
+      el.setAttribute('aria-label', tone ? tone.name+' '+tone.degree+'도' : pcName(pc));
       if(inScale){
         el.dataset.pc=String(pc);
         /* 손가락과 마우스는 아래 쓸기 처리가 맡는다. 여기서는 키보드로 누른 것만 받는다 —
@@ -172,8 +173,8 @@
     const size   = lay.cell;
     const showText = size >= 14;   // 15프렛을 다 담으면 칸이 15~17px이 된다
 
-    const scaleSet = new Map();
-    type.intervals.forEach(iv=> scaleSet.set((rootPc+iv)%12, iv));
+    const scaleSet = new Map();       // pc → {name, degree}
+    theory.spellScale(rootPc, scaleTypeKey, type.intervals).forEach(tone=> scaleSet.set(tone.pc, tone));
 
     fretboard.style.setProperty('--fc', size+'px');
     fretboard.classList.toggle('compact', !showText);
@@ -197,7 +198,7 @@
     for(let s=tuning.strings.length-1; s>=0; s--){
       const row=document.createElement('div'); row.className='fret-row';
       const lab=document.createElement('div'); lab.className='fret-num';
-      lab.textContent=pcName(tuning.strings[s]%12);
+      lab.textContent=tuningStringName(tuning,s);
       row.appendChild(lab);
       for(let f=1; f<=FRETS; f++){
         const midi=tuning.strings[s]+f;
@@ -206,9 +207,10 @@
         c.className='fret-cell';
         if(scaleSet.has(pc)){
           const isRoot = pc===rootPc;
+          const tone = scaleSet.get(pc);
           c.classList.add(isRoot?'root':'scale');
-          if(showText) c.textContent = pcName(pc);
-          c.title = pcName(pc)+' · '+DEGREE[scaleSet.get(pc)]+'도';
+          if(showText) c.textContent = tone.name;
+          c.title = tone.name+' · '+tone.degree+'도';
         } else {
           c.classList.add('note');
         }
@@ -239,7 +241,7 @@
       const root=Math.round(Number(value.root));
       if(Number.isFinite(root) && root>=0 && root<12){ scaleRoot=root; scaleKeyDD.set(root); }
       const typeIndex=SC_KEYS.indexOf(value.type);
-      if(typeIndex>=0){ scaleTypeKey=SC_KEYS[typeIndex]; scaleTypeDD.set(typeIndex); }
+      if(typeIndex>=0){ scaleTypeKey=SC_KEYS[typeIndex]; scaleTypeDD.set(typeIndex); scaleKeyDD.setItems(rootItems()); }
       const tuneIndex=TUNE_ORDER.indexOf(value.tuning);
       if(tuneIndex>=0){ scaleTuneKey=TUNE_ORDER[tuneIndex]; scaleTuneDD.set(tuneIndex); }
       if(ZOOMS.some(item=>item.key===value.zoom)) zoom=value.zoom;
