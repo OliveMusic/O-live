@@ -206,9 +206,13 @@
     ()=>({mode,level}),
     value=>{
       if(!value || typeof value!=='object') return;
+      const previousMode=mode, previousLevel=level;
       if(MODES.some(item=>item.key===value.mode)) mode=value.mode;
       const nextLevel=Math.round(Number(value.level));
       if(LEVELS.some(item=>item.key===nextLevel)) level=nextLevel;
+      /* 바뀐 것이 없으면 점수와 풀던 문제를 그대로 둔다. 동기화가 같은 값을 다시
+         적용할 때마다 정확도·연속 정답이 0으로 돌아가고 문제가 바뀌었다. */
+      if(mode===previousMode && level===previousLevel && current) return;
       earModes.querySelectorAll('.pill')
         .forEach(button=>button.classList.toggle('active',button.dataset.mode===mode));
       earLevels.querySelectorAll('.pill')

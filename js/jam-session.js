@@ -96,8 +96,10 @@
     },
     shuffle:{
       label:'Shuffle',
-      kick:[0,8], snare:[4,12], hat:[0,3,4,7,8,11,12,15],
-      bass:'walk', chord:'beat4', swing:.18,
+      /* 셔플은 셋잇단이다. 뒷박 하이햇이 박의 2/3 자리에 온다. 예전에는 16분 넷째 칸을
+         더 밀어 박의 0.8 자리에 떨어져, 부점(0.75)보다도 늦은 말발굽처럼 들렸다. */
+      kick:[0,8], snare:[4,12], hat:[0,2,4,6,8,10,12,14],
+      bass:'walk', chord:'beat4', swing:0, shuffle:2/3,
     },
   };
 
@@ -623,8 +625,9 @@
     // scheduleStep 안에서 stop()이 불릴 수 있으므로 매 바퀴 playing을 다시 본다
     const ahead=document.visibilityState==='visible' ? AHEAD : BACKGROUND_AHEAD;
     while(playing && nextStepTime < ctx.currentTime + ahead){
-      // 셔플 필: 홀수 16분을 뒤로 민다
-      const swingOff = (st.swing && stepCursor%2===1) ? secPerStep*st.swing : 0;
+      // 셔플: 8분 뒷박(16분 셋째 칸)을 박의 2/3 자리로 민다. swing은 홀수 16분을 민다.
+      const swingOff = (st.shuffle && stepCursor%4===2) ? secPerStep*st.shuffle
+        : (st.swing && stepCursor%2===1) ? secPerStep*st.swing : 0;
       scheduleStep(stepCursor, nextStepTime + swingOff);
       nextStepTime += secPerStep;
       stepCursor++;
@@ -741,11 +744,15 @@
       }
       jamCtx=ctx;
       createJamOutputs(ctx);
+      /* 메트로놈과 같다. 막 열린 출력 경로의 첫 소리는 iOS가 작게 낸다. 들리지 않을
+         만큼 작은 소리로 먼저 깨우고, 시계가 아직 깨어나는 중이면 여유를 더 준다. */
+      if(typeof primeAudioOutput==='function') primeAudioOutput(ctx);
       playing=true;
       stepCursor=0; scheduledMarks=[];
       visualBarIdx=-1;
       // 터치 직후 반주가 시작되면서도 첫 스텝이 잘리지 않을 최소 여유만 둔다.
-      nextStepTime=ctx.currentTime+START_LEAD_TIME;
+      nextStepTime=typeof noteStart==='function'
+        ? noteStart(ctx,START_LEAD_TIME) : ctx.currentTime+START_LEAD_TIME;
       jamStart.classList.add('on');
       jamStart.classList.remove('media-paused');
       jamStart.setAttribute('aria-label','정지');

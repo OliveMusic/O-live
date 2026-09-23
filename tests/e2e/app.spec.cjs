@@ -185,11 +185,14 @@ async function preparePage(page,{
               return {data:serverRows,error:null};
             }}; }}; }}; },
           };
-          if(table==='practice_links') return {
-            select(){ return {order(){ return {async limit(){
-              return {data:serverLinks,error:null};
-            }}; }}; },
-          };
+          if(table==='practice_links'){
+            /* 즐겨찾기 우선 → 최신순으로 order를 두 번 잇는다. */
+            const ordered={
+              order(){ return ordered; },
+              async limit(){ return {data:serverLinks,error:null}; },
+            };
+            return {select(){ return ordered; }};
+          }
           if(table==='user_preferences') return {
             select(){ return {eq(){ return {async maybeSingle(){ return {data:null,error:null}; }}; }}; },
             async upsert(){ return {data:null,error:null}; },
@@ -277,7 +280,7 @@ async function preparePage(page,{
       });
       const harness={
         requests:0,stops:0,pending:false,contexts:0,zeroGainConnections:0,
-        gainNodes:[],scheduledStarts:[],
+        gainNodes:[],scheduledStarts:[],scheduledTones:[],
       };
       class FakeNode{
         connect(next){
@@ -374,7 +377,10 @@ async function preparePage(page,{
             setValueAtTime(value){ this.value=value; },
             exponentialRampToValueAtTime(value){ this.value=value; },
           };
-          node.start=when=>{ harness.scheduledStarts.push(Number(when)||0); };
+          node.start=when=>{
+            harness.scheduledStarts.push(Number(when)||0);
+            harness.scheduledTones.push({when:Number(when)||0,type:node.type,freq:Number(node.frequency.value)||0});
+          };
           node.stop=()=>{};
           return node;
         }
@@ -2171,6 +2177,49 @@ test('잠금 화면의 원형 건너뛰기 버튼으로 BPM을 바꾼다',async(
   await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.metadata.title))
     .toBe('잼 세션 · 105 BPM');
   await jam.click();
+});
+
+/* 재생 중에 세분화를 바꾸면 다음 박 머리에서 갈아 끼운다. 그 자리에서 바꾸던 때는
+   currentStep을 새 단위로 읽어 박 격자가 반 박씩 밀린 채로 굳었다. */
+test('재생 중에 세분화를 바꿔도 박 격자와 마디 첫 박이 그대로 이어진다',async({page})=>{
+  await preparePage(page,{microphone:'controls',advanceClock:true});
+  await page.evaluate(()=>{
+    window.OliveMetronome.setMeter('4/4');
+    window.OliveMetronome.setBpm(120);       // 한 박 = 0.5초
+    window.OliveMetronome.setSub('s');       // 16분음표
+    window.OliveMetronome.setAccent(true);
+  });
+  await page.locator('#metroStart').click();
+  await expect.poll(()=>page.evaluate(()=>window.OliveMetronome.isPlaying())).toBeTruthy();
+  await page.waitForTimeout(700);             // 박 한가운데쯤에서 바꾼다
+  const switchedAt=await page.evaluate(()=>{
+    window.OliveMetronome.setSub('q');
+    return window.__micHarness.scheduledTones.length;
+  });
+  await page.waitForTimeout(2600);
+  const tones=await page.evaluate(()=>window.__micHarness.scheduledTones);
+  await page.locator('#metroStart').click();
+
+  const clicks=tones.filter(t=>t.type==='square' && [900,1180,1500].includes(t.freq));
+  const before=clicks.filter(t=>tones.indexOf(t)<switchedAt).map(t=>t.when);
+  const after=clicks.filter(t=>tones.indexOf(t)>=switchedAt).map(t=>t.when);
+  expect(before.length).toBeGreaterThan(4);
+  expect(after.length).toBeGreaterThan(3);
+  const origin=before[0];
+  const onBeat=when=>{ const beats=(when-origin)/0.5; return Math.abs(beats-Math.round(beats))<0.02; };
+  /* 이미 들어선 박은 16분으로 마저 치고, 다음 박 머리부터 4분음표다. */
+  const firstQuarter=after.findIndex(onBeat);
+  expect(firstQuarter).toBeGreaterThanOrEqual(0);
+  expect(firstQuarter).toBeLessThanOrEqual(3);
+  for(let i=1;i<=firstQuarter;i++) expect(after[i]-after[i-1]).toBeCloseTo(0.125,2);
+  const quarters=after.slice(firstQuarter);
+  expect(quarters.length).toBeGreaterThan(3);
+  for(const when of quarters) expect(onBeat(when)).toBeTruthy();
+  for(let i=1;i<quarters.length;i++) expect(quarters[i]-quarters[i-1]).toBeCloseTo(0.5,2);
+  // 마디 첫 박(강세)은 바꾸기 전후 모두 2초 간격이다.
+  const downbeats=clicks.filter(t=>t.freq===1500).map(t=>t.when);
+  expect(downbeats.length).toBeGreaterThan(1);
+  for(let i=1;i<downbeats.length;i++) expect(downbeats[i]-downbeats[i-1]).toBeCloseTo(2,2);
 });
 
 test('메트로놈과 잼 세션은 터치 직후 첫 소리를 예약한다',async({page})=>{

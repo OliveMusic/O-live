@@ -266,6 +266,10 @@ if(!oliveIsPreview && 'serviceWorker' in navigator){
         try{
           if(typeof anySounding==='function' && anySounding()) return false;
           if(window.OliveRecorder && window.OliveRecorder.isRecording()) return false;
+          /* 녹음을 멈추고 이름을 적는 사이, 저장하는 사이도 기다린다. 그때 새로고침하면
+             아직 저장하지 않은 테이크가 통째로 사라진다. */
+          if(window.OliveRecorder && typeof window.OliveRecorder.hasUnsavedWork==='function' &&
+             window.OliveRecorder.hasUnsavedWork()) return false;
         }catch(e){}
         return true;
       };

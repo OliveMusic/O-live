@@ -110,6 +110,8 @@
   let inputActivityLastAt=0;
   let lastWaveformCaptureAt=0;
   let draft=null;
+  let savingDraft=false;
+  let draftAutoSavePending=false;
   let draftUrl='';
   let draftDecodedBuffer=null;
   let draftDecodedContext=null;
@@ -473,6 +475,11 @@
     if(!loading){
       loading=ctx.audioWorklet.addModule(SOUND_TOUCH_PROCESSOR_URL);
       cloudStretchModulePromises.set(ctx,loading);
+      /* 실패한 약속을 붙잡아 두면 이 컨텍스트가 바뀔 때까지 배속 재생이 계속 실패한다.
+         (오프라인에서 한 번 실패한 뒤 연결이 돌아와도 그대로였다.) 다음에 다시 부른다. */
+      loading.catch(()=>{
+        if(cloudStretchModulePromises.get(ctx)===loading) cloudStretchModulePromises.delete(ctx);
+      });
     }
     return loading;
   }
@@ -1325,12 +1332,48 @@
     setMessage('');
     renderDraft();
   }
-  function discardDraft(){
+  /* 화면과 메모리의 초안만 치운다. 기기에 남긴 초안은 그대로 둔다. 계정이 잠깐
+     풀렸다 같은 계정으로 돌아오면 되살려야 하기 때문이다. */
+  function clearDraftState(){
     pauseDraftPlayback(true);
     draftAudio.removeAttribute('src');
     if(draftUrl) URL.revokeObjectURL(draftUrl);
     draftUrl=''; draft=null;
+    draftAutoSavePending=false;
     renderIdle();
+  }
+  function discardDraft(){
+    const userId=draft && draft.userId || sessionUserId;
+    clearDraftState();
+    forgetStoredDraft(userId);
+  }
+  /* ---------- 초안을 기기에 남기기 ----------
+     저장하기 전의 초안은 메모리에만 있었다. 연습실처럼 인터넷이 없는 곳에서 저장이
+     실패한 뒤 iOS가 앱을 내리면 테이크가 사라졌다. 초안이 생기면 곧바로 기기에
+     적어 두고, 저장하거나 버릴 때 지운다. */
+  function storeDraft(){
+    const cache=recordingCache();
+    if(guidePreview || !draft || !draft.userId || !cache || typeof cache.putDraft!=='function') return;
+    cache.putDraft(draft.userId,draft).catch(error=>console.warn('[O\'live draft store]',error));
+  }
+  function forgetStoredDraft(userId){
+    const cache=recordingCache();
+    if(guidePreview || !userId || !cache || typeof cache.removeDraft!=='function') return;
+    cache.removeDraft(userId).catch(error=>console.warn('[O\'live draft remove]',error));
+  }
+  async function restoreStoredDraft(userId){
+    const cache=recordingCache();
+    if(guidePreview || !userId || !cache || typeof cache.getDraft!=='function') return;
+    let stored=null;
+    try{ stored=await cache.getDraft(userId); }
+    catch(error){ console.warn('[O\'live draft restore]',error); return; }
+    // 기다리는 사이 계정이 바뀌었거나 새로 녹음을 시작했으면 되살리지 않는다.
+    if(!stored || sessionUserId!==userId || draft || recording || startPending) return;
+    draft={...stored,userId,title:stored.title||defaultTitle()};
+    draftUrl=URL.createObjectURL(draft.blob);
+    draftAudio.src=draftUrl;
+    renderDraft();
+    setMessage('저장하지 않은 녹음을 되살렸습니다');
   }
   function fillAnalyserSamples(analyser,samples){
     const data=samples&&samples.length===analyser.fftSize
@@ -1607,11 +1650,13 @@
       recordedAt:recordedAt||new Date().toISOString(),
       playbackGain:playbackGainForRecording(waveformLevels,recordingPeak),
       waveform:compactWaveform(waveformLevels,WAVEFORM_POINTS),
+      userId:sessionUserId,
     };
     waveformLevels=[];
     draftUrl=URL.createObjectURL(blob);
     draftAudio.src=draftUrl;
     renderDraft();
+    storeDraft();
   }
   async function toggleDraftPlayback(){
     if(!draft) return;
@@ -3274,21 +3319,30 @@
     const title=recordTitle.value.trim();
     if(!title){ recordTitle.focus(); setMessage('녹음 이름을 입력해 주세요',true); return; }
     draft.title=title.slice(0,80);
+    draftAutoSavePending=false;
+    storeDraft();                        // 적은 이름까지 함께 남긴다
+    savingDraft=true;
     recordSave.disabled=recordDiscard.disabled=true;
     recordSave.textContent='저장 중…'; setMessage('클라우드에 저장하는 중입니다');
     try{
       const saved={...draft,id:makeId()};
       await window.OliveCloud.uploadRecording(saved);
       rememberCloudBlob(saved,saved.blob);
-      await cacheRowBlob(saved,saved.blob);
+      /* 기기 캐시는 기다리지 않는다. IndexedDB가 멈추면 저장은 끝났는데 버튼이
+         '저장 중…'에 묶여 있었다. 캐시는 다음 재생을 빠르게 할 뿐이다. */
+      cacheRowBlob(saved,saved.blob).catch(error=>console.warn('[O\'live recording cache fill]',error));
       discardDraft(); await loadRecordings(true); recordListCard.open=true; setMessage('클라우드에 저장했습니다');
     }catch(error){
+      const offline=!navigator.onLine;
       const message=/count limit/i.test(error&&error.message||'') ? '녹음은 최대 50개까지 저장할 수 있습니다'
         : /storage limit/i.test(error&&error.message||'') ? '녹음 저장 용량이 가득 찼습니다'
-        : !navigator.onLine ? '인터넷에 연결한 뒤 다시 저장해 주세요'
+        : offline ? '인터넷에 연결되면 자동으로 저장합니다'
         : '녹음을 저장하지 못했습니다. 다시 시도해 주세요';
+      // 인터넷이 끊겨 실패한 것만 연결이 돌아왔을 때 다시 올린다.
+      draftAutoSavePending=offline && Boolean(draft);
       setMessage(message,true);
     }finally{
+      savingDraft=false;
       recordSave.disabled=recordDiscard.disabled=false;
       recordSave.textContent='저장';
     }
@@ -3369,7 +3423,9 @@
     if(sessionUserId && sessionUserId!==nextId){
       const previousId=sessionUserId;
       if(recording || startPending) stopRecording();
-      discardDraft(); stopCloudPlayback(); clearCloudPlaybackCache();
+      /* 기기에 남긴 초안은 지우지 않는다. 토큰이 만료돼 저절로 풀린 것일 수 있고,
+         같은 계정으로 돌아오면 되살린다. 직접 연결을 해제하면 cloud-sync가 지운다. */
+      clearDraftState(); stopCloudPlayback(); clearCloudPlaybackCache();
       waveformCache.clear(); waveformLoads.clear(); playbackPositions.clear(); expandedRecordingId='';
       const cache=recordingCache();
       if(cache) cache.clearUser(previousId).catch(error=>console.warn('[O\'live recording cache clear]',error));
@@ -3378,8 +3434,17 @@
     recordGuest.hidden=Boolean(currentUser);
     recordWorkspace.hidden=!currentUser;
     recordListCard.hidden=!currentUser;
-    if(currentUser) loadRecordings();
-    else{ resetRecordDrop(); rows=[]; renderList(); renderIdle(); }
+    if(currentUser){
+      loadRecordings();
+      if(!guidePreview){
+        const cache=recordingCache();
+        if(cache && typeof cache.keepOnlyDraftOf==='function'){
+          cache.keepOnlyDraftOf(nextId).catch(error=>console.warn('[O\'live draft prune]',error));
+        }
+        if(!draft && !recording && !startPending) restoreStoredDraft(nextId);
+      }
+    }
+    else{ resetRecordDrop(); rows=[]; renderList(); if(!draft) renderIdle(); }
   }
 
   recordConnect.addEventListener('click',()=>window.OliveCloud.openAccount());
@@ -3472,7 +3537,12 @@
     }
     if(recording && document.visibilityState==='hidden') recordingInterruptedWhileHidden=true;
   });
-  window.addEventListener('online',()=>{ if(currentUser) loadRecordings(true); });
+  window.addEventListener('online',()=>{
+    if(!currentUser) return;
+    loadRecordings(true);
+    // 인터넷이 없어 저장하지 못한 초안은 연결이 돌아오면 그대로 다시 올린다.
+    if(draftAutoSavePending && draft && !savingDraft && draft.userId===sessionUserId) saveDraft();
+  });
   function stopPlaybackForOtherTool(){
     pauseDraftPlayback(false);
     if(cloudPlayingId){
@@ -3483,6 +3553,9 @@
   document.addEventListener('olive-practice-links-change',renderList);
   window.OliveRecorder={
     isRecording:()=>recording || startPending,
+    /* 녹음은 멈췄지만 아직 저장하지 않은 것. 새 버전으로 바꾸는 새로고침이
+       이것을 지우지 않도록 app-shell이 묻는다. */
+    hasUnsavedWork:()=>Boolean(draft) || savingDraft || recordUpload.disabled,
     stopPlayback:stopPlaybackForOtherTool,
     collapse:collapseExpandedRow,
     resumeAfterVisibility,

@@ -37,6 +37,10 @@
     {key:'se',  div:4, hits:[0,1,2],   name:'16분2+8분'},
   ];
   let sub = SUBS[0];
+  /* 재생 중에 고른 세분화는 다음 박 머리에서 갈아 끼운다. currentStep은 지금
+     세분화의 칸 수로 센 값이라, 그 자리에서 바꾸면 박 위치가 밀린 채로 굳는다
+     (4분 → 16분이면 3/4박, 16분 → 4분이면 반 박씩 어긋난 격자가 이어졌다). */
+  let pendingSub = null;
   let isPlaying = false;
   let startPending = false, startToken = 0, metroCtx = null, metroOutput = null;
   let currentStep = 0, nextNoteTime = 0.0, timerID = null;
@@ -313,6 +317,11 @@
     }
     const ahead=document.visibilityState==='visible' ? scheduleAheadTime : backgroundScheduleAheadTime;
     while(nextNoteTime < ctx.currentTime + ahead){
+      if(pendingSub && currentStep % sub.div === 0){
+        const beat = Math.floor(currentStep/sub.div);
+        sub = pendingSub; pendingSub = null;
+        currentStep = beat*sub.div;
+      }
       scheduleNote(currentStep, nextNoteTime);
       advanceNote();
     }
@@ -383,6 +392,7 @@
       if(typeof primeAudioOutput==='function') primeAudioOutput(ctx);
       isPlaying=true;
       currentStep=0;
+      if(pendingSub){ sub=pendingSub; pendingSub=null; }
       rollBeat=0;
       /* 세워 둔 자리는 왼쪽이다. 첫 박에서 뒤집히므로 여기서는 거짓이어야
          왼쪽에서 오른쪽으로 구르기 시작한다. */
@@ -425,6 +435,7 @@
     }
   }
   function stopMetro(label='시작'){
+    if(pendingSub){ sub=pendingSub; pendingSub=null; }
     if(!isPlaying && !startPending) return;
     startToken++;
     startPending=false;
@@ -509,7 +520,9 @@
   function selectSub(key){
     const index=SUBS.findIndex(item=>item.key===key);
     if(index<0) return false;
-    sub=SUBS[index];
+    const next=SUBS[index];
+    if(isPlaying && next!==sub) pendingSub=next;
+    else{ sub=next; pendingSub=null; }
     subdivGroup.querySelectorAll('.note-btn')
       .forEach((button,at)=>button.classList.toggle('active',at===index));
     return true;
@@ -535,7 +548,7 @@
   }
 
   window.OlivePreferences.register('metronome',
-    ()=>({bpm,meter:meter.label,subdivision:sub.key,accent:accentOn}),
+    ()=>({bpm,meter:meter.label,subdivision:(pendingSub||sub).key,accent:accentOn}),
     value=>{
       if(!value || typeof value!=='object') return;
       setBpm(value.bpm);
@@ -564,7 +577,7 @@
     setMeter:label=>{ if(!selectMeter(label)) return false;
       window.OlivePreferences.changed(); notifyChange(); return true; },
     subs:()=>SUBS.map(item=>({key:item.key, name:item.name, glyph:noteGlyph(item.div,item.hits)})),
-    subKey:()=>sub.key,
+    subKey:()=>(pendingSub||sub).key,
     setSub:key=>{ if(!selectSub(key)) return false;
       window.OlivePreferences.changed(); notifyChange(); return true; },
     accent:()=>accentOn,

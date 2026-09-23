@@ -496,8 +496,17 @@ function bindTapTempo(el, set){
   let taps=[];
   el.addEventListener('click', ()=>{
     const now=performance.now();
+    /* 쉬었다 다시 치면 처음부터 센다. 쉰 틈까지 평균에 넣으면 120으로 치다 2초쯤
+       쉬고 다시 쳤을 때 41이 먼저 나와, 재생 중이면 빠르기가 출렁였다.
+       가장 느린 30 BPM이 2초이므로 그보다 길거나, 앞 간격의 두 배를 넘으면 새로 시작한다. */
+    const last=taps[taps.length-1];
+    if(last!==undefined){
+      const gap=now-last;
+      const previous=taps.length>1 ? last-taps[taps.length-2] : 0;
+      if(gap>2100 || (previous && gap>previous*2)) taps=[];
+    }
     taps.push(now);
-    taps=taps.filter(t=>now-t<3000);
+    if(taps.length>7) taps=taps.slice(-7);     // 최근 여섯 간격만 평균한다
     if(taps.length>1){
       const iv=[];
       for(let i=1;i<taps.length;i++) iv.push(taps[i]-taps[i-1]);

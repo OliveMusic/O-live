@@ -157,4 +157,125 @@ assert.match(index,/\.log-row \.log-sw\{[^}]*margin-top:3px/);
 assert.match(index,/<script src="js\/practice-log\.js\?v=\d+"><\/script>/);
 assert.match(worker,/'\.\/js\/practice-log\.js\?v=\d+',/);
 
+/* ---------- 실제로 세어 본다 ----------
+   소리 등록부와 잠금화면 멈춤을 흉내 내고 시계를 손으로 돌린다. */
+{
+  const vm=require('node:vm');
+  function fakeElement(){
+    const el={
+      hidden:false,dataset:{},style:{},children:[],childElementCount:0,textContent:'',innerHTML:'',
+      classList:{add(){},remove(){},toggle(){},contains(){ return false; }},
+      addEventListener(){},removeEventListener(){},setAttribute(){},removeAttribute(){},
+      appendChild(child){ this.children.push(child); this.childElementCount++; return child; },
+      querySelector(){ return null; },querySelectorAll(){ return []; },focus(){},
+    };
+    return el;
+  }
+  function harness({search='',stored=null}={}){
+    let now=new Date(2026,8,23,10,0,0).getTime();
+    const storage=new Map();
+    if(stored) storage.set('olive-practice-log-v1',JSON.stringify(stored));
+    const listeners={sounding:null,paused:null};
+    const context={
+      console,JSON,Math,Number,String,Object,Array,Map,Set,Boolean,RegExp,
+      Date:class extends Date{
+        constructor(...args){ super(...(args.length?args:[now])); }
+        static now(){ return now; }
+      },
+      setTimeout:()=>0,clearTimeout(){},setInterval:()=>1,clearInterval(){},
+      requestAnimationFrame(){},
+      location:{search},
+      localStorage:{
+        getItem:key=>storage.has(key)?storage.get(key):null,
+        setItem:(key,value)=>storage.set(key,String(value)),
+        removeItem:key=>storage.delete(key),
+      },
+      document:{
+        getElementById:()=>fakeElement(),createElement:()=>fakeElement(),
+        addEventListener(){},body:fakeElement(),activeElement:null,visibilityState:'visible',
+      },
+      onSoundingChange:fn=>{ listeners.sounding=fn; },
+      onBackgroundPausedChange:fn=>{ listeners.paused=fn; },
+    };
+    context.window=context;
+    context.window.addEventListener=()=>{};
+    vm.createContext(context);
+    vm.runInContext(log,context,{filename:'practice-log.js'});
+    return {
+      at:(h,m,sec=0)=>{ now=new Date(2026,8,23,h,m,sec).getTime(); },
+      atDate:date=>{ now=date.getTime(); },
+      sound:(tab,key,on)=>listeners.sounding(tab,key,on),
+      paused:value=>listeners.paused(value),
+      flush:()=>context.window.OlivePracticeLog.snapshot(),
+      storage,
+    };
+  }
+  const minutes=seconds=>Math.round((Number(seconds)||0)/60);
+
+  /* 잠금화면에서 멈춘 메트로놈은 세지 않는다. 5분 치고 2시간 멈춰 두었다가 끈 날은 5분이다. */
+  {
+    const h=harness();
+    h.at(10,0); h.sound('metronome','metronome',true);
+    h.at(10,5); h.paused(true);
+    h.at(12,5); h.sound('metronome','metronome',false);
+    const day=h.flush()['2026-09-23'];
+    assert.equal(minutes(day.met),5);
+    assert.equal(minutes(day.all),5);
+  }
+  /* 다시 틀면 이어서 센다. 멈춘 사이는 빠진다. */
+  {
+    const h=harness();
+    h.at(10,0); h.sound('jam','play',true);
+    h.at(10,4); h.paused(true);
+    h.at(10,30); h.paused(false);
+    h.at(10,36); h.sound('jam','play',false);
+    assert.equal(minutes(h.flush()['2026-09-23'].jam),10);
+  }
+  /* 메트로놈을 켜고 녹음하면 도구별로는 각각 10분이지만 하루 합계는 10분이다. */
+  {
+    const h=harness();
+    h.at(10,0); h.sound('metronome','metronome',true); h.sound('trainer','recorder',true);
+    h.at(10,10); h.sound('trainer','recorder',false); h.sound('metronome','metronome',false);
+    const day=h.flush()['2026-09-23'];
+    assert.equal(minutes(day.met),10);
+    assert.equal(minutes(day.rec),10);
+    assert.equal(minutes(day.all),10);
+  }
+  /* 합계를 따로 적기 전의 날은 도구별 합이 곧 합계였다. 그 값에서 이어 간다. */
+  {
+    const h=harness({stored:{'2026-09-23':{met:600,jam:300}}});
+    h.at(10,0); h.sound('trainer','rhythm',true);
+    h.at(10,5); h.sound('trainer','rhythm',false);
+    const day=h.flush()['2026-09-23'];
+    assert.equal(minutes(day.all),20);
+    assert.equal(minutes(day.rhy),5);
+  }
+  /* 3초는 소리 하나를 통째로 보고 가린다. 2.5초는 없고, 13.5초는 온전히 13.5초다. */
+  {
+    const h=harness();
+    h.at(10,0,0); h.sound('jam','play',true);
+    h.at(10,0,2); h.sound('jam','play',false);
+    assert.equal(h.flush()['2026-09-23'],undefined);
+    h.at(10,1,0); h.sound('jam','play',true);
+    h.atDate(new Date(2026,8,23,10,1,13,500)); h.sound('jam','play',false);
+    assert.equal(h.flush()['2026-09-23'].jam,13.5);
+  }
+  /* 자정을 넘긴 소리는 날짜마다 나눠 적는다. */
+  {
+    const h=harness();
+    h.atDate(new Date(2026,8,23,23,50)); h.sound('metronome','metronome',true);
+    h.atDate(new Date(2026,8,24,0,30)); h.sound('metronome','metronome',false);
+    const log=h.flush();
+    assert.equal(minutes(log['2026-09-23'].met),10);
+    assert.equal(minutes(log['2026-09-24'].met),30);
+  }
+  /* 도움말(?guide=1)에서 켠 소리는 기기에 적지 않는다. */
+  {
+    const h=harness({search:'?guide=1'});
+    h.at(10,0); h.sound('metronome','metronome',true);
+    h.at(10,5); h.sound('metronome','metronome',false);
+    assert.equal(h.storage.has('olive-practice-log-v1'),false);
+  }
+}
+
 console.log('practice log tests passed');

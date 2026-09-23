@@ -271,9 +271,11 @@
         return;
       }
       rhythmCtx=ctx;
+      // 메트로놈·잼과 같다. 막 열린 출력의 첫 소리가 작게 나지 않도록 먼저 깨운다.
+      if(typeof primeAudioOutput==='function') primeAudioOutput(ctx);
       playing=true;
       cursor=0; marks=[];
-      nextTime=ctx.currentTime+0.06;
+      nextTime=typeof noteStart==='function' ? noteStart(ctx,0.06) : ctx.currentTime+0.06;
       rhyPlay.classList.add('on');
       rhyPlay.setAttribute('aria-label','정지');
       rhyPlay.setAttribute('aria-busy','false');

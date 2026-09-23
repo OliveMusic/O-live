@@ -471,7 +471,9 @@
     const remoteTime=data && typeof data.client_updated_at==='string'
       ? Date.parse(data.client_updated_at) : NaN;
     const localTime=validPreferenceRecord(local) ? Date.parse(local.updatedAt) : NaN;
-    if(Number.isFinite(remoteTime) && (!Number.isFinite(localTime) || remoteTime>=localTime)){
+    /* 같은 시각이면 이미 같은 값이다. 방금 올린 것을 되받아 다시 적용하면 앱으로
+       돌아올 때마다 청음 점수와 풀던 문제가 처음으로 돌아갔다. */
+    if(Number.isFinite(remoteTime) && (!Number.isFinite(localTime) || remoteTime>localTime)){
       handlers.applyPreferences(data.preferences||{},data.client_updated_at);
     }else if(Number.isFinite(localTime)){
       await uploadPreferences(local);
@@ -482,6 +484,11 @@
     if(!userId || !cache || typeof cache.clearUser!=='function') return;
     try{ await cache.clearUser(userId); }
     catch(error){ console.warn('[O\'live recording cache clear]',error); }
+    // 직접 연결을 해제하거나 계정을 지우면 저장하지 않은 초안도 기기에 남기지 않는다.
+    if(typeof cache.removeDraft==='function'){
+      try{ await cache.removeDraft(userId); }
+      catch(error){ console.warn('[O\'live draft clear]',error); }
+    }
   }
   async function clearLocalAccountData(){
     const userId=activeUserId;
@@ -577,10 +584,19 @@
       if(!data) throw new Error('Recording finalize failed');
       return true;
     }catch(error){
-      if(uploaded){
+      /* 취소가 먼저다. 취소는 아직 'pending'인 줄만 지운다. 모바일에서 마무리 응답만
+         끊기고 서버에서는 저장이 끝난 경우, 파일을 먼저 지우면 목록에 재생되지 않는
+         녹음이 남고 다시 저장하면 같은 테이크가 둘이 됐다. */
+      let cancelKnown=false, cancelled=false;
+      try{
+        const {data:cancelData,error:cancelError}=await client.rpc('cancel_practice_recording',{p_recording_id:id});
+        if(!cancelError){ cancelKnown=true; cancelled=Boolean(cancelData); }
+      }catch(e){}
+      if(uploaded && cancelled){
         try{ await client.storage.from('practice-recordings').remove([objectPath]); }catch(e){}
       }
-      try{ await client.rpc('cancel_practice_recording',{p_recording_id:id}); }catch(e){}
+      // 파일이 올라갔고 줄이 더는 'pending'이 아니면 저장은 끝난 것이다. 응답만 잃었다.
+      if(uploaded && cancelKnown && !cancelled) return true;
       throw error;
     }
   }
@@ -829,8 +845,11 @@
     await ensureRecordingAccess();
     const {data,error}=await client.from('practice_links')
       .select('id,provider,video_id,title,duration_ms,last_position_ms,loop_a_ms,loop_b_ms,loop_enabled,playback_rate,pinned,created_at')
+      /* 링크 한도는 200개다(015). 50개만 받던 때는 51번째부터 즐겨찾기까지 목록에서
+         사라져 열 수도 지울 수도 없었다. 즐겨찾기를 먼저 받아 잘리더라도 그것만은 남긴다. */
+      .order('pinned',{ascending:false})
       .order('created_at',{ascending:false})
-      .limit(50);
+      .limit(200);
     if(error) throw error;
     return data||[];
   }

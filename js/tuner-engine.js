@@ -164,7 +164,7 @@
     const previousBands=new Float32Array(BAND_COUNT);
     let hasPreviousBands=false,startTime=null,lastTime=0,lastLevel=0,slowLevel=0;
     let stableFrequency=0,stableSince=0,lastPitchAt=0,peakLevel=0;
-    let attackUntil=0,backgroundStrength=0;
+    let attackUntil=0,backgroundStrength=0,pendingAttackUntil=0;
     let last=Object.freeze({
       onset:false,attackActive:false,background:false,
       penalty:0,backgroundStrength:0,spectralFlux:0,levelRiseDb:0,
@@ -174,7 +174,7 @@
       previousBands.fill(0);
       hasPreviousBands=false; startTime=null; lastTime=0; lastLevel=0; slowLevel=0;
       stableFrequency=0; stableSince=0; lastPitchAt=0; peakLevel=0;
-      attackUntil=0; backgroundStrength=0;
+      attackUntil=0; backgroundStrength=0; pendingAttackUntil=0;
       last=Object.freeze({
         onset:false,attackActive:false,background:false,
         penalty:0,backgroundStrength:0,spectralFlux:0,levelRiseDb:0,
@@ -239,7 +239,19 @@
            초기 0.7초 안에 뚜렷한 감쇠가 보이면 그 자체를 플럭의 증거로 쓴다. */
         const startupDecay=hasPitch && attackUntil<=now && now-startTime<750 && stableDuration>160 &&
           peakLevel>Math.max(1e-8,rms)*1.22;
-        const onset=Boolean(hasPitch && (levelOnset || spectralOnset || changedOnset || startupDecay));
+        /* 현을 튕긴 첫 프레임은 음높이가 아직 안 잡히는 일이 많다. 분석 창(85ms)이
+           무음과 어택을 반씩 담고 있어서다. 음높이가 잡히는 다음 프레임에서는 소리가
+           이미 커져 있어 상승폭이 2~3dB뿐이라 어택으로 치지 못했고, 0.7초 뒤 팬 억제가
+           울리고 있는 현을 배경음으로 보고 지웠다. 음높이 없는 급상승을 잠깐 기억했다가
+           첫 유음 프레임에 어택으로 넘긴다. 팬은 이런 급상승이 없으므로 억제는 그대로다. */
+        if(!hasPitch && afterStartup &&
+           ((lastLevel>1e-8 && levelRiseDb>=4.5) ||
+            (hasPreviousBands && spectralFlux>=0.55 && rms>Math.max(1e-8,lastLevel)*1.2))){
+          pendingAttackUntil=now+220;
+        }
+        const carriedOnset=hasPitch && now<pendingAttackUntil;
+        const onset=Boolean(hasPitch && (levelOnset || spectralOnset || changedOnset || startupDecay || carriedOnset));
+        if(onset) pendingAttackUntil=0;
         if(onset){
           attackUntil=Math.max(attackUntil,now+2200);
           backgroundStrength=0;

@@ -291,7 +291,10 @@ assert.match(recordingCache,/root\.indexedDB\.open/);
 assert.match(recordingCache,/storage\.persist\(\)/);
 assert.match(recorder,/cache\.getMany\(userId,rows\)/);
 assert.match(recorder,/findPlaybackBlob\(row\)/);
-assert.match(recorder,/await cacheRowBlob\(saved,saved\.blob\)/);
+/* 저장한 테이크는 기기 캐시에도 넣되 기다리지 않는다. IndexedDB가 멈추면 저장은
+   끝났는데 버튼이 '저장 중…'에 묶여 있었다. */
+assert.match(recorder,/cacheRowBlob\(saved,saved\.blob\)\.catch\(/);
+assert.doesNotMatch(recorder,/await cacheRowBlob\(saved,saved\.blob\)/);
 assert.match(recorder,/await cache\.remove\(currentUser\.id,row\.id\)/);
 
 // iOS Safari에서는 검증된 Web Audio 출력을 실제 MediaStream 운반자로 보내고,
@@ -318,6 +321,14 @@ assert.match(recorder,/const PLAYBACK_RATE_MIN=\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_MAX=1\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_STEP=\.05/);
 assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=198'/);
+/* 서비스 워커가 미리 받아 두는 주소가 앱이 부르는 주소와 같아야 오프라인에서도 배속이 된다. */
+{
+  const worker=fs.readFileSync('service-worker.js','utf8');
+  const url=recorder.match(/SOUND_TOUCH_PROCESSOR_URL='([^']+)'/)[1];
+  assert.ok(worker.includes(`'${url}',`),'service worker precaches the exact worklet URL the app loads');
+  // 실패한 addModule 약속을 붙잡아 두지 않는다.
+  assert.match(recorder,/loading\.catch\(\(\)=>\{\s*\n\s*if\(cloudStretchModulePromises\.get\(ctx\)===loading\) cloudStretchModulePromises\.delete\(ctx\);/);
+}
 assert.match(recorder,/function makeCloudTransportAudio\(\)/);
 assert.match(recorder,/audio\.dataset\.oliveRecordingTransport='true'/);
 assert.match(recorder,/ctx\.createMediaStreamDestination\(\)/);
@@ -474,5 +485,36 @@ assert.match(edge,/from\("practice-recordings"\)/);
 assert.match(edge,/\.remove\(recordingPaths\)/);
 assert.ok(edge.indexOf('.remove(recordingPaths)')<edge.indexOf('auth.admin.deleteUser(user.id)'),
   'recording objects are removed before the auth user');
+
+/* ---------- 저장하지 않은 초안 ----------
+   녹음을 멈춘 뒤 저장 전의 초안은 기기에도 남긴다. 새 버전으로 바꾸는 새로고침은
+   초안·저장·업로드가 남아 있는 동안 기다린다. */
+{
+  const finalize=recorder.match(/function finalizeDraft\(\)\{[\s\S]*?\n  \}/)[0];
+  assert.match(finalize,/userId:sessionUserId/);
+  assert.match(finalize,/storeDraft\(\);\s*\n\s*\}$/);
+  assert.match(recorder,/function discardDraft\(\)\{[\s\S]{0,160}clearDraftState\(\);\s*\n\s*forgetStoredDraft\(userId\);/);
+  // 계정이 바뀌면 화면의 초안만 치우고 기기에 남긴 것은 둔다(토큰 만료일 수 있다).
+  assert.match(recorder,/clearDraftState\(\); stopCloudPlayback\(\); clearCloudPlaybackCache\(\);/);
+  assert.match(recorder,/if\(!draft && !recording && !startPending\) restoreStoredDraft\(nextId\);/);
+  assert.match(recorder,/hasUnsavedWork:\(\)=>Boolean\(draft\) \|\| savingDraft \|\| recordUpload\.disabled/);
+  assert.match(appShell,/window\.OliveRecorder\.hasUnsavedWork\(\)\) return false;/);
+  // 인터넷이 없어 저장하지 못한 초안은 연결이 돌아오면 다시 올린다.
+  assert.match(recorder,/draftAutoSavePending=offline && Boolean\(draft\);/);
+  assert.match(recorder,/if\(draftAutoSavePending && draft && !savingDraft && draft\.userId===sessionUserId\) saveDraft\(\);/);
+  // 직접 연결을 해제하거나 계정을 지우면 초안도 지운다.
+  assert.match(cloud,/async function clearRecordingAudioCache\(userId\)\{[\s\S]*?cache\.removeDraft\(userId\)/);
+}
+
+/* ---------- 저장 실패 처리 순서 ----------
+   취소가 먼저다. 마무리 응답만 끊기고 서버에서는 저장이 끝났다면 파일을 지우면 안 된다. */
+{
+  const upload=cloud.match(/async function uploadRecording\(recording\)\{[\s\S]*?\n  \}/)[0];
+  const cancelAt=upload.indexOf("client.rpc('cancel_practice_recording'");
+  const removeAt=upload.indexOf(".remove([objectPath])");
+  assert.ok(cancelAt>0 && removeAt>cancelAt,'cancel before removing the uploaded file');
+  assert.match(upload,/if\(uploaded && cancelled\)\{/);
+  assert.match(upload,/if\(uploaded && cancelKnown && !cancelled\) return true;/);
+}
 
 console.log('recording feature tests passed');

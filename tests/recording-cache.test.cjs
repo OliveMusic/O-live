@@ -63,14 +63,16 @@ class FakeDatabase{
   close(){}
 }
 class FakeIndexedDB{
-  constructor(){ this.database=null; }
-  open(){
+  /* 이름마다 따로 된 데이터베이스다. 초안은 캐시와 다른 데이터베이스에 산다. */
+  constructor(){ this.databases=new Map(); }
+  open(name){
     const request={result:null,error:null,transaction:null,onupgradeneeded:null,onsuccess:null,onerror:null,onblocked:null};
     queueMicrotask(()=>{
-      const needsUpgrade=!this.database;
-      if(!this.database) this.database=new FakeDatabase();
-      request.result=this.database;
-      request.transaction=new FakeTransaction(this.database);
+      const needsUpgrade=!this.databases.has(name);
+      if(needsUpgrade) this.databases.set(name,new FakeDatabase());
+      const database=this.databases.get(name);
+      request.result=database;
+      request.transaction=new FakeTransaction(database);
       if(needsUpgrade && request.onupgradeneeded) request.onupgradeneeded();
       if(request.onsuccess) request.onsuccess();
     });
@@ -101,6 +103,8 @@ const context={
   Boolean,
   Error,
   Blob,
+  Uint8Array,
+  ArrayBuffer,
   setTimeout,
   clearTimeout,
   queueMicrotask,
@@ -147,6 +151,41 @@ function blob(size=1){
   assert.equal((await cache.getMany('user-2',largeRows)).size,8,'the 50MB byte limit evicts old entries');
   await cache.remove('user-2','large-9');
   assert.equal(await cache.get('user-2',largeRows[8]),null);
+
+  /* ---------- 저장하지 않은 초안 ----------
+     오프라인에서 저장하지 못한 채 앱이 내려가도 테이크가 남는다. 계정마다 하나,
+     캐시 정리(10개·50MB)와는 따로 산다. */
+  const take={
+    blob:new Blob([new Uint8Array([1,2,3,4])],{type:'audio/mp4'}),
+    durationMs:4200,mimeType:'audio/mp4',title:'연습실',extension:'m4a',
+    recordedAt:'2026-09-23T10:00:00.000Z',playbackGain:1.4,waveform:[0.1,0.5,0.2],
+  };
+  assert.equal(await cache.putDraft('user-3',take),true);
+  for(let index=1;index<=12;index++) await cache.put('user-3',row(`crowd-${index}`),blob());
+  const restored=await cache.getDraft('user-3');
+  assert.ok(restored,'the draft survives cache eviction');
+  assert.equal(restored.title,'연습실');
+  assert.equal(restored.durationMs,4200);
+  assert.equal(restored.blob.size,4);
+  assert.deepEqual(Array.from(restored.waveform),[0.1,0.5,0.2]);
+  assert.equal(await cache.getDraft('user-4'),null,'another account never sees the draft');
+  await cache.clearUser('user-3');
+  assert.ok(await cache.getDraft('user-3'),'clearing the playback cache keeps the unsaved draft');
+  await cache.putDraft('user-4',take);
+  await cache.keepOnlyDraftOf('user-4');
+  assert.equal(await cache.getDraft('user-3'),null,'a different account signing in removes earlier drafts');
+  assert.ok(await cache.getDraft('user-4'));
+  await cache.removeDraft('user-4');
+  assert.equal(await cache.getDraft('user-4'),null);
+  // 남기기가 늦게 끝나도 곧이어 부탁한 지우기가 이긴다.
+  const slowTake={...take,blob:{size:4,type:'audio/mp4',async arrayBuffer(){
+    await new Promise(resolve=>setTimeout(resolve,30));
+    return new Uint8Array([1,2,3,4]).buffer;
+  }}};
+  const writing=cache.putDraft('user-5',slowTake);
+  const removing=cache.removeDraft('user-5');
+  await Promise.all([writing,removing]);
+  assert.equal(await cache.getDraft('user-5'),null,'a saved take is never restored by a late draft write');
 
   console.log('recording cache tests passed');
 })().catch(error=>{

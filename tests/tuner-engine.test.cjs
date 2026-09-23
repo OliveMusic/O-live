@@ -279,4 +279,34 @@ assert.equal(startupAttackSeen,true,'a pluck made immediately after microphone s
 assert.equal(startupState.attackActive,true);
 assert.equal(startupState.background,false);
 
+/* 현을 튕긴 첫 프레임은 음높이가 아직 안 잡히는 일이 많다(분석 창이 무음과 어택을
+   반씩 담는다). 그 다음 프레임은 이미 커져 있어 상승폭이 작다. 예전에는 이 경우
+   어택으로 치지 못해 0.7초 뒤 팬 억제가 울리고 있는 현을 지웠다. */
+{
+  const detector=engine.createToneActivityDetector();
+  const step=33.3;
+  let t=0;
+  for(;t<1000;t+=step) detector.update(null,null,0.00001,t);
+  detector.update(null,null,0.001,t); t+=step;                 // 음높이 없는 급상승
+  const first=detector.update({freq:110},null,0.0013,t);       // 겨우 +2.3dB
+  assert.equal(first.onset,true,'a pitchless attack frame carries over to the first pitched frame');
+  let backgroundSeen=false;
+  const pluckAt=t;
+  for(t+=step;t<pluckAt+1500;t+=step){
+    const rms=0.0013*Math.exp(-(t-pluckAt)/3000);
+    backgroundSeen ||= detector.update({freq:110},null,rms,t).background;
+  }
+  assert.equal(backgroundSeen,false,'a ringing string is not mistaken for a fan within the attack window');
+}
+{
+  /* 소리 없는 잡음의 급상승이 오래전 일이면 넘겨주지 않는다. */
+  const detector=engine.createToneActivityDetector();
+  let t=0;
+  for(;t<1000;t+=33.3) detector.update(null,null,0.00001,t);
+  detector.update(null,null,0.001,t);
+  for(let i=0;i<10;i++){ t+=33.3; detector.update(null,null,0.001,t); }
+  const late=detector.update({freq:110},null,0.0011,t+33.3);
+  assert.equal(late.onset,false,'a pitchless jump older than the carry window does not count');
+}
+
 console.log('tuner engine tests passed');

@@ -70,6 +70,8 @@
           database.close();
           databasePromise=null;
         };
+        // iOS가 뒤에서 연결을 끊으면 죽은 연결을 계속 붙잡고 있게 된다. 다음 요청에서 새로 연다.
+        database.onclose=()=>{ databasePromise=null; };
         resolve(database);
       };
       request.onerror=()=>{
@@ -200,6 +202,117 @@
       await deleteKeys(database,entries.filter(entry=>entry.userId===userId).map(entry=>entry.key));
     });
   }
+  /* ---------- 저장하지 않은 녹음 초안 ----------
+     녹음을 멈춘 뒤 '저장'을 누르기 전까지 초안은 메모리에만 있었다. 오프라인에서
+     저장이 실패한 채로 iOS가 앱을 내리면 테이크가 통째로 사라졌다. 캐시와 섞이지
+     않도록 따로 된 데이터베이스에 계정마다 하나만 둔다. 캐시의 10개·50MB 정리에
+     휩쓸려 지워지면 안 되기 때문이다. */
+  const DRAFT_DB_NAME='olive-recording-draft-v1';
+  const DRAFT_STORE='drafts';
+  let draftDatabasePromise=null;
+  /* 초안 쓰기는 한 줄로 세운다. 저장을 누르면 이름을 적은 초안을 남기고 곧이어
+     업로드가 끝나면 지우는데, 남기는 쪽이 늦게 끝나면 이미 올라간 테이크가 다음
+     실행에 되살아난다. 차례대로 처리하면 지우기가 언제나 마지막이다. */
+  let draftQueue=Promise.resolve();
+  function enqueueDraft(action){
+    const queued=draftQueue.then(action,action);
+    draftQueue=queued.catch(()=>{});
+    return queued;
+  }
+  function draftKey(userId){ return `draft:${userId}`; }
+  function openDraftDatabase(){
+    if(draftDatabasePromise) return draftDatabasePromise;
+    if(!root.indexedDB) return Promise.resolve(null);
+    draftDatabasePromise=new Promise((resolve,reject)=>{
+      const request=root.indexedDB.open(DRAFT_DB_NAME,1);
+      request.onupgradeneeded=()=>{
+        const database=request.result;
+        if(!database.objectStoreNames.contains(DRAFT_STORE)) database.createObjectStore(DRAFT_STORE,{keyPath:'key'});
+      };
+      request.onsuccess=()=>{
+        const database=request.result;
+        database.onversionchange=()=>{ database.close(); draftDatabasePromise=null; };
+        /* iOS가 뒤에서 연결을 끊으면 붙잡아 둔 연결이 죽은 채로 남는다. 다음에 새로 연다. */
+        database.onclose=()=>{ draftDatabasePromise=null; };
+        resolve(database);
+      };
+      request.onerror=()=>{ draftDatabasePromise=null; reject(request.error||new Error('Draft store unavailable')); };
+      request.onblocked=()=>{ draftDatabasePromise=null; reject(new Error('Draft store upgrade blocked')); };
+    });
+    return draftDatabasePromise;
+  }
+  function putDraft(userId,draft){
+    if(!userId || !draft || !draft.blob || typeof draft.blob.arrayBuffer!=='function') return Promise.resolve(false);
+    const snapshot={...draft,waveform:Array.isArray(draft.waveform)?draft.waveform.slice():[]};
+    return enqueueDraft(()=>writeDraft(userId,snapshot));
+  }
+  async function writeDraft(userId,draft){
+    const data=await draft.blob.arrayBuffer();
+    const database=await openDraftDatabase();
+    if(!database) return false;
+    const entry={
+      key:draftKey(userId),userId,data,
+      mimeType:String(draft.mimeType||draft.blob.type||''),
+      durationMs:Math.max(0,Number(draft.durationMs)||0),
+      title:String(draft.title||''),
+      extension:String(draft.extension||''),
+      recordedAt:String(draft.recordedAt||''),
+      playbackGain:Number(draft.playbackGain)||1,
+      waveform:Array.isArray(draft.waveform) ? draft.waveform.slice() : [],
+      savedAt:Date.now(),
+    };
+    const transaction=database.transaction(DRAFT_STORE,'readwrite');
+    const done=transactionDone(transaction);
+    transaction.objectStore(DRAFT_STORE).put(entry);
+    await done;
+    return true;
+  }
+  async function getDraft(userId){
+    if(!userId) return null;
+    await draftQueue;                  // 앞서 부탁한 쓰기·지우기가 끝난 뒤에 읽는다
+    const database=await openDraftDatabase();
+    if(!database) return null;
+    const transaction=database.transaction(DRAFT_STORE,'readonly');
+    const entry=await requestResult(transaction.objectStore(DRAFT_STORE).get(draftKey(userId)));
+    if(!entry || entry.userId!==userId || !entry.data) return null;
+    const blob=root.Blob ? new root.Blob([entry.data],{type:entry.mimeType||''}) : null;
+    if(!blob || !blob.size) return null;
+    return {
+      blob,durationMs:entry.durationMs,mimeType:entry.mimeType,title:entry.title,
+      extension:entry.extension,recordedAt:entry.recordedAt,
+      playbackGain:entry.playbackGain,waveform:Array.isArray(entry.waveform)?entry.waveform:[],
+    };
+  }
+  function removeDraft(userId){
+    if(!userId) return Promise.resolve();
+    return enqueueDraft(()=>deleteDraft(userId));
+  }
+  async function deleteDraft(userId){
+    const database=await openDraftDatabase();
+    if(!database) return;
+    const transaction=database.transaction(DRAFT_STORE,'readwrite');
+    const done=transactionDone(transaction);
+    transaction.objectStore(DRAFT_STORE).delete(draftKey(userId));
+    await done;
+  }
+  /* 다른 계정이 이 기기에 로그인하면 앞 사람의 초안은 남겨 두지 않는다. */
+  function keepOnlyDraftOf(userId){
+    return enqueueDraft(()=>pruneDrafts(userId));
+  }
+  async function pruneDrafts(userId){
+    const database=await openDraftDatabase();
+    if(!database) return;
+    const read=database.transaction(DRAFT_STORE,'readonly');
+    const entries=await requestResult(read.objectStore(DRAFT_STORE).getAll());
+    const stale=(entries||[]).filter(entry=>entry && entry.userId!==userId).map(entry=>entry.key);
+    if(!stale.length) return;
+    const transaction=database.transaction(DRAFT_STORE,'readwrite');
+    const done=transactionDone(transaction);
+    const store=transaction.objectStore(DRAFT_STORE);
+    stale.forEach(key=>store.delete(key));
+    await done;
+  }
+
   async function requestPersistence(){
     const storage=root.navigator&&root.navigator.storage;
     if(!storage || typeof storage.persist!=='function') return false;
@@ -211,6 +324,7 @@
 
   root.OliveRecordingCache=Object.freeze({
     get,getMany,put,remove,clearUser,requestPersistence,
+    putDraft,getDraft,removeDraft,keepOnlyDraftOf,
     limits:Object.freeze({maxEntries:MAX_ENTRIES,maxBytes:MAX_BYTES}),
   });
   requestPersistence();

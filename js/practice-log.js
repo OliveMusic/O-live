@@ -105,9 +105,15 @@
         if(Number.isFinite(bv) && (!Number.isFinite(a) || bv>a)) ours[field]=bv;
       });
     });
+    /* 오래된 날은 합친 뒤에 걷는다. 먼저 걷으면 저장소에 남은 날이 합칠 때 도로 들어온다. */
+    prune();
     return store;
   }
+  /* 도움말은 진짜 앱을 띄워 눌러 보게 한다. 거기서 켠 메트로놈이 실제 연습
+     기록에 쌓이면 안 된다. 도움말은 읽기만 한다. */
+  const preview=/[?&]guide=1(?:&|$)/.test(location.search);
   function write(){
+    if(preview) return;
     try{
       localStorage.setItem(STORE_KEY,JSON.stringify(merge(load())));
     }catch(error){}
@@ -135,29 +141,69 @@
   }
   function totalSeconds(day){
     if(!day) return 0;
+    const all=Number(day.all);
+    if(Number.isFinite(all)) return all;
     return TOOL_ORDER.reduce((sum,tool)=>sum+(Number(day[tool])||0),0);
   }
 
-  /* ---------- 시간 재기 ---------- */
-  const openSources=new Map();      // '탭:출처' → 마지막으로 셈한 시각
+  /* ---------- 시간 재기 ----------
+     소리마다 시작한 때(startedAt)와 어디까지 적었는지(creditedTo)를 든다.
+     · 3초는 소리 하나를 통째로 보고 가린다. 예전에는 마지막 틱 뒤의 꼬리만 보고
+       가려서, 틱을 건넌 짧은 소리가 반쯤 적히고 긴 소리의 꼬리가 잘렸다.
+     · 자정을 넘긴 소리는 날짜마다 나눠 적는다. 잠금화면에서 타이머가 멈춘 사이
+       울린 시간이 통째로 다음 날로 넘어갔다.
+     · 잠금화면에서 멈춘 메트로놈·잼은 세지 않는다. 멈춰도 소리 등록부에서는
+       빠지지 않으므로(그래야 재개가 된다) 여기서 따로 거른다. */
+  const openSources=new Map();      // '탭:출처' → {startedAt, creditedTo, pausedAt}
+  const PAUSABLE=new Set(['metronome:metronome','jam:play']);
+  let backgroundPaused=false;
+  /* 하루 합계는 도구별 시간을 더한 값이 아니라 '무엇이든 울린 시간'이다.
+     메트로놈을 켜고 10분 녹음하면 도구별로는 각각 10분이지만 연습은 10분이다. */
+  let union=null;
   let ticker=0;
 
-  function addSeconds(tool,seconds,key){
-    const day=dayFor(key);
-    day[tool]=(Number(day[tool])||0)+seconds;
+  function counting(id){ return !(backgroundPaused && PAUSABLE.has(id)); }
+  function anyCounting(){
+    for(const id of openSources.keys()) if(counting(id)) return true;
+    return false;
+  }
+  function legacyTotal(day){
+    return TOOL_ORDER.reduce((sum,tool)=>sum+(Number(day[tool])||0),0);
+  }
+  function addSpan(field,from,to){
+    let at=from;
+    while(at<to){
+      const date=new Date(at);
+      const midnight=new Date(date.getFullYear(),date.getMonth(),date.getDate()+1).getTime();
+      const until=Math.min(to,midnight);
+      const day=dayFor(dateKey(date));
+      /* 합계를 따로 적기 전의 날은 도구별 합이 곧 합계였다. 새로 적기 전에 그 값을
+         합계로 옮겨 두고 거기서 이어 간다. */
+      if(!Number.isFinite(Number(day.all))) day.all=legacyTotal(day);
+      day[field]=(Number(day[field])||0)+(until-at)/1000;
+      at=until;
+    }
+  }
+  function credit(entry,field,now){
+    if(!entry || entry.pausedAt) return false;
+    if(now-entry.startedAt<MIN_SESSION_SECONDS*1000) return false;
+    if(now-entry.creditedTo<1) return false;
+    addSpan(field,entry.creditedTo,now);
+    entry.creditedTo=now;
+    return true;
+  }
+  function syncUnion(now){
+    const active=anyCounting();
+    if(active && !union) union={startedAt:now,creditedTo:now,pausedAt:0};
+    else if(!active && union){ credit(union,'all',now); union=null; }
   }
 
   function accumulate(now){
     let touched=false;
-    openSources.forEach((since,id)=>{
-      const tool=TOOLS[id];
-      const span=(now-since)/1000;
-      if(!tool || span<1) return;
-      openSources.set(id,now);
-      const key=todayKey();
-      addSeconds(tool,span,key);
-      touched=true;
+    openSources.forEach((entry,id)=>{
+      if(counting(id) && credit(entry,TOOLS[id],now)) touched=true;
     });
+    if(union && credit(union,'all',now)) touched=true;
     if(touched) save();
     return touched;
   }
@@ -175,25 +221,50 @@
     if(!TOOLS[id]) return;
     const now=Date.now();
     if(on){
-      if(!openSources.has(id)) openSources.set(id,now);
+      if(!openSources.has(id)){
+        openSources.set(id,{startedAt:now,creditedTo:now,pausedAt:backgroundPaused&&PAUSABLE.has(id)?now:0});
+      }
+      syncUnion(now);
       startTicker();
       return;
     }
-    const since=openSources.get(id);
+    const entry=openSources.get(id);
     openSources.delete(id);
-    if(Number.isFinite(since)){
-      const span=(now-since)/1000;
-      if(span>=MIN_SESSION_SECONDS){
-        const dayAt=todayKey();
-        addSeconds(TOOLS[id],span,dayAt);
-        saveNow();
-      }
+    if(entry && counting(id) && credit(entry,TOOLS[id],now)) saveNow();
+    if(union){
+      const credited=credit(union,'all',now);
+      syncUnion(now);
+      if(credited) saveNow();
     }
     if(!openSources.size) stopTicker();
     if(!sheet.hidden) render();
   }
 
+  /* 잠금화면·제어 센터·이어폰 빼기로 멈추고 다시 틀 때. 멈춘 사이는 시계를 밀어
+     없던 시간으로 친다. 3초 문턱도 그만큼 밀려 멈추기 전 몫이 그대로 이어진다. */
+  function handleBackgroundPaused(paused){
+    paused=Boolean(paused);
+    if(paused===backgroundPaused) return;
+    const now=Date.now();
+    if(paused){
+      accumulate(now);
+      backgroundPaused=true;
+      openSources.forEach((entry,id)=>{ if(PAUSABLE.has(id) && !entry.pausedAt) entry.pausedAt=now; });
+      syncUnion(now);
+      saveNow();
+      return;
+    }
+    backgroundPaused=false;
+    openSources.forEach((entry,id)=>{
+      if(!PAUSABLE.has(id) || !entry.pausedAt) return;
+      const gap=Math.max(0,now-entry.pausedAt);
+      entry.startedAt+=gap; entry.creditedTo+=gap; entry.pausedAt=0;
+    });
+    syncUnion(now);
+  }
+
   if(typeof onSoundingChange==='function') onSoundingChange(handleSounding);
+  if(typeof onBackgroundPausedChange==='function') onBackgroundPausedChange(handleBackgroundPaused);
   // 탭을 닫거나 화면을 끄면 세던 것을 잃지 않게 그 자리에서 적는다.
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='hidden'){ accumulate(Date.now()); saveNow(); }

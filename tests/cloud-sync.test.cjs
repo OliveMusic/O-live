@@ -3,6 +3,22 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const {webcrypto}=require('node:crypto');
 
+/* ---------- 같은 설정을 되받지 않는다 ----------
+   방금 올린 설정을 다시 받아 적용하면 앱으로 돌아올 때마다 청음 점수와 풀던 문제가
+   처음으로 돌아갔다. 같은 시각이면 이미 같은 값이다. */
+{
+  const cloudSource=require('node:fs').readFileSync('cloud-sync.js','utf8');
+  const earSource=require('node:fs').readFileSync('js/ear-trainer.js','utf8');
+  assert.match(cloudSource,/remoteTime>localTime\)\)\{/);
+  assert.doesNotMatch(cloudSource,/remoteTime>=localTime/);
+  assert.match(earSource,/if\(mode===previousMode && level===previousLevel && current\) return;/);
+  /* 링크 한도는 200개다. 50개만 받던 때는 51번째부터 즐겨찾기까지 사라졌다. */
+  const list=cloudSource.match(/from\('practice_links'\)\s*\n\s*\.select\([^)]*\)[\s\S]*?\.limit\((\d+)\)/);
+  assert.ok(list,'practice link list query is present');
+  assert.equal(Number(list[1]),200);
+  assert.match(list[0],/\.order\('pinned',\{ascending:false\}\)/);
+}
+
 class FakeClassList{
   constructor(){ this.values=new Set(); }
   add(...names){ names.forEach(name=>this.values.add(name)); }

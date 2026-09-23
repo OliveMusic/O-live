@@ -9,6 +9,7 @@ let __backgroundAudioUrl = '';
 let __stoppingBackgroundMedia = false;
 let __backgroundMediaArmed = false;
 let __backgroundMediaPaused = false;
+const __backgroundPausedListeners = [];
 let __backgroundSuspendPromise = null;
 let __backgroundResumePromise = null;
 let __backgroundResumeSequence = 0;
@@ -461,6 +462,9 @@ function setBackgroundTransportsPaused(paused){
          typeof transport.setPaused==='function') transport.setPaused(paused);
     }catch(e){}
   });
+  /* 연습 기록은 '소리가 난 시간'만 센다. 잠금화면에서 멈춘 메트로놈·잼은 소리
+     등록부에서 빠지지 않으므로(그래야 재개된다) 멈춤과 재개를 따로 알린다. */
+  __backgroundPausedListeners.forEach(listener=>{ try{ listener(Boolean(paused)); }catch(e){} });
 }
 
 /* 잠금 화면의 일시정지는 재생 위치를 버리는 '정지'가 아니다. 실제 출력이
@@ -705,6 +709,9 @@ function resumeBackgroundPlayback(){
 }
 
 function isBackgroundMediaPaused(){ return __backgroundMediaPaused; }
+function onBackgroundPausedChange(listener){
+  if(typeof listener==='function') __backgroundPausedListeners.push(listener);
+}
 
 function stopBackgroundMedia(){
   recordAudioDiagnostic('media-element:stop');
