@@ -26,12 +26,6 @@
   const tunerEngine = window.OliveTunerEngine;
 
   let currentTuning='guitar';
-  const a4Minus=document.getElementById('a4Minus');
-  const a4Plus=document.getElementById('a4Plus');
-  const a4Val=document.getElementById('a4Val');
-  const droneToggle=document.getElementById('droneToggle');
-  let droneMode=false;          // '누르면 계속 울리기'
-  let drone=null;               // 지금 울리는 지속음 {midi, stop()}
   let listening=false, micStarting=false, micStartToken=0;
   let stream=null, analyser=null, buf=null, srcNode=null, micBoost=null, monitorSink=null;
   let micChain=[];              // 껐을 때 확실히 끊기 위해 들고 있는다
@@ -304,7 +298,6 @@
 
   /* ---------- 표시 ---------- */
   function renderStringButtons(){
-    stopDrone();
     stringBtns.innerHTML='';
     const t=TUNINGS[currentTuning];
     const chromatic=Boolean(t.chromatic);
@@ -331,85 +324,11 @@
       b.append(sn,nn);
       b.dataset.midi=midi;
       b.setAttribute('aria-label', chromatic ? name+' 기준음' : num+'번 줄 '+name);
-      b.addEventListener('click', ()=> pressReference(midi,b));
+      b.addEventListener('click', ()=> referenceTone(midi, 2.6));
       stringBtns.appendChild(b);
     });
   }
 
-  /* ---------- 기준음과 지속음 ----------
-     '누르면 계속 울리기'를 켜 두면 누른 음이 다시 누를 때까지 이어진다. 다른 줄을 누르면
-     그 줄로 옮긴다. 튜너 탭을 떠나거나 다른 소리를 켜면 멈춘다(운반자로 등록). */
-  function pressReference(midi,button){
-    if(!droneMode){ referenceTone(midi, 2.6); return; }
-    const same=drone && drone.midi===midi;
-    stopDrone();
-    if(same) return;
-    drone=startDrone(midi);
-    button.classList.add('droning');
-    button.setAttribute('aria-pressed','true');
-    setTabSounding('tuner', true, 'drone');
-  }
-  function stopDrone(){
-    if(!drone) return;
-    const current=drone;
-    drone=null;
-    current.stop();
-    stringBtns.querySelectorAll('.string-btn.droning').forEach(b=>{
-      b.classList.remove('droning');
-      b.removeAttribute('aria-pressed');
-    });
-    setTabSounding('tuner', false, 'drone');
-  }
-  registerTransport({ isPlaying:()=>Boolean(drone), stop:stopDrone });
-  function renderDroneToggle(){
-    droneToggle.textContent=droneMode?'ON':'OFF';
-    droneToggle.classList.toggle('active',droneMode);
-    droneToggle.setAttribute('aria-pressed',String(droneMode));
-  }
-  droneToggle.addEventListener('click',()=>{
-    droneMode=!droneMode;
-    if(!droneMode) stopDrone();
-    renderDroneToggle();
-    window.OlivePreferences.changed();
-  });
-
-  /* 기준음 A4. 누르면 1Hz, 누르고 있으면 계속 움직인다. 값을 두 번 누르면 440.
-     앱의 모든 소리가 따르므로(core.js) 여기서 바꾸면 잼과 지판도 같은 높이로 난다. */
-  function renderA4(){
-    const hz=concertA();
-    a4Val.textContent=hz+' Hz';
-    a4Minus.disabled=hz<=CONCERT_A_MIN;
-    a4Plus.disabled=hz>=CONCERT_A_MAX;
-  }
-  function applyA4(hz,{save=true}={}){
-    const before=concertA();
-    const next=setConcertA(hz);
-    renderA4();
-    if(next===before) return;
-    renderStringButtons();          // 음역 경계를 새 기준으로 다시 잡는다
-    idle();
-    if(save) window.OlivePreferences.changed();
-  }
-  [[a4Minus,-1],[a4Plus,1]].forEach(([button,step])=>{
-    let holdTimer=0, repeatTimer=0, held=false;
-    const end=()=>{ clearTimeout(holdTimer); clearInterval(repeatTimer); holdTimer=repeatTimer=0; };
-    button.addEventListener('pointerdown',event=>{
-      if(event.button>0) return;
-      held=false;
-      holdTimer=setTimeout(()=>{
-        held=true;
-        repeatTimer=setInterval(()=>applyA4(concertA()+step),90);
-      },450);
-    });
-    ['pointerup','pointerleave','pointercancel'].forEach(type=>button.addEventListener(type,end));
-    button.addEventListener('click',()=>{
-      if(held){ held=false; return; }
-      applyA4(concertA()+step);
-    });
-  });
-  bindResetOnDouble(a4Val,()=>applyA4(CONCERT_A_DEFAULT));
-  renderA4();
-  renderDroneToggle();
   const tunerTuningDD = makeSplitDropdown(
     tuningSelect,
     TUNING_ORDER.map(k=>({ main:TUNINGS[k].label, sub:tuningLetters(TUNINGS[k]) })),
@@ -555,7 +474,6 @@
         } : null,{
           minConfidence:sensitivity.value>=67 ? 0.43 : 0.48,
           attackConfirmed:toneState.onset,
-          referenceHz:concertA(),
         });
         let accepted=Boolean(tracked);
         // 어택 없이 오래 유지된 음높이는 팬·모터 배경음으로 보고 즉시 표시를 놓는다.
@@ -718,7 +636,7 @@
   // 튜너가 아닌 다른 탭으로 넘어가면 마이크를 자동으로 끈다
   document.querySelectorAll('.tab-btn').forEach(b=>{
     b.addEventListener('click', ()=>{
-      if(b.dataset.tab !== 'tuner'){ stopMic(); stopDrone(); }   // 지속음도 튜너 안에서만 운다
+      if(b.dataset.tab !== 'tuner') stopMic();
       else if(!listening && !micStarting) requestAnimationFrame(()=>resetScope());
     });
   });
@@ -737,8 +655,6 @@
     ()=>({
       tuning:currentTuning,
       sensitivity:sensEl ? Number(sensEl.value) : SENS_DEFAULT,
-      a4:concertA(),
-      drone:droneMode,
     }),
     value=>{
       if(!value || typeof value!=='object') return;
@@ -749,20 +665,11 @@
         renderStringButtons();
       }
       setSens(value.sensitivity);
-      if(value.a4!==undefined) applyA4(value.a4,{save:false});
-      if(typeof value.drone==='boolean' && value.drone!==droneMode){
-        droneMode=value.drone;
-        if(!droneMode) stopDrone();
-        renderDroneToggle();
-      }
     }
   );
 
   tunerStart.addEventListener('click', async ()=>{
     if(listening || micStarting){ stopMic(); return; }
-    /* 마이크를 열 때 오디오 컨텍스트를 새로 만들므로, 울리던 지속음은 소리 없이 끊긴 채
-       버튼만 켜져 남는다. 먼저 끈다. 마이크를 켠 뒤에 누르는 지속음은 그대로 운다. */
-    stopDrone();
     const token=++micStartToken;
     let requestedStream=null;
     micStarting=true;

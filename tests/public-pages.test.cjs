@@ -913,6 +913,10 @@ assert.match(guide,/1\.5초 뒤에 다음 문제가 저절로 나옵니다/,'맞
   assert.match(tuner,/const TUNINGS = OLIVE_TUNINGS;/);
   assert.match(read('js/scales.js'),/const TUNINGS = OLIVE_TUNINGS;/);
   assert.match(guide,/기타\(반음 다운·드롭 D·드롭 C·DADGAD·오픈 G·7현\), 베이스 4·5현, 우쿨렐레, 만돌린, 바이올린·비올라·첼로와 모든 음을 보는 크로매틱을 지원합니다/);
+  /* 기준음 A4와 '누르면 계속 울리기'는 뺐다. 카드도 도움말도 다시 꺼내지 않는다. */
+  assert.doesNotMatch(indexHtml,/id="a4Val"|id="droneToggle"/);
+  assert.doesNotMatch(guide,/누르면 계속 울리기|기준음 A4/);
+  assert.doesNotMatch(read('js/core.js'),/setConcertA|startDrone/);
 }
 
 /* 목록 머리는 아래 행들이 'YouTube'라고 적는 것과 같은 말을 쓴다. */

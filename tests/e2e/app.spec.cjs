@@ -2937,46 +2937,23 @@ test('리듬 트레이너의 6/8은 8분음표 여섯 개다',async({page})=>{
   })).toBe(12);
 });
 
-/* ---------- 튜너: 기준음·지속음·튜닝 ---------- */
-test('튜너는 기준음 A4를 바꾸고, 누른 음을 계속 울리고, 튜닝을 넓게 고른다',async({page})=>{
-  await preparePage(page,{microphone:'controls'});
+/* ---------- 튜너: 튜닝 목록 ----------
+   기준 튜닝 카드는 드롭다운·줄 버튼·안내 한 줄로 단순하게 둔다. 기준음 A4와
+   '누르면 계속 울리기'는 1.14.0에 넣었다가 1.14.1에서 뺐다. */
+test('튜너의 기준 튜닝 카드는 단순하고 튜닝은 넓게 고른다',async({page})=>{
+  await preparePage(page,{microphone:'controls',preferences:{
+    /* 1.14.0에서 A4를 바꿔 둔 사람도 다시 440으로 돌아온다. */
+    data:{tuner:{tuning:'guitar',sensitivity:50,a4:442,drone:true}},
+    updatedAt:'2026-09-23T00:00:00.000Z',
+  }});
   await page.locator('.tab-btn[data-tab="tuner"]').click();
-  await expect(page.locator('#a4Val')).toHaveText('440 Hz');
-  await page.locator('#a4Plus').click();
-  await page.locator('#a4Plus').click();
-  await expect(page.locator('#a4Val')).toHaveText('442 Hz');
-  expect(await page.evaluate(()=>[concertA(),Math.round(midiToFreq(69))])).toEqual([442,442]);
-  /* 앱의 다른 소리도 같은 기준을 따르고, 설정으로 남는다. */
-  await expect.poll(()=>page.evaluate(()=>{
-    const record=window.OlivePreferences.getRecord();
-    return record && record.data && record.data.tuner && record.data.tuner.a4;
-  })).toBe(442);
-  /* 두 번 누르면 440. */
-  await page.locator('#a4Val').click();
-  await page.locator('#a4Val').click();
-  await expect(page.locator('#a4Val')).toHaveText('440 Hz');
-
-  /* 지속음을 켜면 누른 음이 다시 누를 때까지 이어진다. 탭 아이콘도 울리는 표시를 한다. */
-  await page.locator('#droneToggle').click();
-  await expect(page.locator('#droneToggle')).toHaveText('ON');
-  const low=page.locator('#stringBtns .string-btn').first();
-  await low.click();
-  await expect(low).toHaveClass(/droning/);
-  await expect(page.locator('.tab-btn[data-tab="tuner"]')).toHaveClass(/sounding/);
-  /* 다른 줄을 누르면 그 줄로 옮긴다. */
-  const second=page.locator('#stringBtns .string-btn').nth(1);
-  await second.click();
-  await expect(second).toHaveClass(/droning/);
-  await expect(low).not.toHaveClass(/droning/);
-  await second.click();
-  await expect(second).not.toHaveClass(/droning/);
-  await expect(page.locator('.tab-btn[data-tab="tuner"]')).not.toHaveClass(/sounding/);
-  /* 다른 탭으로 가면 멈춘다. */
-  await low.click();
-  await expect(low).toHaveClass(/droning/);
-  await page.locator('.tab-btn[data-tab="metronome"]').click();
-  await expect.poll(()=>page.evaluate(()=>document.querySelectorAll('#stringBtns .droning').length)).toBe(0);
-  await page.locator('.tab-btn[data-tab="tuner"]').click();
+  await expect(page.locator('#a4Val, #a4Minus, #a4Plus, #droneToggle')).toHaveCount(0);
+  const card=page.locator('#stringBtns').locator('xpath=..');
+  await expect(card.locator('p.hint').first()).toHaveText('현을 누르면 기준음이 들립니다');
+  expect(await page.evaluate(()=>Math.round(midiToFreq(69)))).toBe(440);
+  /* 줄을 눌러도 계속 울리지 않는다. 한 번 튕기고 사라지는 기준음이다. */
+  await page.locator('#stringBtns .string-btn').first().click();
+  await expect(page.locator('#stringBtns .droning')).toHaveCount(0);
 
   /* 크로매틱은 열두 음, 반음 다운은 플랫 이름. */
   await page.locator('#tuningSelect .dd-btn').click();
@@ -2985,6 +2962,12 @@ test('튜너는 기준음 A4를 바꾸고, 누른 음을 계속 울리고, 튜�
   await page.locator('#tuningSelect .dd-btn').click();
   await page.locator('#tuningSelect .dd-item',{hasText:'반음 다운'}).click();
   await expect(page.locator('#stringBtns .nn')).toHaveText(['E♭2','A♭2','D♭3','G♭3','B♭3','E♭4']);
+  /* 다음에 저장할 때 예전 a4·drone 값은 남기지 않는다. */
+  await expect.poll(()=>page.evaluate(()=>{
+    const record=window.OlivePreferences.getRecord();
+    const tuner=record && record.data && record.data.tuner || {};
+    return [tuner.tuning,'a4' in tuner || 'drone' in tuner];
+  })).toEqual(['halfdown',false]);
   /* 스케일 지판도 같은 목록을 쓴다(크로매틱만 빼고). */
   const scaleTunings=await page.locator('#scaleTuning .dd-item .dd-main').allTextContents();
   expect(scaleTunings).toContain('기타 반음 다운');

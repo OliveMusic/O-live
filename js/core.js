@@ -1,19 +1,8 @@
 /* ===================== 공통 유틸 ===================== */
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 function midiToName(midi){ return NOTE_NAMES[((midi%12)+12)%12] + (Math.floor(midi/12)-1); }
-/* 기준음 A4. 튜너 카드에서 415~466Hz로 고른다. 앱이 내는 모든 소리(튜너 기준음,
-   지판, 잼, 청음)가 이 값을 따른다. 442로 맞춘 기타로 잼을 켰는데 반주만 440이면
-   8센트 어긋난 채로 연습하게 된다. */
-const CONCERT_A_DEFAULT=440, CONCERT_A_MIN=415, CONCERT_A_MAX=466;
-let __concertA=CONCERT_A_DEFAULT;
-function concertA(){ return __concertA; }
-function setConcertA(hz){
-  const value=Math.round(Number(hz));
-  __concertA=Number.isFinite(value) ? Math.max(CONCERT_A_MIN,Math.min(CONCERT_A_MAX,value)) : CONCERT_A_DEFAULT;
-  return __concertA;
-}
-function midiToFreq(midi){ return __concertA * Math.pow(2, (midi-69)/12); }
-function freqToMidi(freq){ return 69+12*Math.log2(freq/__concertA); }
+function midiToFreq(midi){ return 440 * Math.pow(2, (midi-69)/12); }
+function freqToMidi(freq){ return 69+12*Math.log2(freq/440); }
 function pcName(pc){ return NOTE_NAMES[((pc%12)+12)%12]; }
 
 /* 튜너와 스케일 지판이 함께 쓰는 튜닝 목록. 한 곳에 두어야 튜너에서 고른 튜닝을
@@ -460,52 +449,6 @@ function guitarPluck(midi, dur=2.4, vol=0.62){
   });
 }
 function referenceTone(midi, dur=2.6){ guitarPluck(midi, dur, 0.78); }
-
-/* ---- 지속음(드론) ----
-   튜너의 '누르면 계속 울리기'. 기준음에 맞춰 음정을 연습할 때 쓴다. 현을 튕긴 소리는
-   2초 남짓에 사그라들어 기댈 수 없으므로, 배음 몇 개를 쌓은 오르간 같은 음을 다시
-   누를 때까지 낸다. 켜고 끌 때는 짧게 오르내려 '툭' 소리를 내지 않는다. */
-function startDrone(midi, vol=0.3){
-  const ctx=getCtx();
-  const f0=midiToFreq(midi);
-  const bus=ctx.createGain(); bus.gain.value=0.0001;
-  const tone=ctx.createBiquadFilter();
-  tone.type='lowpass'; tone.frequency.value=Math.min(4200,f0*6); tone.Q.value=0.4;
-  tone.connect(bus); bus.connect(getMaster(ctx));
-  sendTo(bus,0.16);
-  const partials=[[1,1],[2,.42],[3,.2],[4,.09]].map(([n,amp])=>{
-    const osc=ctx.createOscillator(), gain=ctx.createGain();
-    osc.type='sine'; osc.frequency.value=f0*n; gain.gain.value=amp*0.5;
-    osc.connect(gain).connect(tone);
-    return osc;
-  });
-  let started=false, stopped=false;
-  whenClockAwake(ctx,()=>{
-    if(stopped) return;
-    const t=noteStart(ctx,0.005);
-    partials.forEach(osc=>osc.start(t));
-    bus.gain.setValueAtTime(0.0001,t);
-    bus.gain.exponentialRampToValueAtTime(vol,t+0.12);
-    started=true;
-  });
-  return {
-    midi,
-    stop(){
-      if(stopped) return;
-      stopped=true;
-      if(!started){ try{ bus.disconnect(); }catch(e){} return; }
-      const now=ctx.currentTime;
-      try{
-        bus.gain.cancelScheduledValues(now);
-        bus.gain.setValueAtTime(Math.max(0.0001,bus.gain.value),now);
-        bus.gain.exponentialRampToValueAtTime(0.0001,now+0.25);
-      }catch(e){}
-      partials.forEach(osc=>{ try{ osc.stop(now+0.3); }catch(e){} });
-      keepVoice(ctx,bus,now+0.3);
-      setTimeout(()=>{ try{ bus.disconnect(); }catch(e){} },450);
-    },
-  };
-}
 
 /* ---- 어쿠스틱 피아노 ----
    실제 피아노는 한 음에 현이 2~3개이고 서로 미세하게 어긋나 있다.
