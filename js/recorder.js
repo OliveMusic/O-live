@@ -16,7 +16,7 @@
   const PLAYBACK_RATE_MIN=.5;
   const PLAYBACK_RATE_MAX=1.5;
   const PLAYBACK_RATE_STEP=.05;
-  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=198';
+  const SOUND_TOUCH_PROCESSOR_URL='./vendor/soundtouch/soundtouch-processor.js?v=325';
   /* 필요한 마이그레이션 번호는 릴리스 계약에서 가져온다.
      문구에 번호를 직접 적으면 스키마를 올릴 때마다 낡는다. */
   const SCHEMA_ERROR_CODE='DB-'+String(
@@ -163,6 +163,8 @@
   let cloudStretchNode=null;
   let cloudStretchOpenTimer=0;
   let cloudMediaUsesPersistentNative=false;
+  let cloudRouteCtx=null, cloudRouteIn=null, cloudRouteLocal=null, cloudRouteStream=null;
+  let cloudRouteHidden=null;
   let cloudNativeInternalPause=false;
   let cloudNativeIgnorePauseUntil=0;
   let cloudMediaSessionActive=false;
@@ -347,6 +349,12 @@
     if(cloudTransportDestination){
       try{ cloudTransportDestination.stream.getTracks().forEach(track=>track.stop()); }catch(error){}
     }
+    /* 통로가 바뀌면 갈림길도 다시 세운다. 옛 통로에 묶인 채로 두면 안 된다. */
+    try{ if(cloudRouteIn) cloudRouteIn.disconnect(); }catch(error){}
+    try{ if(cloudRouteLocal) cloudRouteLocal.disconnect(); }catch(error){}
+    try{ if(cloudRouteStream) cloudRouteStream.disconnect(); }catch(error){}
+    cloudRouteCtx=cloudRouteIn=cloudRouteLocal=cloudRouteStream=null;
+    cloudRouteHidden=null;
     if(cloudStreamFeed){
       try{ cloudStreamFeed.stop(); }catch(error){}
       try{ cloudStreamFeed.disconnect(); }catch(error){}
@@ -464,8 +472,68 @@
     cloudTransportPlayPromise=tracked;
     return tracked;
   }
+  /* 앞에 있는 동안에는 스피커로 곧장 보내고, 가려질 때만 잠금화면 통로로 보낸다.
+
+     통로(MediaStream을 받는 <audio>)는 받은 소리를 그대로 내보내지 않는다. WebKit은
+     통로에 쌓인 양이 20ms 밑으로 내려가면 5% 느리게(음이 반음 가까이 낮게), 100ms를
+     넘으면 5% 빠르게(반음 가까이 높게) 다시 샘플링하고, 60ms·40ms로 돌아올 때까지
+     그대로 둔다(WebKit AudioSampleDataConverter의 ±5% 변환기).
+     렌더가 한 번만 늦어도 1초 가까이 음이 틀어진다. 조옮김을 걸면 SoundTouch가 렌더를
+     무겁게 하니 더 자주 걸리고, 그것이 '키를 바꿔 뒀는데 중간에 저절로 이상하게
+     바뀐다'는 증상이다. 크롬에서 같은 그래프의 출력을 재 보면 음높이는 ±6센트 안에서
+     흔들림이 없다. 틀어지는 곳은 그래프 뒤의 통로다.
+
+     통로는 잠금화면 때문에만 있다. 운반자는 앞에서도 계속 돌고(무음이 흐른다)
+     잠금화면 자리도 그대로 지킨다. 빌드 296에서 같은 갈래를 썼다가 297에서 걷었는데,
+     그때 쫓던 1초 지연의 범인이 아니었을 뿐 갈래 자체의 문제는 아니었다. */
+  const CLOUD_ROUTE_FADE=.04;
+  function cloudRouteUsesStream(){
+    return typeof document!=='undefined' && document.visibilityState==='hidden';
+  }
+  function applyCloudRoute(immediate){
+    if(!cloudRouteCtx || !cloudRouteLocal || !cloudRouteStream) return;
+    const hidden=cloudRouteUsesStream();
+    const changed=hidden!==cloudRouteHidden;
+    cloudRouteHidden=hidden;
+    const now=cloudRouteCtx.currentTime;
+    const set=(node,value)=>{
+      try{
+        node.gain.cancelScheduledValues(now);
+        if(immediate) node.gain.setValueAtTime(value,now);
+        else{
+          node.gain.setValueAtTime(node.gain.value,now);
+          node.gain.linearRampToValueAtTime(value,now+CLOUD_ROUTE_FADE);
+        }
+      }catch(error){ try{ node.gain.value=value; }catch(ignore){} }
+    };
+    set(cloudRouteLocal,hidden?0:1);
+    set(cloudRouteStream,hidden?1:0);
+    if(changed && window.OliveAudioDiagnostics) window.OliveAudioDiagnostics.mark('recording-route',{
+      갈래:hidden?'통로':'스피커',
+    });
+  }
   function cloudOutputDestination(ctx){
-    return ensureCloudTransport(ctx)||ctx.destination;
+    const stream=ensureCloudTransport(ctx);
+    if(!stream) return ctx.destination;
+    if(cloudRouteCtx!==ctx || !cloudRouteIn){
+      try{
+        cloudRouteIn=makeMono(ctx.createGain());
+        cloudRouteLocal=makeMono(ctx.createGain());
+        cloudRouteStream=makeMono(ctx.createGain());
+        cloudRouteIn.connect(cloudRouteLocal).connect(ctx.destination);
+        cloudRouteIn.connect(cloudRouteStream).connect(stream);
+        cloudRouteCtx=ctx;
+        cloudRouteHidden=null;
+      }catch(error){
+        cloudRouteCtx=cloudRouteIn=cloudRouteLocal=cloudRouteStream=null;
+        return stream;
+      }
+      applyCloudRoute(true);
+    }else if(cloudRouteHidden!==cloudRouteUsesStream()){
+      /* 가려짐 알림을 놓쳤으면 새 소리를 물릴 때 바로잡는다. */
+      applyCloudRoute(true);
+    }
+    return cloudRouteIn;
   }
   function ensureSoundTouchProcessor(ctx){
     if(!ctx || !ctx.audioWorklet || typeof AudioWorkletNode!=='function'){
@@ -3526,6 +3594,7 @@
   document.addEventListener('visibilitychange',()=>{
     /* 멈춘 채로 화면이 가려지는 순간이 자리를 지켜야 하는 때다. 앞에 있는 동안
        멈춰 두었다가 잠그는 길도 여기로 들어온다. */
+    applyCloudRoute(false);
     if(document.visibilityState==='hidden' && cloudMediaId && !cloudPlayingId){
       cloudKeepAliveRestored=false;
       keepCloudTransportFlowing({onHide:true});

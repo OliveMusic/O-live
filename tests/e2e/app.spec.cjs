@@ -1437,7 +1437,7 @@ test('녹음 줄을 열면 올리브 재생 버튼과 탐색 가능한 파형이
     stretchRate:window.__micHarness.workletNode&&
       window.__micHarness.workletNode.parameters.get('playbackRate').value,
   }))).toMatchObject({
-    module:'./vendor/soundtouch/soundtouch-processor.js?v=198',
+    module:'./vendor/soundtouch/soundtouch-processor.js?v=325',
     processor:'soundtouch-processor',sourceRate:.75,stretchRate:.75,
   });
   await page.locator('.record-speed-control input[type="range"]').dblclick();
@@ -1640,7 +1640,7 @@ test('녹음 배속 처리기가 실제 브라우저 AudioWorklet에 등록된�
     const Context=window.AudioContext||window.webkitAudioContext;
     const ctx=new Context();
     try{
-      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=198');
+      await ctx.audioWorklet.addModule('./vendor/soundtouch/soundtouch-processor.js?v=325');
       const node=new AudioWorkletNode(ctx,'soundtouch-processor');
       return {
         pitch:Boolean(node.parameters.get('pitch')),
@@ -2879,6 +2879,58 @@ test('조옮김을 걸면 스트레처가 찰 때까지 소리를 닫아 둔다'
     const gains=window.__micHarness.gainNodes;
     return gains[gains.length-1].gain.value;
   })).toBeGreaterThan(.5);
+});
+
+/* 앞에 있는 동안 녹음 재생은 스피커로 곧장 나간다. 잠금화면 통로(MediaStream을 받는
+   <audio>)는 쌓인 양이 모자라거나 넘치면 WebKit이 ±5%로 다시 샘플링해, 조옮김해 둔 키가
+   중간에 반음 가까이 틀어진다. 통로는 가려질 때만 연다. */
+test('녹음 재생은 앞에서는 스피커로, 가려지면 잠금화면 통로로 나간다',async({page})=>{
+  await preparePage(page,{
+    cloudClient:'recordings',
+    microphone:'playback',
+    recordings:[{
+      id:'rec-route',title:'갈래',object_path:'recording-browser-user/rec-route.m4a',
+      duration_ms:8000,byte_size:1000,mime_type:'audio/mp4',playback_gain:1,transpose:2,
+      waveform:Array.from({length:80},(_,index)=>18+(index*17)%82),
+      recorded_at:'2026-09-06T09:00:00.000Z',created_at:'2026-09-06T09:00:00.000Z',
+    }],
+  });
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn',{hasText:'트랙'}).click();
+  await expandRecordList(page);
+  await page.locator('#recordList .record-row-open').click();
+  await page.locator('.record-player-play').click();
+  await resolveRecordingDownload(page);
+  await expect.poll(()=>page.evaluate(()=>Boolean(window.__micHarness.workletNode))).toBeTruthy();
+  const route=()=>page.evaluate(()=>{
+    const harness=window.__micHarness;
+    const gains=harness.gainNodes;
+    for(let i=0;i+2<gains.length;i++){
+      const [input,local,stream]=[gains[i],gains[i+1],gains[i+2]];
+      if(input.lastConnection!==stream) continue;
+      if(!stream.lastConnection || stream.lastConnection.stream!==harness.processedStream) continue;
+      const source=gains.find(node=>node.lastConnection===input);
+      return {
+        speaker:local.gain.value,stream:stream.gain.value,
+        localIsSpeaker:Boolean(local.lastConnection && !local.lastConnection.stream),
+        sourceRouted:Boolean(source),
+      };
+    }
+    return null;
+  });
+  await expect.poll(route).toEqual({speaker:1,stream:0,localIsSpeaker:true,sourceRouted:true});
+  const setVisibility=state=>page.evaluate(value=>{
+    Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>value});
+    Object.defineProperty(document,'hidden',{configurable:true,get:()=>value==='hidden'});
+    document.dispatchEvent(new Event('visibilitychange'));
+  },state);
+  await setVisibility('hidden');
+  await expect.poll(route).toMatchObject({speaker:0,stream:1});
+  expect(await page.evaluate(()=>window.OliveAudioDiagnostics.read()
+    .filter(entry=>entry.event==='recording-route').map(entry=>entry.갈래)))
+    .toEqual(['스피커','통로']);
+  await setVisibility('visible');
+  await expect.poll(route).toMatchObject({speaker:1,stream:0});
 });
 
 /* ---------- 조에 맞는 음 이름 ----------

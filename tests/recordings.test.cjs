@@ -320,7 +320,7 @@ assert.match(recorder,/const edgeSnap=Math\.min\(12,bounds\.width\*\.04\)/);
 assert.match(recorder,/const PLAYBACK_RATE_MIN=\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_MAX=1\.5/);
 assert.match(recorder,/const PLAYBACK_RATE_STEP=\.05/);
-assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=198'/);
+assert.match(recorder,/SOUND_TOUCH_PROCESSOR_URL='\.\/vendor\/soundtouch\/soundtouch-processor\.js\?v=325'/);
 /* 서비스 워커가 미리 받아 두는 주소가 앱이 부르는 주소와 같아야 오프라인에서도 배속이 된다. */
 {
   const worker=fs.readFileSync('service-worker.js','utf8');
@@ -515,6 +515,72 @@ assert.ok(edge.indexOf('.remove(recordingPaths)')<edge.indexOf('auth.admin.delet
   assert.ok(cancelAt>0 && removeAt>cancelAt,'cancel before removing the uploaded file');
   assert.match(upload,/if\(uploaded && cancelled\)\{/);
   assert.match(upload,/if\(uploaded && cancelKnown && !cancelled\) return true;/);
+}
+
+/* 조옮김·배속 재생은 앞에 있는 동안 잠금화면 통로를 거치지 않는다. WebKit은 그 통로에
+   쌓인 양이 모자라거나 넘치면 ±5%로 다시 샘플링해 음이 반음 가까이 틀어진다. */
+{
+  const output=recorder.match(/function cloudOutputDestination\(ctx\)\{[\s\S]*?\n  \}\n/)[0];
+  assert.match(output,/cloudRouteIn\.connect\(cloudRouteLocal\)\.connect\(ctx\.destination\)/);
+  assert.match(output,/cloudRouteIn\.connect\(cloudRouteStream\)\.connect\(stream\)/);
+  assert.match(output,/return cloudRouteIn;/);
+  const route=recorder.match(/function applyCloudRoute\(immediate\)\{[\s\S]*?\n  \}\n/)[0];
+  assert.match(route,/set\(cloudRouteLocal,hidden\?0:1\)/);
+  assert.match(route,/set\(cloudRouteStream,hidden\?1:0\)/);
+  assert.match(recorder,/function cloudRouteUsesStream\(\)\{\s*\n\s*return typeof document!=='undefined' && document\.visibilityState==='hidden';/);
+  assert.match(recorder,/document\.addEventListener\('visibilitychange',\(\)=>\{[\s\S]{0,200}applyCloudRoute\(false\);/);
+  // 통로를 새로 세우면 갈림길도 다시 세운다.
+  const reset=recorder.match(/function resetCloudTransport\(\)\{[\s\S]*?\n  \}\n/)[0];
+  assert.match(reset,/cloudRouteCtx=cloudRouteIn=cloudRouteLocal=cloudRouteStream=null;/);
+}
+
+/* SoundTouch의 Lanczos 커널은 표를 쓴다. 탭마다 Math.sin을 두 번 부르던 원래 커널은
+   한 창을 한 블록에서 몰아 바꿀 때 렌더 마감을 넘겼다. 무게는 원래 식과 같아야 한다. */
+{
+  const vm=require('node:vm');
+  const sandbox={sampleRate:48000,
+    AudioWorkletProcessor:class{constructor(){ this.port={postMessage(){}}; }},
+    registerProcessor(){}};
+  vm.createContext(sandbox);
+  vm.runInContext(soundTouchProcessor,sandbox);
+  const kernel=vm.runInContext('lanczosKernel',sandbox);
+  const kernelSource=String(kernel);
+  assert.ok(!/lanczosWeight\(|Math\.sin\(/.test(kernelSource),'kernel reads weights from a table');
+  assert.ok(vm.runInContext('lanczosTables.has(LANCZOS_DEFAULT_PARAMS.zeroCrossings)',sandbox),
+    'default table is built when the module loads, not inside a render block');
+  const sinc=x=>x===0?1:Math.sin(Math.PI*x)/(Math.PI*x);
+  const reference=(src,numFrames,position,channel,state)=>{
+    const radius=state.params.zeroCrossings;
+    const read=index=>index<0 ? (channel===0?state.prevSampleL:state.prevSampleR)
+      : index>=numFrames ? src[2*(numFrames-1)+channel] : src[2*index+channel];
+    const center=Math.floor(position);
+    let numerator=0, denominator=0;
+    for(let index=center-(radius-1);index<=center+radius;index++){
+      const distance=position-index;
+      const weight=Math.abs(distance)>=radius?0:sinc(distance)*sinc(distance/radius);
+      numerator+=read(index)*weight; denominator+=weight;
+    }
+    return numerator/denominator;
+  };
+  let seed=7;
+  const random=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  const frames=256;
+  const src=new Float32Array(frames*2).map(()=>random()*2-1);
+  for(const radius of [4,2,6]){
+    const state=kernel.createState();
+    state.params.zeroCrossings=radius;
+    state.prevSampleL=.25; state.prevSampleR=-.5;
+    let worst=0;
+    for(let i=0;i<4000;i++){
+      // 가장자리(앞쪽 이전 샘플, 뒤쪽 끝 샘플)까지 고르게 짚는다.
+      const position=random()*(frames+2)-2;
+      const channel=i%2;
+      const got=kernel(src,0,frames,position,channel,state);
+      const want=reference(src,frames,position,channel,state);
+      worst=Math.max(worst,Math.abs(got-want));
+    }
+    assert.ok(worst<1e-5,`lanczos table matches the formula (radius ${radius}, worst ${worst})`);
+  }
 }
 
 console.log('recording feature tests passed');

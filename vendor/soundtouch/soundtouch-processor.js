@@ -581,18 +581,56 @@ function lanczosWeight(distance, radius) {
 	if (Math.abs(distance) >= radius) return 0;
 	return normalizedSinc(distance) * normalizedSinc(distance / radius);
 }
+/*
+* O'live modification (MPL-2.0 file, changed here only): the kernel used to call
+* Math.sin twice for every tap of every output sample. In the stretch-first stage
+* order the transposer converts a whole ~110 ms window in one render quantum, so one
+* block in ~35 took several milliseconds and the audio thread missed its deadline.
+* A precomputed weight table, shared by every processor in this worklet scope, gives
+* the same weights (linear interpolation between 2048 phases, error below 1e-6) at a
+* fraction of the cost. Edge handling and normalisation are unchanged.
+*/
+var LANCZOS_TABLE_PHASES = 2048;
+var lanczosTables = /* @__PURE__ */ new Map();
+function lanczosTableFor(radius) {
+	let table = lanczosTables.get(radius);
+	if (table !== void 0) return table;
+	const taps = 2 * radius;
+	table = new Float64Array((LANCZOS_TABLE_PHASES + 1) * taps);
+	for (let phase = 0; phase <= LANCZOS_TABLE_PHASES; phase += 1) {
+		const fraction = phase / LANCZOS_TABLE_PHASES;
+		for (let tap = 0; tap < taps; tap += 1) table[phase * taps + tap] = lanczosWeight(fraction + (radius - 1) - tap, radius);
+	}
+	lanczosTables.set(radius, table);
+	return table;
+}
 var lanczosKernel = (src, srcOffset, numFrames, position, channel, state) => {
 	const kernelState = state;
 	const radius = kernelState.params.zeroCrossings;
 	const normalize = Boolean(kernelState.params.normalize);
+	const table = kernelState.tableRadius === radius ? kernelState.table : (kernelState.table = lanczosTableFor(radius), kernelState.tableRadius = radius, kernelState.table);
+	const taps = 2 * radius;
 	const center = Math.floor(position);
 	const start = center - (radius - 1);
-	const end = center + radius;
+	const scaled = (position - center) * LANCZOS_TABLE_PHASES;
+	const phase = Math.min(LANCZOS_TABLE_PHASES - 1, Math.floor(scaled));
+	const blend = scaled - phase;
+	const row = phase * taps;
 	let numerator = 0;
 	let denominator = 0;
-	for (let sampleIndex = start; sampleIndex <= end; sampleIndex += 1) {
-		const weight = lanczosWeight(position - sampleIndex, radius);
-		numerator += readFrameSample(src, srcOffset, numFrames, sampleIndex, channel, kernelState) * weight;
+	if (start >= 0 && start + taps <= numFrames) {
+		let index = srcOffset + 2 * start + channel;
+		for (let tap = 0; tap < taps; tap += 1) {
+			const low = table[row + tap];
+			const weight = low + (table[row + taps + tap] - low) * blend;
+			numerator += src[index] * weight;
+			denominator += weight;
+			index += 2;
+		}
+	} else for (let tap = 0; tap < taps; tap += 1) {
+		const low = table[row + tap];
+		const weight = low + (table[row + taps + tap] - low) * blend;
+		numerator += readFrameSample(src, srcOffset, numFrames, start + tap, channel, kernelState) * weight;
 		denominator += weight;
 	}
 	if (Math.abs(denominator) < 1e-12) return readFrameSample(src, srcOffset, numFrames, Math.round(position), channel, kernelState);
@@ -601,7 +639,9 @@ var lanczosKernel = (src, srcOffset, numFrames, position, channel, state) => {
 lanczosKernel.createState = () => ({
 	prevSampleL: 0,
 	prevSampleR: 0,
-	params: { ...LANCZOS_DEFAULT_PARAMS }
+	params: { ...LANCZOS_DEFAULT_PARAMS },
+	table: null,
+	tableRadius: 0
 });
 /** Default Lanczos strategy registration payload. */
 var lanczosStrategy = {
@@ -687,6 +727,7 @@ registerBuiltInInterpolationStrategy({
 	...lanczosStrategy,
 	baseStrategy: "lanczos"
 });
+lanczosTableFor(LANCZOS_DEFAULT_PARAMS.zeroCrossings);
 //#endregion
 //#region ../core/src/RateTransposer.ts
 /**
