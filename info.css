@@ -278,6 +278,13 @@ h1{
   line-height:1.75;
 }
 
+.credits{
+  margin:14px 4px 0;
+  color:var(--ink-3);
+  font-size:.6875rem;
+  line-height:1.7;
+}
+.credits a{color:inherit; text-underline-offset:2px;}
 .site-footer{
   width:min(100%,760px);
   margin:0 auto;

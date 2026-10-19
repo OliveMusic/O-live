@@ -405,7 +405,11 @@ async function preparePage(page,{
             value:1,
             setValueAtTime(value){ this.value=value; },
           };
-          node.start=(when,offset)=>{ harness.lastSourceOffset=offset; };
+          node.start=(when,offset)=>{
+            harness.lastSourceOffset=offset;
+            // 녹음 피아노 음도 버퍼 소스다. 무엇이 울렸는지 따로 센다.
+            harness.bufferStarts=(harness.bufferStarts||0)+1;
+          };
           node.stop=()=>{};
           harness.bufferSource=node;
           return node;
@@ -1923,8 +1927,8 @@ test('청음 오답 후 선택지를 같은 루트로 비교하고 올리브로 
   await page.evaluate(()=>{
     Math.random=()=>0;
     window.__earTones=[];
-    /* 청음은 잼과 같은 합성 피아노로 낸다. 음 하나가 pianoNote 한 번이다. */
-    window.pianoNote=(...args)=>{ window.__earTones.push(args); };
+    /* 청음은 그랜드 피아노 녹음으로 낸다. 음 하나가 grandPianoNote 한 번이다. */
+    window.grandPianoNote=(...args)=>{ window.__earTones.push(args); };
   });
   await page.locator('#earModes .pill',{hasText:'음정'}).click();
 
@@ -2057,12 +2061,14 @@ test('멈춰 둔 목록 재생 뒤 청음 트레이너가 일반 출력으로 �
   await page.evaluate(()=>window.__recordingTransportMedia.dispatchEvent(new Event('pause')));
   await expect(page.locator('.record-player-play')).not.toHaveClass(/playing/);
 
-  const tonesBefore=await page.evaluate(()=>window.__micHarness.scheduledStarts.length);
+  /* 청음 음은 녹음 피아노(버퍼 소스)이거나, 녹음이 아직이면 합성 피아노(오실레이터)다. */
+  const started=()=>page.evaluate(()=>
+    window.__micHarness.scheduledStarts.length+(window.__micHarness.bufferStarts||0));
+  const tonesBefore=await started();
   await page.locator('#trainerSeg .seg-btn',{hasText:'청음'}).click();
   await page.locator('#earPlayBtn').click();
 
-  await expect.poll(()=>page.evaluate(()=>window.__micHarness.scheduledStarts.length))
-    .toBeGreaterThanOrEqual(tonesBefore+2);
+  await expect.poll(started).toBeGreaterThanOrEqual(tonesBefore+2);
   await expect.poll(()=>page.evaluate(()=>window.__testAudioSession.type)).toBe('ambient');
   await expect.poll(()=>page.evaluate(()=>window.__testMediaSession.playbackState)).toBe('none');
   expect(await page.evaluate(()=>(
@@ -2965,6 +2971,30 @@ test('녹음 재생은 앞에서는 스피커로, 가려지면 잠금화면 통�
     .toEqual(['스피커','통로']);
   await setVisibility('visible');
   await expect.poll(route).toMatchObject({speaker:1,stream:0});
+});
+
+/* 청음은 그랜드 피아노 녹음으로 낸다. 진짜 오디오 엔진에서 여덟 개를 모두 풀고,
+   문제를 누르면 합성 피아노가 아니라 녹음이 울리는지 본다. */
+test('청음이 그랜드 피아노 녹음을 받아 풀고 그 소리로 문제를 낸다',async({page})=>{
+  await preparePage(page);
+  await page.locator('.tab-btn[data-tab="trainer"]').click();
+  await page.locator('#trainerSeg .seg-btn[data-mode="ear"]').click();
+  const buffers=await page.evaluate(async()=>{
+    const map=await loadGrandPiano();
+    return map ? [...map].map(([midi,buffer])=>({midi,duration:Math.round(buffer.duration*10)/10})) : null;
+  });
+  expect(buffers).toEqual([57,60,63,66,69,72,75,78].map(midi=>({midi,duration:2.4})));
+  await page.evaluate(()=>{
+    window.__grand=[]; window.__synth=0;
+    const grand=window.grandPianoNote, synth=window.pianoNote;
+    window.grandPianoNote=(...args)=>{ window.__grand.push({midi:args[0],ready:grandPianoReady()}); return grand(...args); };
+    window.pianoNote=(...args)=>{ window.__synth++; return synth(...args); };
+  });
+  await page.locator('#earModes .pill',{hasText:'음정'}).click();
+  await page.locator('#earPlayBtn').click();
+  await expect.poll(()=>page.evaluate(()=>window.__grand.length)).toBe(2);
+  expect(await page.evaluate(()=>window.__grand.every(note=>note.ready))).toBeTruthy();
+  expect(await page.evaluate(()=>window.__synth)).toBe(0);
 });
 
 /* ---------- 조에 맞는 음 이름 ----------

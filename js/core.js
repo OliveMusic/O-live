@@ -505,6 +505,80 @@ function pianoNote(midi, when, dur, vol=0.19, destination, reverbAmount=0.3){
   ns.start(t); ns.stop(t+0.06);
   keepVoice(ctx,bus,t+dur+0.06);
 }
+/* ---- 그랜드 피아노 (녹음 샘플) ----
+   Salamander Grand Piano V3(Alexander Holm, CC BY 3.0)에서 단3도마다 한 음씩, A3부터
+   F♯5까지 여덟 개를 잘라 왔다(audio/piano/README.md). 그 사이 음은 가장 가까운 샘플을
+   반음 하나 안에서 옮겨 낸다. 청음 음역(A3~F♯5)이 다 들어간다.
+
+   디코딩은 OfflineAudioContext로 한다. 실시간 컨텍스트는 탭할 때마다 새로 생기고 닫히지만
+   AudioBuffer는 어느 컨텍스트에도 매이지 않으므로 한 번 풀어 두면 계속 쓴다. 아직 풀리지
+   않았거나 받지 못했으면(오프라인 첫 실행 등) 합성 피아노로 대신 낸다. */
+const GRAND_PIANO_MIDIS=Object.freeze([57,60,63,66,69,72,75,78]);
+const GRAND_PIANO_VERSION=327;      // 파일이 바뀔 때만 올린다. 서비스 워커 목록과 같아야 한다.
+function grandPianoUrl(midi){ return `./audio/piano/grand-${midi}.mp3?v=${GRAND_PIANO_VERSION}`; }
+let __grandBuffers=null, __grandLoading=null;
+function decodeAudioFile(ctx, data){
+  /* 예전 WebKit은 콜백만, 지금 브라우저는 둘 다 받는다. 어느 쪽이 먼저 와도 한 번만 푼다. */
+  return new Promise((resolve,reject)=>{
+    try{
+      const result=ctx.decodeAudioData(data,resolve,reject);
+      if(result && typeof result.then==='function') result.then(resolve,reject);
+    }catch(error){ reject(error); }
+  });
+}
+function loadGrandPiano(){
+  if(__grandBuffers) return Promise.resolve(__grandBuffers);
+  if(__grandLoading) return __grandLoading;
+  const Offline=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+  if(!Offline || typeof fetch!=='function') return Promise.resolve(null);
+  let decoder;
+  try{ decoder=new Offline(1,1,44100); }catch(error){ return Promise.resolve(null); }
+  const task=Promise.all(GRAND_PIANO_MIDIS.map(midi=>
+    fetch(grandPianoUrl(midi))
+      .then(res=>{ if(!res.ok) throw new Error('HTTP '+res.status); return res.arrayBuffer(); })
+      .then(data=>decodeAudioFile(decoder,data))
+      .then(buffer=>[midi,buffer])
+  )).then(entries=>{
+    __grandBuffers=new Map(entries);
+    return __grandBuffers;
+  }).catch(error=>{
+    console.warn('[O\'live grand piano]',error);
+    return null;
+  }).finally(()=>{ __grandLoading=null; });   // 실패했으면 다음에 다시 받는다
+  __grandLoading=task;
+  return task;
+}
+function grandPianoReady(){ return Boolean(__grandBuffers); }
+/* 샘플은 음마다 크기를 맞추며 작게 저장했다. 세기 1.9에서 예전 청음 소리(삼각파)와 합성 피아노
+   0.36과 같은 크기로 들린다(마스터를 거친 오프라인 렌더로 잼, 최고점 0.9 안팎). 합성 피아노로
+   대신 낼 때는 0.36이 되도록 줄인다. */
+const GRAND_FALLBACK_RATIO=0.36/1.9;
+/* hold는 건반을 누르고 있는 길이다. 떼면 댐퍼가 내려앉아 0.3초쯤에 잦아든다. */
+function grandPianoNote(midi, when, hold, vol=1.9, destination, reverbAmount=0.22){
+  const ctx=getCtx();
+  if(!__grandBuffers){
+    pianoNote(midi, when, Math.max(1.2,hold+0.9), vol*GRAND_FALLBACK_RATIO, destination, reverbAmount);
+    return;
+  }
+  const t=when!=null ? when : noteStart(ctx,0.004);
+  let base=GRAND_PIANO_MIDIS[0];
+  GRAND_PIANO_MIDIS.forEach(m=>{ if(Math.abs(m-midi)<Math.abs(base-midi)) base=m; });
+  const buffer=__grandBuffers.get(base);
+  const rate=Math.pow(2,(midi-base)/12);
+  const src=ctx.createBufferSource();
+  src.buffer=buffer;
+  src.playbackRate.value=rate;
+  const g=ctx.createGain();
+  g.gain.setValueAtTime(vol,t);
+  g.gain.setTargetAtTime(0.0001,t+hold,0.07);
+  src.connect(g).connect(destination || getMaster());
+  sendTo(g, reverbAmount);
+  const end=t+Math.min(hold+0.6,(Number(buffer.duration)||2.4)/rate);
+  src.start(t);
+  src.stop(end+0.02);
+  keepVoice(ctx,g,end+0.02);
+}
+
 function pianoChord(midis, when, dur, vol=0.28, destination, reverbAmount=0.3){
   midis.forEach((m,i)=> pianoNote(
     m,(when||getCtx().currentTime)+i*0.010,dur,vol,destination,reverbAmount

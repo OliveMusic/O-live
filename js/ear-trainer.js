@@ -438,13 +438,31 @@
   }
 
   /* ---------- 재생 ----------
-     잼 코드와 같은 합성 피아노(core.js의 pianoNote)로 낸다. 예전 삼각파와 합성 피아노,
-     녹음 피아노를 같은 문제로 렌더해 들려주고 사용자가 이것을 골랐다(2026-10-19).
-     hold는 건반을 누르고 있는 길이다. 합성 피아노는 떼는 동작이 없어 그만큼 더 울리다
-     잦아든다. 길이와 세기는 그때 들려준 렌더와 같다. */
-  const EAR_PIANO_VOL=0.36;
+     그랜드 피아노 녹음(core.js의 grandPianoNote)으로 낸다. 합성 피아노(1.15.0)를 다시
+     들어 보고 사용자가 녹음 쪽을 골랐다(2026-10-19). 녹음이 아직 풀리지 않았으면 합성
+     피아노로 대신 낸다. hold는 건반을 누르고 있는 길이고, 떼면 댐퍼가 내려앉는다.
+     길이는 처음에 들려준 녹음 피아노 렌더와 같다. */
+  const EAR_PIANO_VOL=1.9;
   function earNote(midi, at, hold, vol=EAR_PIANO_VOL){
-    pianoNote(midi, at, Math.max(1.2, hold+0.9), vol);
+    grandPianoNote(midi, at, hold, vol);
+  }
+  /* 녹음은 청음을 열 때 미리 받아 둔다. 첫 문제부터 같은 소리가 나야 한다. 처음 누를 때
+     아직이면 잠깐(최대 0.9초) 기다렸다 내고, 그래도 안 되면 합성 피아노로 낸다. */
+  const PIANO_WAIT_MS=900;
+  let playToken=0;
+  function warmPiano(){
+    if(typeof loadGrandPiano==='function') loadGrandPiano();
+  }
+  {
+    const pane=document.getElementById('pane-ear');
+    const later=fn=>typeof window.requestIdleCallback==='function'
+      ? window.requestIdleCallback(fn,{timeout:2000}) : setTimeout(fn,300);
+    const warmIfShown=()=>{ if(pane && pane.classList.contains('active')) later(warmPiano); };
+    if(pane && typeof MutationObserver==='function'){
+      new MutationObserver(warmIfShown).observe(pane,{attributes:true,attributeFilter:['class']});
+    }
+    warmIfShown();
+    earPlayBtn.addEventListener('pointerdown',warmPiano);
   }
   function playAnswer(answer, flashButton=false){
     if(!current) return;
@@ -467,7 +485,11 @@
     /* 갓 깨어난 컨텍스트는 state가 'running'이 된 뒤에도 시계가 0에 멈춰 있다. 음을
        currentTime에 바로 얹으면 그 사이에 잡은 시각은 오디오 유닛이 열리는 순간 이미
        지나간 시각이 되어 통째로 사라진다. 튜너 현음·잼 코드를 고친 것과 같은 자리다. */
-    whenClockAwake(ctx,()=>{
+    const token=++playToken;
+    const ready=typeof grandPianoReady!=='function' || grandPianoReady();
+    const waitPiano=ready ? Promise.resolve()
+      : Promise.race([loadGrandPiano(), new Promise(resolve=>setTimeout(resolve,PIANO_WAIT_MS))]);
+    waitPiano.then(()=>{ if(token===playToken) whenClockAwake(ctx,()=>{
       const t0=noteStart(ctx,0.02);
       const n=answer.iv ? answer.iv.length : 2;
       if(mode==='interval'){
@@ -481,7 +503,7 @@
       } else {
         answer.iv.forEach((iv,i)=> earNote(root+iv, t0+i*0.23, i===n-1 ? 0.8 : 0.26));
       }
-    });
+    }); });
   }
   function playCurrent(){
     if(!current) return;
