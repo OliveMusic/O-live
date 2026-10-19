@@ -46,7 +46,9 @@ assert.match(source,/const degrees=mode!=='interval' && item\.degrees/);
    그동안 다시 누르면 마지막 것만 낸다. */
 const play=source.slice(source.indexOf('function playAnswer('),source.indexOf('function playCurrent('));
 assert.doesNotMatch(play,/playTone\(/);
-assert.match(source,/function earNote\(midi, at, hold, vol=EAR_PIANO_VOL\)\{\s*\n\s*grandPianoNote\(midi, at, hold, vol\);/);
+assert.match(source,/function earNote\(midi, at, hold, vol=EAR_PIANO_VOL\)\{\s*\n\s*grandPianoNote\(midi, at, hold, vol, undefined, EAR_PIANO_REVERB\);/);
+// 청음은 리버브를 덜 건다. 음이 뭉쳐 들렸다.
+assert.match(source,/const EAR_PIANO_REVERB=0\.04;/);
 assert.match(source,/const EAR_PIANO_VOL=1\.9;/);
 assert.match(play,/const token=\+\+playToken;/);
 assert.match(play,/Promise\.race\(\[loadGrandPiano\(\), new Promise\(resolve=>setTimeout\(resolve,PIANO_WAIT_MS\)\)\]\)/);

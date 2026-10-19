@@ -443,8 +443,12 @@
      피아노로 대신 낸다. hold는 건반을 누르고 있는 길이고, 떼면 댐퍼가 내려앉는다.
      길이는 처음에 들려준 녹음 피아노 렌더와 같다. */
   const EAR_PIANO_VOL=1.9;
+  /* 리버브는 거의 걸지 않는다(다른 악기는 0.22~0.3). 음이 뭉쳐 들린다는 의견에 0.22, 0.1,
+     0.04를 같은 문제로 렌더해 들려주었고 사용자가 0.04를 골랐다(2026-10-19). 음계와
+     아르페지오는 음이 빠르게 이어져 앞 음의 잔향이 다음 음 밑에 깔린다. */
+  const EAR_PIANO_REVERB=0.04;
   function earNote(midi, at, hold, vol=EAR_PIANO_VOL){
-    grandPianoNote(midi, at, hold, vol);
+    grandPianoNote(midi, at, hold, vol, undefined, EAR_PIANO_REVERB);
   }
   /* 녹음은 청음을 열 때 미리 받아 둔다. 첫 문제부터 같은 소리가 나야 한다. 처음 누를 때
      아직이면 잠깐(최대 0.9초) 기다렸다 내고, 그래도 안 되면 합성 피아노로 낸다. */
