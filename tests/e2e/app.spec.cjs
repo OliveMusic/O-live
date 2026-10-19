@@ -315,8 +315,22 @@ async function preparePage(page,{
         createMediaStreamSource(){ return new FakeNode(); }
         createBiquadFilter(){
           const node=new FakeNode();
-          node.frequency={value:0}; node.Q={value:0};
+          /* 피아노 음색이 밝기를 시간에 따라 내린다. 진짜 AudioParam처럼 자동화를 받는다. */
+          const param=value=>({
+            value,
+            setValueAtTime(next){ this.value=next; },
+            linearRampToValueAtTime(next){ this.value=next; },
+            exponentialRampToValueAtTime(next){ this.value=next; },
+            cancelScheduledValues(){},
+          });
+          node.frequency=param(0); node.Q=param(0);
           return node;
+        }
+        /* 피아노의 해머 소리는 짧은 잡음 버퍼다. */
+        createBuffer(channels,length,sampleRate){
+          const data=Array.from({length:channels},()=>new Float32Array(length));
+          return {numberOfChannels:channels,length,sampleRate,duration:length/sampleRate,
+            getChannelData:index=>data[index]};
         }
         createAnalyser(){
           const node=new FakeNode();
@@ -372,6 +386,7 @@ async function preparePage(page,{
         createOscillator(){
           const node=new FakeNode();
           node.type='sine';
+          node.detune={value:0};
           node.frequency={
             value:0,
             setValueAtTime(value){ this.value=value; },
@@ -1856,31 +1871,49 @@ test('녹음 캐시가 앱을 다시 열어도 모바일 기기에 남는다',as
   expect(afterReload).toBe(beforeReload);
 });
 
-test('화음 도수가 같은 줄 오른쪽에 놓이고 선택지 높이가 유지된다',async({page})=>{
-  await preparePage(page);
+/* 화음·음계 보기는 이름 아래 한 줄에 도수를 둔다. 같은 줄 오른쪽에 두었을 때 반쪽 칸에서
+   '하프 디미니시'와 도수가 겹쳤고, 음계의 일곱 음은 들어갈 자리가 없었다. */
+test('화음·음계 도수가 이름 아래 한 줄에 놓이고 변화음만 진하다',async({page})=>{
+  await preparePage(page,{preferences:{data:{earTrainer:{mode:'interval',level:3,focus:true}},
+    updatedAt:'2026-10-19T00:00:00.000Z'}});
   await page.locator('.tab-btn[data-tab="trainer"]').click();
   /* 트레이너는 트랙에서 열린다. 청음은 골라서 들어간다. */
   await page.locator('#trainerSeg .seg-btn[data-mode="ear"]').click();
+  await expect(page.locator('#earChoices .choice-row .degrees')).toHaveCount(0);
 
-  const intervalHeight=await page.locator('#earChoices .choice-row').first().evaluate(
-    element=>element.getBoundingClientRect().height,
-  );
-  await page.locator('#earModes .pill',{hasText:'화음'}).click();
-  const chordRows=page.locator('#earChoices .choice-row');
-  await expect(chordRows).toHaveCount(2);
-  const metrics=await chordRows.first().evaluate(element=>{
-    const primary=element.querySelector('.choice-primary').getBoundingClientRect();
-    const name=element.querySelector('.ko').getBoundingClientRect();
-    const degrees=element.querySelector('.degrees').getBoundingClientRect();
+  const layout=()=>page.locator('#earChoices .choice-row').evaluateAll(rows=>rows.map(row=>{
+    const box=row.getBoundingClientRect();
+    const name=row.querySelector('.ko').getBoundingClientRect();
+    const degrees=row.querySelector('.degrees');
+    const range=document.createRange(); range.selectNodeContents(degrees);
+    const text=range.getBoundingClientRect();
+    const padRight=parseFloat(getComputedStyle(row).paddingRight)||0;
     return {
-      height:element.getBoundingClientRect().height,
-      rightGap:Math.abs(primary.right-degrees.right),
-      baselineGap:Math.abs(name.bottom-degrees.bottom),
+      height:Math.round(box.height),
+      leftGap:Math.abs(degrees.getBoundingClientRect().left-name.left),
+      below:degrees.getBoundingClientRect().top>=name.bottom-1,
+      room:box.right-padRight-text.right,
+      degrees:degrees.textContent,
+      alt:[...degrees.querySelectorAll('.deg-alt')].map(node=>node.textContent),
     };
-  });
-  expect(metrics.rightGap).toBeLessThanOrEqual(1);
-  expect(metrics.baselineGap).toBeLessThanOrEqual(3);
-  expect(Math.abs(metrics.height-intervalHeight)).toBeLessThanOrEqual(1);
+  }));
+  for(const label of ['화음','음계']){
+    await page.locator('#earModes .pill',{hasText:label}).click();
+    await expect(page.locator('#earChoices .choice-row')).toHaveCount(4);
+    const rows=await layout();
+    for(const row of rows){
+      expect(row.leftGap).toBeLessThanOrEqual(1);
+      expect(row.below).toBeTruthy();
+      expect(row.room).toBeGreaterThanOrEqual(0);
+      expect(row.alt).toEqual(row.degrees.split(label==='화음'?'–':' ').filter(token=>/[♭♯]/.test(token)));
+    }
+    // ♭ 글꼴이 달라도 보기 높이는 같다.
+    expect(new Set(rows.map(row=>row.height)).size).toBe(1);
+  }
+  const blues=page.locator('#earChoices .choice-row',{hasText:'Blues'});
+  if(await blues.count()) await expect(blues.locator('.degrees')).toHaveText('1 ♭3 4 ♭5 5 ♭7');
+  await expect(page.locator('#earChoices .choice-row').first())
+    .toHaveAttribute('aria-label',/구성 도수 1 /);
 });
 
 test('청음 오답 후 선택지를 같은 루트로 비교하고 올리브로 다음 문제를 시작한다',async({page})=>{
@@ -1890,7 +1923,8 @@ test('청음 오답 후 선택지를 같은 루트로 비교하고 올리브로 
   await page.evaluate(()=>{
     Math.random=()=>0;
     window.__earTones=[];
-    window.playTone=(...args)=>{ window.__earTones.push(args); return {}; };
+    /* 청음은 잼과 같은 합성 피아노로 낸다. 음 하나가 pianoNote 한 번이다. */
+    window.pianoNote=(...args)=>{ window.__earTones.push(args); };
   });
   await page.locator('#earModes .pill',{hasText:'음정'}).click();
 

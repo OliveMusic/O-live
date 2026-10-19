@@ -239,11 +239,15 @@ for(const degrees of ['1–3–5','1–♭3–5','1–♭3–♭5','1–3–♯5
   assert.match(index,new RegExp(degrees));
 }
 assert.match(index,/class="degrees"/);
-assert.match(index,/class="choice-primary"/);
-assert.match(index,/\.choice-row \.degrees\{[\s\S]*?margin-left:auto; flex:0 0 auto;/);
-assert.match(index,/\.choice-row \.choice-primary\{[\s\S]*?gap:6px;/);
+/* 도수는 이름 아래 한 줄이다. 같은 줄 오른쪽에 두었을 때 반쪽 칸에서 '하프 디미니시'와 겹쳤다. */
+assert.doesNotMatch(index,/choice-primary/);
+assert.match(index,/\.choice-row \.degrees\{\s*display:block;[\s\S]*?height:15px; line-height:15px;[\s\S]*?white-space:nowrap;/);
+assert.match(index,/\.choice-row \.degrees \.deg-alt\{ color:var\(--ink\); font-weight:700; \}/);
 assert.match(index,/\.choice-row \.ko\{[\s\S]*?white-space:nowrap;/);
 assert.match(index,/구성 도수 \$\{item\.degrees\}/);
+for(const degrees of ['1 2 3 4 5 6 7','1 2 ♭3 4 5 ♭6 ♭7','1 ♭3 4 ♭5 5 ♭7','1 2 3 ♯4 5 6 7']){
+  assert.ok(index.includes(`degrees:'${degrees}'`),`음계 도수 ${degrees}`);
+}
 assert.match(index,/const EAR_HISTORY_MODES = \[/);
 assert.match(index,/recordAnswer\(key,correct,mode\)/);
 /* 날짜별 청음 기록은 상단바의 연습 기록 하나로 모았다. 음정/화음/음계로 나눈

@@ -266,7 +266,8 @@ assert.match(audioRuntime,/window\.OliveRecorder\.resumeAfterVisibility\(\)/);
 assert.match(audioRuntime,/if\(!anySounding\(\) && !recording && !hiddenSafe\)[\s\S]*?setAudioSession\('ambient'\)/);
 assert.match(rhythm,/await ensurePlaybackCtx\(\)/);
 assert.match(ear,/beginForegroundPlaybackFromGesture\(\)/);
-assert.match(ear,/playTone\([^\n]+, ctx\)/);
+// 청음은 제스처로 깨운 컨텍스트의 시계에 맞춰 피아노 음을 얹는다.
+assert.match(ear,/whenClockAwake\(ctx,\(\)=>\{\s*\n\s*const t0=noteStart\(ctx,0\.02\);/);
 assert.match(core,/function playTone\([^)]*preparedCtx\)[\s\S]*?preparedCtx \|\| getCtx\(\)/);
 for(const source of [metronome,jam]){
   assert.match(source,/await ensureBackgroundPlaybackCtx\(/);

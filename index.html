@@ -1464,26 +1464,40 @@
     transition:background .12s var(--ease-out), transform .1s var(--ease-out);
   }
   .choice-row:active{ background:var(--key-press); border-bottom-width:1px; transform:translateY(1px); }
-  .choice-row .choice-primary{
-    width:100%; min-width:0; display:flex; align-items:baseline; gap:6px;
-  }
   .choice-row .ko{
-    min-width:0; white-space:nowrap;
+    min-width:0; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     font-size:0.8125rem; font-weight:500; color:var(--ink); letter-spacing:-0.0182em;
   }
   .choice-row .en{ font-size:0.5938rem; color:var(--ink-3); font-weight:400; letter-spacing:.02em; }
+  /* 화음·음계 도수: 이름 아래 한 줄. ♭·♯이 붙은 음만 진하게. 높이를 못 박아 두어
+     기호 글꼴이 바뀌어도 보기들의 높이가 어긋나지 않는다. */
   .choice-row .degrees{
-    margin-left:auto; flex:0 0 auto; font-size:0.625rem; color:var(--ink-2);
-    font-weight:550; letter-spacing:.025em; font-variant-numeric:tabular-nums;
+    display:block; margin:3px 0 1px; height:15px; line-height:15px;
+    font-size:0.6875rem; color:var(--ink-2); font-weight:550;
+    letter-spacing:.02em; word-spacing:.12em; white-space:nowrap;
+    font-variant-numeric:tabular-nums;
   }
+  .choice-row .degrees .deg{ color:var(--ink-3); font-weight:450; }
+  /* iPhone SE 폭에서는 일곱 음이 칸 끝에 닿는다. 사이를 조금 좁힌다. */
+  @media (max-width:340px){ .choice-row .degrees{ letter-spacing:0; word-spacing:0; } }
+  .choice-row .degrees .deg-alt{ color:var(--ink); font-weight:700; }
+  .choice-row .degrees .deg-sep{ color:var(--ink-3); font-weight:450; }
   .choice-row.correct{ background:var(--signal); border-color:var(--signal); }
   .choice-row.correct .ko{ color:var(--on-signal); }
   .choice-row.correct .en{ color:rgba(255,255,255,.55); }
-  .choice-row.correct .degrees{color:var(--on-signal);}
+  .choice-row.correct .degrees,
+  .choice-row.correct .degrees .deg,
+  .choice-row.correct .degrees .deg-alt,
+  .choice-row.correct .degrees .deg-sep{ color:var(--on-signal); }
   .choice-row.wrong{ background:var(--error); border-color:var(--error); }
   .choice-row.wrong .ko{ color:var(--on-error); }
   .choice-row.wrong .en{ color:var(--on-error); opacity:.62; }
-  .choice-row.wrong .degrees{color:var(--on-error);}
+  .choice-row.wrong .degrees,
+  .choice-row.wrong .degrees .deg,
+  .choice-row.wrong .degrees .deg-alt,
+  .choice-row.wrong .degrees .deg-sep{ color:var(--on-error); }
+  .choice-row.correct .degrees .deg,.choice-row.wrong .degrees .deg,
+  .choice-row.correct .degrees .deg-sep,.choice-row.wrong .degrees .deg-sep{ opacity:.7; }
   .choice-row[disabled]{ opacity:1; }
   .choice-row:disabled:not(.correct):not(.wrong){ opacity:.45; }
 
@@ -3175,25 +3189,25 @@
   </section>
 </div>
 
-<script src="app-version.js?v=325"></script>
+<script src="app-version.js?v=326"></script>
 <script src="cloud-config.js?v=92"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="cloud-sync.js?v=325"></script>
-<script src="js/audio-runtime.js?v=325"></script>
-<script src="js/core.js?v=325"></script>
-<script src="js/metronome.js?v=325"></script>
-<script src="js/tuner-engine.js?v=325"></script>
-<script src="js/tuner.js?v=325"></script>
-<script src="js/chord-engine.js?v=325"></script>
-<script src="js/scales.js?v=325"></script>
-<script src="js/chords.js?v=325"></script>
-<script src="js/ear-trainer.js?v=325"></script>
-<script src="js/rhythm-trainer.js?v=325"></script>
-<script src="js/recording-cache.js?v=325"></script>
-<script src="js/recorder.js?v=325"></script>
-<script src="js/practice-links.js?v=325"></script>
-<script src="js/jam-session.js?v=325"></script>
-<script src="js/practice-log.js?v=325"></script>
-<script src="js/app-shell.js?v=325"></script>
+<script src="cloud-sync.js?v=326"></script>
+<script src="js/audio-runtime.js?v=326"></script>
+<script src="js/core.js?v=326"></script>
+<script src="js/metronome.js?v=326"></script>
+<script src="js/tuner-engine.js?v=326"></script>
+<script src="js/tuner.js?v=326"></script>
+<script src="js/chord-engine.js?v=326"></script>
+<script src="js/scales.js?v=326"></script>
+<script src="js/chords.js?v=326"></script>
+<script src="js/ear-trainer.js?v=326"></script>
+<script src="js/rhythm-trainer.js?v=326"></script>
+<script src="js/recording-cache.js?v=326"></script>
+<script src="js/recorder.js?v=326"></script>
+<script src="js/practice-links.js?v=326"></script>
+<script src="js/jam-session.js?v=326"></script>
+<script src="js/practice-log.js?v=326"></script>
+<script src="js/app-shell.js?v=326"></script>
 </body>
 </html>

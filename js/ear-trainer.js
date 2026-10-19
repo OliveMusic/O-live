@@ -26,16 +26,18 @@
     {ko:'하프 디미니시',en:'Half-dim 7th',degrees:'1–♭3–♭5–♭7', iv:[0,3,6,10],  lv:3},
     {ko:'sus4',         en:'Suspended 4th',degrees:'1–4–5',      iv:[0,5,7],    lv:3},
   ];
+  /* 음계 도수는 장음계에 견준 것이다. 옥타브(8)는 적지 않는다. 블루스의 블루 노트는
+     ♭5, 리디안은 ♯4로 적는다(scales.js와 같다). 화음 도수와 같은 ♭·♯ 기호를 쓴다. */
   const SCALES = [
-    {ko:'메이저',           en:'Major',            iv:[0,2,4,5,7,9,11,12], lv:1},
-    {ko:'내추럴 마이너',    en:'Natural minor',    iv:[0,2,3,5,7,8,10,12], lv:1},
-    {ko:'메이저 펜타토닉',  en:'Major pentatonic', iv:[0,2,4,7,9,12],      lv:1},
-    {ko:'마이너 펜타토닉',  en:'Minor pentatonic', iv:[0,3,5,7,10,12],     lv:2},
-    {ko:'블루스',           en:'Blues',            iv:[0,3,5,6,7,10,12],   lv:2},
-    {ko:'도리안',           en:'Dorian',           iv:[0,2,3,5,7,9,10,12], lv:2},
-    {ko:'믹소리디안',       en:'Mixolydian',       iv:[0,2,4,5,7,9,10,12], lv:3},
-    {ko:'하모닉 마이너',    en:'Harmonic minor',   iv:[0,2,3,5,7,8,11,12], lv:3},
-    {ko:'리디안',           en:'Lydian',           iv:[0,2,4,6,7,9,11,12], lv:3},
+    {ko:'메이저',           en:'Major',            degrees:'1 2 3 4 5 6 7',     iv:[0,2,4,5,7,9,11,12], lv:1},
+    {ko:'내추럴 마이너',    en:'Natural minor',    degrees:'1 2 ♭3 4 5 ♭6 ♭7',  iv:[0,2,3,5,7,8,10,12], lv:1},
+    {ko:'메이저 펜타토닉',  en:'Major pentatonic', degrees:'1 2 3 5 6',         iv:[0,2,4,7,9,12],      lv:1},
+    {ko:'마이너 펜타토닉',  en:'Minor pentatonic', degrees:'1 ♭3 4 5 ♭7',       iv:[0,3,5,7,10,12],     lv:2},
+    {ko:'블루스',           en:'Blues',            degrees:'1 ♭3 4 ♭5 5 ♭7',    iv:[0,3,5,6,7,10,12],   lv:2},
+    {ko:'도리안',           en:'Dorian',           degrees:'1 2 ♭3 4 5 6 ♭7',   iv:[0,2,3,5,7,9,10,12], lv:2},
+    {ko:'믹소리디안',       en:'Mixolydian',       degrees:'1 2 3 4 5 6 ♭7',    iv:[0,2,4,5,7,9,10,12], lv:3},
+    {ko:'하모닉 마이너',    en:'Harmonic minor',   degrees:'1 2 ♭3 4 5 ♭6 7',   iv:[0,2,3,5,7,8,11,12], lv:3},
+    {ko:'리디안',           en:'Lydian',           degrees:'1 2 3 ♯4 5 6 7',    iv:[0,2,4,6,7,9,11,12], lv:3},
   ];
 
   const MODES = [
@@ -374,14 +376,24 @@
     if(autoPlay) playCurrent();
   }
 
+  /* 화음·음계 보기는 이름 아래 한 줄에 도수를 둔다. 같은 줄 오른쪽에 두었더니 반쪽 칸에서
+     '하프 디미니시'와 도수가 겹쳤고, 음계의 일곱 음은 애초에 들어가지 않았다.
+     ♭·♯이 붙은 음만 진하게 둔다. 도리안과 내추럴 마이너처럼 한 음만 다른 보기를
+     눈으로 바로 가를 수 있다. 화음은 1–3–5처럼 잇고 음계는 띄어 쓴다. */
+  function degreesHtml(degrees){
+    const scale=mode==='scale';
+    return String(degrees).split(scale?' ':'–')
+      .map(token=>`<span class="${/[♭♯]/.test(token)?'deg-alt':'deg'}">${token}</span>`)
+      .join(scale?' ':'<span class="deg-sep">–</span>');
+  }
   function renderChoices(list, answer){
     earChoices.innerHTML='';
     list.forEach(item=>{
       const b=document.createElement('button');
       b.className='choice-row';
-      const degrees=mode==='chord' && item.degrees
-        ? `<span class="degrees">${item.degrees}</span>` : '';
-      b.innerHTML = `<span class="choice-primary"><span class="ko">${item.ko}</span>${degrees}</span>`+
+      const degrees=mode!=='interval' && item.degrees
+        ? `<span class="degrees">${degreesHtml(item.degrees)}</span>` : '';
+      b.innerHTML = `<span class="ko">${item.ko}</span>${degrees}`+
         `<span class="en">${item.en}</span>`;
       b.setAttribute('aria-label',item.ko+', '+item.en+(degrees?`, 구성 도수 ${item.degrees}`:''));
       if(guidePreview && item===answer) b.dataset.answer='1';
@@ -425,7 +437,15 @@
     if(correct) nextTimer=setTimeout(()=>newQuestion(true), 1500);
   }
 
-  /* ---------- 재생 ---------- */
+  /* ---------- 재생 ----------
+     잼 코드와 같은 합성 피아노(core.js의 pianoNote)로 낸다. 예전 삼각파와 합성 피아노,
+     녹음 피아노를 같은 문제로 렌더해 들려주고 사용자가 이것을 골랐다(2026-10-19).
+     hold는 건반을 누르고 있는 길이다. 합성 피아노는 떼는 동작이 없어 그만큼 더 울리다
+     잦아든다. 길이와 세기는 그때 들려준 렌더와 같다. */
+  const EAR_PIANO_VOL=0.36;
+  function earNote(midi, at, hold, vol=EAR_PIANO_VOL){
+    pianoNote(midi, at, Math.max(1.2, hold+0.9), vol);
+  }
   function playAnswer(answer, flashButton=false){
     if(!current) return;
     /* 앞 문제가 아직 울리는 중에 '다시 듣기'를 누르면 두 소리가 겹치거나, 잘려서
@@ -444,20 +464,22 @@
       clearTimeout(playFlash);               // 연타하면 앞 타이머가 먼저 꺼버렸다
       playFlash=setTimeout(()=>earPlayBtn.classList.remove('playing'), 900);
     }
-    /* 갓 깨어난 컨텍스트는 state가 'running'이 된 뒤에도 시계가 0에 멈춰 있다. playTone은
-       currentTime에 바로 얹으므로 그 사이에 잡으면 오디오 유닛이 열리는 순간 이미 지나간
-       시각이 되어 통째로 사라진다. 튜너 현음·잼 코드를 고친 것과 같은 자리다. */
+    /* 갓 깨어난 컨텍스트는 state가 'running'이 된 뒤에도 시계가 0에 멈춰 있다. 음을
+       currentTime에 바로 얹으면 그 사이에 잡은 시각은 오디오 유닛이 열리는 순간 이미
+       지나간 시각이 되어 통째로 사라진다. 튜너 현음·잼 코드를 고친 것과 같은 자리다. */
     whenClockAwake(ctx,()=>{
+      const t0=noteStart(ctx,0.02);
+      const n=answer.iv ? answer.iv.length : 2;
       if(mode==='interval'){
-        playTone(midiToFreq(root), 0.5, 0, 'triangle', 0.98, ctx);
-        playTone(midiToFreq(root+answer.semis), 0.5, 0.6, 'triangle', 0.98, ctx);
+        earNote(root, t0, 0.55);
+        earNote(root+answer.semis, t0+0.6, 0.75);
       } else if(mode==='chord'){
         // 아르페지오 후 동시 울림 — 구성음이 잘 들리도록
-        answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.36, i*0.17, 'triangle', 0.64, ctx));
-        const after = answer.iv.length*0.17 + 0.12;
-        answer.iv.forEach(iv=> playTone(midiToFreq(root+iv), 1.1, after, 'sine', 0.44, ctx));
+        answer.iv.forEach((iv,i)=> earNote(root+iv, t0+i*0.17, (n-i)*0.17+0.05, EAR_PIANO_VOL*0.8));
+        const after = n*0.17 + 0.12;
+        answer.iv.forEach(iv=> earNote(root+iv, t0+after, 1.3, EAR_PIANO_VOL*0.62));
       } else {
-        answer.iv.forEach((iv,i)=> playTone(midiToFreq(root+iv), 0.3, i*0.23, 'triangle', 0.84, ctx));
+        answer.iv.forEach((iv,i)=> earNote(root+iv, t0+i*0.23, i===n-1 ? 0.8 : 0.26));
       }
     });
   }
